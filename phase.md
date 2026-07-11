@@ -381,9 +381,9 @@ People/Org   Attendance
 
 | Phase | Weeks | Status | Started | Done |
 |---|---|---|---|---|
-| 0 · Prereqs | — | ☐ Not started | | |
-| 1 · Foundation | 1.5 | ☐ Not started | | |
-| 2 · People & Org | 1 | ☐ Not started | | |
+| 0 · Prereqs | — | ✅ Complete | 2026-07-10 | 2026-07-11 |
+| 1 · Foundation | 1.5 | ✅ Complete | 2026-07-10 | 2026-07-11 |
+| 2 · People & Org | 1 | ⬜ Next | | |
 | 3 · Attendance | 1.5 | ☐ Not started | | |
 | 4 · Projects & Tasks | 2.5 | ☐ Not started | | |
 | 5 · Files | 1 | ☐ Not started | | |
