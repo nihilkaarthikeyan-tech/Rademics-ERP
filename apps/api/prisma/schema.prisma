@@ -1,0 +1,157 @@
+// Rademics ERP — Prisma schema.
+// Phase 1 (Foundation) scope: auth, RBAC capability grants, sessions, audit log,
+// settings. Later phases extend this (People/Org in Phase 2, etc.).
+//
+// Enum string values MUST match @rademics/permissions and @rademics/types.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Seven roles (Spec §2/§3). Freelancer is NOT a role — it is EMPLOYEE + resourceType FREELANCE.
+enum Role {
+  SUPER_ADMIN
+  HR
+  PM
+  TEAM_LEAD
+  EMPLOYEE
+  CLIENT
+  FINANCE
+}
+
+enum ResourceType {
+  INTERNAL
+  FREELANCE
+}
+
+/// Grant value for a capability, per role (Spec §3).
+enum Grant {
+  ALLOW
+  DENY
+  SCOPED
+}
+
+/// Account lifecycle at the auth layer (distinct from employment status in Phase 2).
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DEACTIVATED
+}
+
+enum AuthTokenType {
+  INVITE
+  PASSWORD_RESET
+}
+
+/// A person who can authenticate: staff, freelancer (EMPLOYEE+FREELANCE), or client user.
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique
+  name         String
+  passwordHash String? // null until the invite set-password link is used
+  role         Role
+  resourceType ResourceType @default(INTERNAL)
+  status       UserStatus   @default(INVITED)
+
+  // Failed-login lockout (Spec §5.1): lock 15 min after 5 consecutive failures.
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  authTokens    AuthToken[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+/// Refresh-token rotation family for server-side revocation (Spec §5.1, §10).
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique // only the hash is stored
+  familyId     String    @db.Uuid
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?   @db.Uuid
+  createdByIp  String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+/// Single-use tokens for invite + password reset (Spec §5.1). Reset link valid 30 min.
+model AuthToken {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @db.Uuid
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String        @unique
+  type      AuthTokenType
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId])
+  @@map("auth_tokens")
+}
+
+/// Capability grants per role (Spec §3). Seeded from @rademics/permissions matrix,
+/// then editable by Super Admin without a code change.
+model RoleCapability {
+  id            String @id @default(uuid()) @db.Uuid
+  role          Role
+  capabilityKey String
+  grant         Grant
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([role, capabilityKey])
+  @@index([role])
+  @@map("role_capabilities")
+}
+
+/// Append-only audit trail (Spec §5.10, §10). No update/delete path exists anywhere.
+model AuditLog {
+  id         String  @id @default(uuid()) @db.Uuid
+  actorId    String? @db.Uuid
+  actor      User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String? // denormalized so entries survive user changes
+  action     String
+  entityType String?
+  entityId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+/// Admin Settings store (Spec §4, §23). Business-rule defaults live here, not in code.
+model Setting {
+  key         String   @id
+  value       Json
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}

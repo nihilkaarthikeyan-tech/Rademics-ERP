@@ -1,0 +1,92 @@
+# Local development stack for Rademics ERP (Spec §12).
+# Mirrors the production dependencies: Postgres, Redis, MinIO, ClamAV.
+# Mailhog stands in for a real SMTP provider in dev only.
+#
+#   pnpm docker:up      # start
+#   pnpm docker:down    # stop
+#   pnpm docker:logs    # tail logs
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rademics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rademics_dev_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-rademics}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./.docker-data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rademics} -d ${POSTGRES_DB:-rademics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./.docker-data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-rademics}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-rademics_dev_pw}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - ./.docker-data/minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: create the app bucket on startup.
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-rademics} ${MINIO_ROOT_PASSWORD:-rademics_dev_pw};
+      mc mb --ignore-existing local/${S3_BUCKET:-rademics-files};
+      mc mb --ignore-existing local/${S3_BUCKET:-rademics-files}-quarantine;
+      echo 'MinIO buckets ready';
+      "
+
+  clamav:
+    image: clamav/clamav:latest
+    restart: unless-stopped
+    ports:
+      - "${CLAMAV_PORT:-3310}:3310"
+    volumes:
+      - ./.docker-data/clamav:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --version || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "${SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
