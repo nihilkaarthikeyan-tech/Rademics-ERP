@@ -3,10 +3,6 @@
 import { Card, CardContent, CardHeader, CardTitle, EmptyState } from '@rademics/ui';
 import { useMe } from '@/lib/me-context';
 
-/**
- * Role dashboards (Spec §17). Phase 1 renders the authenticated shell with
- * designed empty states; the real per-role widgets are filled in per phase.
- */
 export default function DashboardPage() {
   const me = useMe();
 
@@ -18,18 +14,16 @@ export default function DashboardPage() {
       </p>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {['Tasks in progress', 'Awaiting acknowledgment', 'Overdue', 'Completed this week'].map(
-          (label) => (
-            <Card key={label}>
-              <CardHeader>
-                <CardTitle>{label}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-semibold text-slate-300">—</div>
-              </CardContent>
-            </Card>
-          ),
-        )}
+        {['Tasks in progress', 'Awaiting acknowledgment', 'Overdue', 'Completed this week'].map((label) => (
+          <Card key={label}>
+            <CardHeader>
+              <CardTitle>{label}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold text-slate-300">—</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <div className="mt-6">

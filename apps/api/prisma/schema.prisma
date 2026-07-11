@@ -48,6 +48,21 @@ enum AuthTokenType {
   PASSWORD_RESET
 }
 
+/// Employment status (Spec §5.2) — distinct from the auth-level UserStatus.
+enum EmploymentStatus {
+  ACTIVE
+  ON_NOTICE
+  EXITED
+}
+
+/// Business verticals a department maps to for P&L (Spec §5.2).
+enum BusinessVertical {
+  PUBLICATIONS
+  DESIGN
+  WEB
+  SUPPORT
+}
+
 /// A person who can authenticate: staff, freelancer (EMPLOYEE+FREELANCE), or client user.
 model User {
   id           String       @id @default(uuid()) @db.Uuid
@@ -63,6 +78,35 @@ model User {
   lockedUntil      DateTime?
   lastLoginAt      DateTime?
 
+  // ── People & Org profile (Spec §5.2) ──
+  phone            String?
+  photoUrl         String?
+  employeeCode     String?           @unique
+  joinDate         DateTime?
+  employmentStatus EmploymentStatus?
+
+  departmentId String?     @db.Uuid
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  teamId       String?     @db.Uuid
+  team         Team?       @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+
+  reportingManagerId String? @db.Uuid
+  reportingManager   User?   @relation("Reports", fields: [reportingManagerId], references: [id], onDelete: SetNull)
+  reports            User[]  @relation("Reports")
+
+  ledTeams Team[] @relation("TeamLead")
+
+  // ── Salary / PII, field-level encrypted at rest (Spec §10). Ciphertext only. ──
+  salaryCiphertext      String?
+  bankAccountCiphertext String?
+  govIdCiphertext       String?
+
+  // ── Freelancer (Spec §5.2) — resourceType = FREELANCE ──
+  payPerDeliverable Decimal? @db.Decimal(12, 2)
+  activeEngagement  Boolean  @default(true)
+
+  skills UserSkill[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -72,6 +116,8 @@ model User {
 
   @@index([role])
   @@index([status])
+  @@index([departmentId])
+  @@index([teamId])
   @@map("users")
 }
 
@@ -154,4 +200,60 @@ model Setting {
   updatedAt   DateTime @updatedAt
 
   @@map("settings")
+}
+
+/// Department → maps to a business vertical for P&L (Spec §5.2).
+model Department {
+  id       String           @id @default(uuid()) @db.Uuid
+  name     String           @unique
+  vertical BusinessVertical
+
+  teams   Team[]
+  members User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("departments")
+}
+
+/// A team has exactly one Team Lead (Spec §5.2).
+model Team {
+  id           String  @id @default(uuid()) @db.Uuid
+  name         String
+  departmentId String  @db.Uuid
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  teamLeadId   String? @db.Uuid
+  teamLead     User?   @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
+
+  members User[] @relation("TeamMembers")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, name])
+  @@index([departmentId])
+  @@map("teams")
+}
+
+/// Admin-managed skill tag list (Spec §5.9).
+model SkillTag {
+  id        String      @id @default(uuid()) @db.Uuid
+  name      String      @unique
+  users     UserSkill[]
+  createdAt DateTime    @default(now())
+
+  @@map("skill_tags")
+}
+
+/// Many-to-many: users ↔ skill tags.
+model UserSkill {
+  userId  String   @db.Uuid
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId String   @db.Uuid
+  skill   SkillTag @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skillId])
+  @@index([skillId])
+  @@map("user_skills")
 }

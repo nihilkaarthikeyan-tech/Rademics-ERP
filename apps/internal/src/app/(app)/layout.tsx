@@ -20,7 +20,7 @@ const ROLE_LABELS: Record<string, string> = {
   FINANCE: 'Finance',
 };
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [me, setMe] = useState<Me | null>(null);
@@ -65,11 +65,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <MeContext.Provider value={me}>
       <div className="flex min-h-screen">
-        {/* Sidebar (Spec §16.1) */}
         <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white sm:flex">
-          <div className="flex h-14 items-center px-5 text-lg font-bold text-brand-navy">
-            Rademics
-          </div>
+          <div className="flex h-14 items-center px-5 text-lg font-bold text-brand-navy">Rademics</div>
           <nav className="flex flex-col gap-0.5 px-3 py-2">
             {items.map((item) => {
               const active = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -79,9 +76,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   href={item.href}
                   className={cn(
                     'rounded-md px-3 py-2 text-sm font-medium',
-                    active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-slate-600 hover:bg-slate-100',
+                    active ? 'bg-primary text-primary-foreground' : 'text-slate-600 hover:bg-slate-100',
                   )}
                 >
                   {item.label}
@@ -91,9 +86,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </nav>
         </aside>
 
-        {/* Main column */}
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Top bar (Spec §16.1) */}
           <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4">
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <Search className="h-4 w-4" />
@@ -105,11 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="text-sm font-medium text-slate-700">{me.email}</div>
                 <div className="text-xs text-slate-400">{ROLE_LABELS[me.role] ?? me.role}</div>
               </div>
-              <button
-                onClick={logout}
-                className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
-                title="Log out"
-              >
+              <button onClick={logout} className="text-slate-500 hover:text-slate-800" title="Log out">
                 <LogOut className="h-4 w-4" />
               </button>
             </div>

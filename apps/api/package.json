@@ -13,7 +13,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:seed": "dotenv -e ../../.env -- prisma db seed",
-    "verify:phase1": "dotenv -e ../../.env -- ts-node scripts/verify-phase1.ts"
+    "seed:demo": "dotenv -e ../../.env -- ts-node scripts/demo-users.ts",
+    "verify:phase1": "dotenv -e ../../.env -- ts-node scripts/verify-phase1.ts",
+    "verify:phase2": "dotenv -e ../../.env -- ts-node scripts/verify-phase2.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

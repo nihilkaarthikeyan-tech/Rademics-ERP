@@ -383,8 +383,8 @@ People/Org   Attendance
 |---|---|---|---|---|
 | 0 · Prereqs | — | ✅ Complete | 2026-07-10 | 2026-07-11 |
 | 1 · Foundation | 1.5 | ✅ Complete | 2026-07-10 | 2026-07-11 |
-| 2 · People & Org | 1 | ⬜ Next | | |
-| 3 · Attendance | 1.5 | ☐ Not started | | |
+| 2 · People & Org | 1 | ✅ Complete | 2026-07-11 | 2026-07-11 |
+| 3 · Attendance | 1.5 | ⬜ Next | | |
 | 4 · Projects & Tasks | 2.5 | ☐ Not started | | |
 | 5 · Files | 1 | ☐ Not started | | |
 | 6 · Client Portal | 1.5 | ☐ Not started | | |

@@ -59,8 +59,9 @@ These are implementer choices the spec delegates to me (Spec §0/§12). All reve
 
 ## Status snapshot
 
-- ✅ **Phase 1 (Foundation) COMPLETE**: backend (verified 10/10 e2e), internal app + client portal + shared UI (both build clean), GitHub Actions CI. 34 unit tests + full-workspace typecheck green.
-- ⬜ **Phase 2 (People & Org)**: next up.
-- ⬜ Phases 3–10: queued per [`phase.md`](phase.md).
+- ✅ **Phase 1 (Foundation) COMPLETE**: backend (verified 10/10 e2e), internal app + client portal + shared UI, GitHub Actions CI.
+- ✅ **Phase 2 (People & Org) COMPLETE**: departments/teams/skills, employee lifecycle + invite, encrypted salary/PII with matrix-gated access, Admin settings + role editor, People directory + create UI. Verified 19/19 e2e; 39 unit tests + full-workspace typecheck green.
+- ⬜ **Phase 3 (Attendance)**: next up.
+- ⬜ Phases 4–10: queued per [`phase.md`](phase.md).
 
 *Last updated by the build. See [`phase.md`](phase.md) for the full plan and [`RADEMICS_ERP_SPEC.md`](RADEMICS_ERP_SPEC.md) for the spec.*
