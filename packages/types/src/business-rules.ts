@@ -46,11 +46,32 @@ export const DEFAULT_BUSINESS_RULES = {
   // Retention (§4) [ASSUMED]
   monitoringRetentionMonths: 12,
 
-  // Finance (§4)
+  // Finance (§4, §23) — all editable by Finance/SA in Admin Settings
   invoiceNumberFormat: 'RAD-{YYYY}-{SEQ4}', // [ASSUMED]
   currency: 'INR', // INR only in V1
   defaultGstPercent: 18, // editable per line [ASSUMED]
   paymentTermsDays: 15, // [ASSUMED]
+  paymentModes: ['Bank Transfer', 'UPI', 'Cheque', 'Cash', 'Card'], // [ASSUMED]
+  expenseCategories: ['Freelancer Payout', 'Tool Subscription', 'Travel', 'Other'], // §5.8 [ASSUMED]
+  // Per-role hourly COST rates for P&L labor estimate (§5.8, §23). INR/hour. [ASSUMED]
+  hourlyCostRates: {
+    SUPER_ADMIN: 0,
+    HR: 300,
+    PM: 800,
+    TEAM_LEAD: 600,
+    EMPLOYEE: 400,
+    FINANCE: 400,
+    CLIENT: 0,
+  } as Record<string, number>,
+  standardWorkdayHours: 8, // payable-day / overtime-day basis (§21) [ASSUMED]
+  invoiceFooterText: 'Thank you for your business.', // [ASSUMED]
+
+  // Company / branding for invoices & portal (§23 Company) [ASSUMED — confirm]
+  companyName: 'Rademics',
+  companyAddress: 'Chennai, Tamil Nadu, India',
+  companyGstin: '',
+  brandPrimary: '#1B2A4A',
+  brandAccent: '#2563EB',
 
   // Files (§4) [ASSUMED]
   fileUploadLimitMb: 100,

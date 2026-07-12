@@ -63,6 +63,155 @@ enum BusinessVertical {
   SUPPORT
 }
 
+/// Nightly-computed daily attendance outcome (Spec §5.3, §4).
+enum AttendanceDayStatus {
+  PRESENT
+  HALF_DAY
+  ABSENT
+  WEEKLY_OFF
+  ON_LEAVE // reserved for Phase 7 leave integration
+}
+
+/// Lifecycle of an attendance regularization request (Spec §5.3).
+enum RegularizationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Container type (Spec §5.4): a fixed-scope Project or a continuous Work Stream.
+enum ProjectType {
+  PROJECT
+  STREAM
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  ARCHIVED
+  CLOSED
+}
+
+enum TaskPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+/// Task status — the §6 state machine spine. Mirrors @rademics/types TaskStatus.
+enum TaskStatus {
+  DRAFT
+  ASSIGNED
+  ACKNOWLEDGED
+  IN_PROGRESS
+  SUBMITTED_FOR_REVIEW
+  CLIENT_REVIEW
+  COMPLETED
+  INVOICED
+  CLOSED
+  CANCELLED
+}
+
+/// Comment visibility (Spec §5.4): internal by default; client-visible needs sharing.
+enum CommentVisibility {
+  INTERNAL
+  CLIENT_VISIBLE
+}
+
+/// Per-user notification channel preference for an event group (Spec §5.12).
+enum NotificationPref {
+  IN_APP
+  IN_APP_EMAIL
+  MUTE
+}
+
+/// Virus-scan lifecycle for a file version (Spec §5.6). A version is only
+/// downloadable once AVAILABLE; INFECTED is quarantined.
+enum FileScanStatus {
+  PENDING
+  SCANNING
+  AVAILABLE
+  INFECTED
+  ERROR
+}
+
+/// File version visibility (Spec §5.6). Client-visible requires the §3 permission.
+enum FileVisibility {
+  INTERNAL
+  CLIENT_VISIBLE
+}
+
+/// Leave types with configured quotas/accrual (Spec §4, §5.7).
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+  UNPAID
+}
+
+/// Lifecycle of a leave request (Spec §5.7). Escalation keeps status PENDING but
+/// moves the approval level up (§5.7 48h auto-escalation).
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Half-day support (Spec §5.7, §24): a half-day request is a single day only.
+enum LeaveHalf {
+  FULL
+  FIRST_HALF
+  SECOND_HALF
+}
+
+/// The routed approval chain level (Spec §5.7): TL → PM → HR.
+enum LeaveApprovalLevel {
+  TEAM_LEAD
+  PM
+  HR
+}
+
+/// Ledger entry kinds for a leave balance (Spec §5.7): monthly accrual, usage on
+/// approval, refund on holiday-recompute, or a manual adjustment.
+enum LeaveLedgerType {
+  ACCRUAL
+  USAGE
+  REFUND
+  ADJUSTMENT
+}
+
+/// Invoice lifecycle (Spec §5.8): Draft → Sent → Partially Paid → Paid; Overdue is
+/// auto-set after the due date; Cancelled burns the number (§24, never reused).
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+/// A payroll month is OPEN until locked (Spec §5.8, §25). Locking freezes the export;
+/// unlock is Super-Admin-approved and audited.
+enum PayrollMonthStatus {
+  OPEN
+  LOCKED
+}
+
+/// A client organization's lifecycle (Spec §2, §25 access-ended).
+enum ClientOrgStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+/// Per-project client access level (Spec §5.5): Viewer sees progress; Approver
+/// can additionally approve / request revision.
+enum ClientAccessLevel {
+  VIEWER
+  APPROVER
+}
+
 /// A person who can authenticate: staff, freelancer (EMPLOYEE+FREELANCE), or client user.
 model User {
   id           String       @id @default(uuid()) @db.Uuid
@@ -113,6 +262,52 @@ model User {
   refreshTokens RefreshToken[]
   authTokens    AuthToken[]
   auditLogs     AuditLog[]     @relation("AuditActor")
+
+  // ── Attendance (Spec §5.3) ──
+  attendanceSessions      AttendanceSession[]
+  attendanceDays          AttendanceDay[]
+  regularizations         RegularizationRequest[] @relation("RegSubject")
+  reviewedRegularizations RegularizationRequest[] @relation("RegReviewer")
+
+  // ── Projects & Tasks (Spec §5.4, §6) ──
+  managedProjects   Project[]           @relation("ProjectPM")
+  clientProjects    Project[]           @relation("ProjectClient")
+  assignedTasks     Task[]              @relation("TaskAssignee")
+  createdTasks      Task[]              @relation("TaskCreator")
+  taskHistory       TaskStatusHistory[] @relation("TaskHistoryActor")
+  watching          TaskWatcher[]
+  comments          Comment[]           @relation("CommentAuthor")
+  mentionedIn       CommentMention[]
+  notifications     Notification[]
+  notificationPrefs NotificationPreference[]
+
+  // ── Files (Spec §5.6) ──
+  createdFiles     FileAsset[]   @relation("FileCreator")
+  profileFiles     FileAsset[]   @relation("ProfileFiles")
+  uploadedVersions FileVersion[] @relation("FileUploader")
+
+  // ── Leave (Spec §5.7) ──
+  leaveBalances     LeaveBalance[]
+  leaveRequests     LeaveRequest[] @relation("LeaveSubject")
+  leaveToApprove    LeaveRequest[] @relation("LeaveCurrentApprover")
+  reviewedLeave     LeaveRequest[] @relation("LeaveReviewer")
+  leaveLedger       LeaveLedger[]
+
+  // ── Finance (Spec §5.8) ──
+  createdInvoices Invoice[]       @relation("InvoiceCreator")
+  recordedPayments Payment[]      @relation("PaymentCreator")
+  loggedExpenses  Expense[]       @relation("ExpenseCreator")
+  lockedPayrollMonths PayrollMonth[] @relation("PayrollLocker")
+  payrollExports  PayrollExport[] @relation("PayrollExporter")
+
+  // ── AI (Spec §7) ──
+  aiSummaries AiDailySummary[] @relation("AiSummaryAuthor")
+  aiUsage     AiUsage[]
+
+  // ── Client portal (Spec §2, §5.5) — for CLIENT-role users ──
+  clientOrgId  String?               @db.Uuid
+  clientOrg    ClientOrg?            @relation("OrgUsers", fields: [clientOrgId], references: [id], onDelete: SetNull)
+  clientAccess ClientProjectAccess[] @relation("ClientAccess")
 
   @@index([role])
   @@index([status])
@@ -228,6 +423,8 @@ model Team {
 
   members User[] @relation("TeamMembers")
 
+  aiSummaries AiDailySummary[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -256,4 +453,680 @@ model UserSkill {
   @@id([userId, skillId])
   @@index([skillId])
   @@map("user_skills")
+}
+
+/// One check-in/check-out pair (Spec §5.3). Multi-session: a day's total is the
+/// SUM of its sessions — a single pair/day is never assumed. Times stored UTC.
+model AttendanceSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkInAt  DateTime
+  checkOutAt DateTime?
+
+  // Idempotency (Spec §25 internet-drop): client-generated key dedupes retried check-ins.
+  idempotencyKey String? @unique
+
+  // Idle tracking (Spec §5.3): seconds with no heartbeat past the configured gap.
+  idleSeconds     Int       @default(0)
+  lastHeartbeatAt DateTime?
+
+  // Auto-closed by the 11:59 PM job (Spec §5.3, §25) — prompts regularization next login.
+  autoClosed Boolean @default(false)
+
+  checkInIp         String?
+  checkInUserAgent  String?
+  checkOutIp        String?
+  checkOutUserAgent String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([userId, checkInAt])
+  @@map("attendance_sessions")
+}
+
+/// Nightly-computed daily marks (Spec §5.3, §4): late / half-day / overtime,
+/// derived from configured rules. One row per user per day.
+model AttendanceDay {
+  id              String              @id @default(uuid()) @db.Uuid
+  userId          String              @db.Uuid
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime            @db.Date
+  workedSeconds   Int                 @default(0)
+  idleSeconds     Int                 @default(0)
+  overtimeSeconds Int                 @default(0)
+  firstCheckInAt  DateTime?
+  isLate          Boolean             @default(false)
+  status          AttendanceDayStatus @default(ABSENT)
+  // 3-lates rule (Spec §4): set the day a monthly late-count deduction is applied.
+  lateDeductionApplied Boolean        @default(false)
+  computedAt      DateTime            @default(now())
+
+  @@unique([userId, date])
+  @@index([date])
+  @@map("attendance_days")
+}
+
+/// Regularization request (Spec §5.3): a correction that is approved and logged,
+/// and NEVER overwrites the original session history.
+model RegularizationRequest {
+  id                  String               @id @default(uuid()) @db.Uuid
+  userId              String               @db.Uuid
+  user                User                 @relation("RegSubject", fields: [userId], references: [id], onDelete: Cascade)
+  date                DateTime             @db.Date
+  reason              String
+  requestedCheckInAt  DateTime?
+  requestedCheckOutAt DateTime?
+  status              RegularizationStatus @default(PENDING)
+
+  reviewerId      String? @db.Uuid
+  reviewer        User?   @relation("RegReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  decisionComment String?
+
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@map("regularization_requests")
+}
+
+/// A Project or Work Stream (Spec §5.4). Budget is visible only to PM/Finance/Admin (§3).
+model Project {
+  id          String        @id @default(uuid()) @db.Uuid
+  name        String
+  type        ProjectType   @default(PROJECT)
+  status      ProjectStatus @default(ACTIVE)
+  description String?
+
+  pmId String? @db.Uuid
+  pm   User?   @relation("ProjectPM", fields: [pmId], references: [id], onDelete: SetNull)
+
+  clientId String? @db.Uuid // primary CLIENT contact (kept for notifications)
+  client   User?   @relation("ProjectClient", fields: [clientId], references: [id], onDelete: SetNull)
+
+  // Client-org scoping for the portal (Spec §2, §5.5).
+  clientOrgId  String?               @db.Uuid
+  clientOrg    ClientOrg?            @relation(fields: [clientOrgId], references: [id], onDelete: SetNull)
+  clientAccess ClientProjectAccess[]
+
+  startDate    DateTime?
+  endDate      DateTime? // null for STREAM (no end date, §5.4)
+  budgetAmount Decimal?  @db.Decimal(14, 2)
+  cadence      String? // STREAM cadence, e.g. 'WEEKLY' (§5.4)
+  vertical     BusinessVertical? // business vertical for P&L grouping (Spec §5.8)
+
+  invoices Invoice[]
+  expenses Expense[]
+
+  modules Module[]
+  tasks   Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pmId])
+  @@index([clientId])
+  @@index([status])
+  @@map("projects")
+}
+
+/// A named grouping inside a project (Spec §5.4) — e.g. "Frontend", "Chapter 3".
+model Module {
+  id        String @id @default(uuid()) @db.Uuid
+  projectId String @db.Uuid
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  position  Int    @default(0)
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("modules")
+}
+
+/// A Task or Subtask (Spec §5.4). Subtasks are one level deep only (enforced in service).
+model Task {
+  id        String @id @default(uuid()) @db.Uuid
+  projectId String @db.Uuid
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  moduleId String? @db.Uuid
+  module   Module? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+
+  parentTaskId String? @db.Uuid
+  parentTask   Task?   @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks     Task[]  @relation("Subtasks")
+
+  title       String
+  description String?
+
+  assigneeId String? @db.Uuid
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  priority       TaskPriority @default(MEDIUM)
+  estimatedHours Decimal?     @db.Decimal(6, 2) // 0.25–999, quarter-hour steps (§24)
+  actualHours    Decimal?     @db.Decimal(6, 2)
+  deadline       DateTime?
+  clientFacing   Boolean      @default(false) // §6 flag, settable by PM/TL
+  status         TaskStatus   @default(DRAFT)
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  history   TaskStatusHistory[]
+  watchers  TaskWatcher[]
+  checklist ChecklistItem[]
+  comments  Comment[]
+  files     FileAsset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([parentTaskId])
+  @@index([moduleId])
+  @@map("tasks")
+}
+
+/// Immutable transition record (Spec §6, §5.4): from/to/actor/timestamp/comment.
+/// APPEND-ONLY — the service exposes no update or delete path. Powers reports + AI.
+model TaskStatusHistory {
+  id     String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  fromStatus TaskStatus?
+  toStatus   TaskStatus
+  action     String
+
+  actorId    String? @db.Uuid
+  actor      User?   @relation("TaskHistoryActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorEmail String?
+  comment    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@map("task_status_history")
+}
+
+/// Watchers get task notifications (Spec §5.4, §5.12).
+model TaskWatcher {
+  taskId String @db.Uuid
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+  @@map("task_watchers")
+}
+
+/// Task checklist item (Spec §5.4).
+model ChecklistItem {
+  id       String  @id @default(uuid()) @db.Uuid
+  taskId   String  @db.Uuid
+  task     Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  text     String
+  done     Boolean @default(false)
+  position Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@map("checklist_items")
+}
+
+/// Task comment (Spec §5.4). Internal by default; client-visible needs task sharing.
+model Comment {
+  id     String @id @default(uuid()) @db.Uuid
+  taskId String @db.Uuid
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  authorId    String? @db.Uuid
+  author      User?   @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorEmail String?
+
+  body       String
+  visibility CommentVisibility @default(INTERNAL)
+
+  mentions CommentMention[]
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@map("comments")
+}
+
+/// @mention resolved to a user with task access (Spec §5.4) — drives a notification.
+model CommentMention {
+  commentId String  @db.Uuid
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String  @db.Uuid
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId])
+  @@index([userId])
+  @@map("comment_mentions")
+}
+
+/// In-app notification (Spec §5.12). Real-time delivery via the presence gateway;
+/// email is enqueued separately per the user's preference. Auto-deleted after §4 retention.
+model Notification {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type       String // event key, e.g. 'TASK_ASSIGNED'
+  title      String
+  body       String?
+  entityType String?
+  entityId   String?
+  readAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+/// Per-user, per-event-group channel preference (Spec §5.12).
+model NotificationPreference {
+  userId     String           @db.Uuid
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventGroup String
+  pref       NotificationPref @default(IN_APP_EMAIL)
+
+  @@id([userId, eventGroup])
+  @@map("notification_preferences")
+}
+
+/// A logical file attached to a task or a user profile (Spec §5.6). Its content
+/// lives across one-or-more immutable versions — a re-upload adds a version.
+model FileAsset {
+  id String @id @default(uuid()) @db.Uuid
+
+  // Attach target: exactly one of task / profile.
+  taskId String? @db.Uuid
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  profileUserId String? @db.Uuid
+  profileUser   User?   @relation("ProfileFiles", fields: [profileUserId], references: [id], onDelete: Cascade)
+
+  displayName String // original filename, preserved for display (§24)
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation("FileCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  versions FileVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([profileUserId])
+  @@map("file_assets")
+}
+
+/// One immutable version of a file (Spec §5.6): every upload = new version, never
+/// an overwrite. Downloadable only once the virus scan marks it AVAILABLE.
+model FileVersion {
+  id          String    @id @default(uuid()) @db.Uuid
+  fileAssetId String    @db.Uuid
+  fileAsset   FileAsset @relation(fields: [fileAssetId], references: [id], onDelete: Cascade)
+
+  versionNumber Int
+  storageKey    String  @unique // object key in the bucket (sanitized)
+  originalName  String
+  sizeBytes     Int?
+  contentType   String?
+
+  scanStatus FileScanStatus @default(PENDING)
+  scanDetail String? // signature name when INFECTED
+  visibility FileVisibility @default(INTERNAL)
+  note       String? // optional version note ≤ 500 chars (§24)
+
+  uploadedById String? @db.Uuid
+  uploadedBy   User?   @relation("FileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  uploadedAt DateTime  @default(now())
+  deletedAt  DateTime? // soft-delete only in V1 (§25); deletions are audited (§5.10)
+
+  @@unique([fileAssetId, versionNumber])
+  @@index([fileAssetId])
+  @@index([scanStatus])
+  @@map("file_versions")
+}
+
+/// Per-user, per-type, per-year leave balance (Spec §5.7). Available = accruedDays −
+/// usedDays. Accrual runs monthly; usage is deducted on approval. Projected accrual
+/// is computed on read, not stored.
+model LeaveBalance {
+  id     String    @id @default(uuid()) @db.Uuid
+  userId String    @db.Uuid
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   LeaveType
+  year   Int
+
+  accruedDays Decimal @default(0) @db.Decimal(6, 2)
+  usedDays    Decimal @default(0) @db.Decimal(6, 2)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type, year])
+  @@index([userId])
+  @@map("leave_balances")
+}
+
+/// A leave request routed through the approval chain (Spec §5.7). Excess beyond
+/// balance auto-converts to Unpaid (paidDays + unpaidDays = totalDays), flagged into
+/// the payroll export (Phase 8). Never in a locked payroll month (§24, wired Phase 8).
+model LeaveRequest {
+  id     String    @id @default(uuid()) @db.Uuid
+  userId String    @db.Uuid
+  user   User      @relation("LeaveSubject", fields: [userId], references: [id], onDelete: Cascade)
+  type   LeaveType
+  half   LeaveHalf @default(FULL)
+
+  fromDate DateTime @db.Date
+  toDate   DateTime @db.Date
+  reason   String
+
+  // Working-day counts computed at request time, re-split at approval against the
+  // then-current balance (§24 balance check at request AND approval).
+  totalDays  Decimal @db.Decimal(6, 2)
+  paidDays   Decimal @db.Decimal(6, 2)
+  unpaidDays Decimal @default(0) @db.Decimal(6, 2)
+
+  status LeaveRequestStatus @default(PENDING)
+
+  // Approval routing (§5.7). currentApproverId is the specific person when known;
+  // when null (e.g. HR level), any capable approver picks it from the queue.
+  currentLevel      LeaveApprovalLevel
+  currentApproverId String?            @db.Uuid
+  currentApprover   User?              @relation("LeaveCurrentApprover", fields: [currentApproverId], references: [id], onDelete: SetNull)
+
+  // 48h auto-escalation (§4, §5.7): the deadline the escalation job checks.
+  escalationDueAt DateTime?
+  escalatedCount  Int       @default(0)
+
+  reviewerId      String? @db.Uuid
+  reviewer        User?   @relation("LeaveReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  decisionComment String?
+
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([currentApproverId, status])
+  @@map("leave_requests")
+}
+
+/// Append-only ledger backing every balance change (Spec §5.7). Accrual is idempotent
+/// per period (unique userId+type+ACCRUAL+periodKey), so the monthly job is safe to
+/// re-run. Usage/refund rows link the driving request.
+model LeaveLedger {
+  id        String          @id @default(uuid()) @db.Uuid
+  userId    String          @db.Uuid
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      LeaveType
+  entryType LeaveLedgerType
+  days      Decimal         @db.Decimal(6, 2)
+
+  periodKey String? // 'YYYY-MM' for accrual idempotency; null otherwise
+  requestId String? @db.Uuid
+  note      String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, type, entryType, periodKey])
+  @@index([userId])
+  @@map("leave_ledger")
+}
+
+/// Company holiday calendar (Spec §5.13). Excluded from leave working-day counts;
+/// adding one refunds overlapping approved leave (§25 recompute).
+model Holiday {
+  id        String   @id @default(uuid()) @db.Uuid
+  date      DateTime @unique @db.Date
+  name      String
+  createdAt DateTime @default(now())
+
+  @@map("holidays")
+}
+
+/// Per-year invoice number counter (Spec §4 format RAD-{YYYY}-{SEQ4}). lastSeq only
+/// ever increases, so cancelled numbers stay burned and are never reused (§24).
+model InvoiceSequence {
+  year    Int @id
+  lastSeq Int @default(0)
+}
+
+/// An invoice against a client org + project (Spec §5.8). Totals are denormalized
+/// from the lines at write time; amountPaid is the sum of non-reversal payments.
+model Invoice {
+  id     String        @id @default(uuid()) @db.Uuid
+  number String        @unique // burned even when CANCELLED (§24)
+  status InvoiceStatus @default(DRAFT)
+
+  clientOrgId String?    @db.Uuid
+  clientOrg   ClientOrg? @relation(fields: [clientOrgId], references: [id], onDelete: SetNull)
+  projectId   String?    @db.Uuid
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  issueDate DateTime @db.Date
+  dueDate   DateTime @db.Date
+
+  subtotal   Decimal @default(0) @db.Decimal(14, 2)
+  gstAmount  Decimal @default(0) @db.Decimal(14, 2)
+  total      Decimal @default(0) @db.Decimal(14, 2)
+  amountPaid Decimal @default(0) @db.Decimal(14, 2)
+
+  notes      String?
+  footerText String?
+
+  // Cancel-and-reissue lineage (§24): content edits after Sent cancel + reissue.
+  cancelledReason String?
+  reissuedFromId  String?   @db.Uuid
+  reissuedFrom    Invoice?  @relation("Reissue", fields: [reissuedFromId], references: [id], onDelete: SetNull)
+  reissues        Invoice[] @relation("Reissue")
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  lines    InvoiceLine[]
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientOrgId])
+  @@index([projectId])
+  @@index([status])
+  @@map("invoices")
+}
+
+/// One invoice line (Spec §5.8, §24): qty > 0, rate ≥ 0, GST 0–28. Amounts stored.
+model InvoiceLine {
+  id        String  @id @default(uuid()) @db.Uuid
+  invoiceId String  @db.Uuid
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  position    Int     @default(0)
+  description String
+  quantity    Decimal @db.Decimal(12, 2)
+  rate        Decimal @db.Decimal(14, 2)
+  gstPercent  Decimal @db.Decimal(5, 2)
+
+  lineSubtotal Decimal @db.Decimal(14, 2)
+  lineGst      Decimal @db.Decimal(14, 2)
+  lineTotal    Decimal @db.Decimal(14, 2)
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+/// A payment against an invoice (Spec §5.8): partial payments supported. Reversals
+/// are compensating entries (isReversal, negative amount) — never a delete (§25).
+model Payment {
+  id        String  @id @default(uuid()) @db.Uuid
+  invoiceId String  @db.Uuid
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  paidAt     DateTime @db.Date
+  mode       String
+  reference  String?
+  amount     Decimal  @db.Decimal(14, 2)
+  note       String?
+  isReversal Boolean  @default(false)
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation("PaymentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+/// An expense logged against a project (Spec §5.8): category + optional receipt file.
+model Expense {
+  id        String  @id @default(uuid()) @db.Uuid
+  projectId String  @db.Uuid
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  category    String
+  description String?
+  amount      Decimal  @db.Decimal(14, 2)
+  spentAt     DateTime @db.Date
+
+  receiptFileId String? @db.Uuid // FileAsset id (§5.6) — receipt attachment
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([category])
+  @@map("expenses")
+}
+
+/// Payroll month lock state (Spec §5.8, §25). Locking freezes attendance/leave edits
+/// for the month and enables the immutable export; unlock is SA-approved + audited.
+model PayrollMonth {
+  id     String             @id @default(uuid()) @db.Uuid
+  year   Int
+  month  Int // 1–12
+  status PayrollMonthStatus @default(OPEN)
+
+  lockedById   String?   @db.Uuid
+  lockedBy     User?     @relation("PayrollLocker", fields: [lockedById], references: [id], onDelete: SetNull)
+  lockedAt     DateTime?
+  unlockReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([year, month])
+  @@map("payroll_months")
+}
+
+/// An immutable payroll export snapshot (Spec §5.8, §25). Re-export increments the
+/// revision; the CSV + computed rows are frozen at generation time.
+model PayrollExport {
+  id       String @id @default(uuid()) @db.Uuid
+  year     Int
+  month    Int
+  revision Int    @default(1)
+
+  csv  String @db.Text
+  rows Json // structured snapshot behind the CSV
+
+  generatedById String?  @db.Uuid
+  generatedBy   User?    @relation("PayrollExporter", fields: [generatedById], references: [id], onDelete: SetNull)
+  generatedAt   DateTime @default(now())
+
+  @@unique([year, month, revision])
+  @@index([year, month])
+  @@map("payroll_exports")
+}
+
+/// A team's daily AI summary (Spec §7): generated once per team per day, stored so
+/// re-requests return the cached copy. aiGenerated=false marks the rule-based fallback.
+model AiDailySummary {
+  id     String   @id @default(uuid()) @db.Uuid
+  teamId String   @db.Uuid
+  team   Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  date   DateTime @db.Date
+
+  content     String  @db.Text
+  aiGenerated Boolean @default(false)
+  provider    String?
+
+  generatedById String? @db.Uuid
+  generatedBy   User?   @relation("AiSummaryAuthor", fields: [generatedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, date])
+  @@map("ai_daily_summaries")
+}
+
+/// Per-user, per-day AI call counter for the daily rate limit (Spec §7, §10).
+model AiUsage {
+  id     String   @id @default(uuid()) @db.Uuid
+  userId String   @db.Uuid
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime @db.Date
+  count  Int      @default(0)
+
+  @@unique([userId, date])
+  @@map("ai_usage")
+}
+
+/// A client organization with many individual users (Spec §2). One login per org
+/// is explicitly NOT acceptable — each user has their own login and scope.
+model ClientOrg {
+  id     String          @id @default(uuid()) @db.Uuid
+  name   String          @unique
+  status ClientOrgStatus @default(ACTIVE)
+
+  users    User[]    @relation("OrgUsers")
+  projects Project[]
+  invoices Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("client_orgs")
+}
+
+/// Which client user can see which project, and at what level (Spec §5.5).
+/// Scoping key for the portal: a client can only ever reach rows reachable here.
+model ClientProjectAccess {
+  id        String  @id @default(uuid()) @db.Uuid
+  projectId String  @db.Uuid
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  clientUserId String @db.Uuid
+  clientUser   User   @relation("ClientAccess", fields: [clientUserId], references: [id], onDelete: Cascade)
+
+  level ClientAccessLevel @default(VIEWER)
+
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, clientUserId])
+  @@index([clientUserId])
+  @@map("client_project_access")
 }

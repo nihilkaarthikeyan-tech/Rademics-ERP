@@ -59,6 +59,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen">
+      {/* Skip link (WCAG 2.4.1): keyboard users bypass the nav straight to content. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+      >
+        Skip to content
+      </a>
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <div className="flex items-center gap-6">
@@ -83,13 +90,18 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-slate-500">{me.email}</span>
-            <button onClick={logout} className="text-slate-500 hover:text-slate-800" title="Log out">
+            <button
+              onClick={logout}
+              className="rounded-md text-slate-500 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+              title="Log out"
+              aria-label="Log out"
+            >
               <LogOut className="h-4 w-4" />
             </button>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl p-6">{children}</main>
+      <main id="main-content" className="mx-auto max-w-5xl p-6">{children}</main>
     </div>
   );
 }

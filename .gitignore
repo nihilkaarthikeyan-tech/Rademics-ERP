@@ -44,3 +44,6 @@ test-results/
 
 # Source document (kept out of app builds; reference only)
 *.docx
+
+# Local-only: holds the real Super Admin password — never commit
+DEMO_LOGINS.md

@@ -152,7 +152,7 @@ export default function NewEmployeePage() {
               <Input id="phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
             </div>
 
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {error ? <p className="text-sm text-slate-900">{error}</p> : null}
 
             <div className="flex gap-3">
               <Button type="submit" disabled={saving}>

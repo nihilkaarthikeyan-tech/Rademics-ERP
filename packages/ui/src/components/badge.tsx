@@ -1,7 +1,11 @@
 import * as React from 'react';
 import { cn } from '../lib/cn';
 
-/** Small status chip (e.g. task status, invoice status). */
+/**
+ * Small status chip. Interior is monochrome (user direction): severity is encoded by
+ * FILL WEIGHT, not hue — neutral → outlined (positive) → mid-grey (warning) → solid
+ * black (critical). Callers keep the same `tone` API; only the rendering is B&W.
+ */
 export function Badge({
   className,
   tone = 'slate',
@@ -10,11 +14,11 @@ export function Badge({
   tone?: 'slate' | 'blue' | 'green' | 'amber' | 'red';
 }) {
   const tones: Record<string, string> = {
-    slate: 'bg-slate-100 text-slate-700',
-    blue: 'bg-blue-100 text-blue-700',
-    green: 'bg-green-100 text-green-700',
-    amber: 'bg-amber-100 text-amber-800',
-    red: 'bg-red-100 text-red-700',
+    slate: 'bg-slate-100 text-slate-600',
+    blue: 'bg-slate-100 text-slate-700',
+    green: 'border border-slate-300 bg-white text-slate-700',
+    amber: 'bg-slate-200 text-slate-800',
+    red: 'bg-slate-900 text-white',
   };
   return (
     <span

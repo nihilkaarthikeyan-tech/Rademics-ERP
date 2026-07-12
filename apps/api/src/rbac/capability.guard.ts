@@ -9,7 +9,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Grant } from '@rademics/permissions';
 import type { Request } from 'express';
-import { CAPABILITY_KEY_META } from './capability.decorator';
+import { CAPABILITY_KEY_META, CAPABILITY_SCOPED_META } from './capability.decorator';
 import { CapabilityService } from './capability.service';
 import type { AuthUser } from '../auth/auth-user';
 
@@ -52,8 +52,15 @@ export class CapabilityGuard implements CanActivate {
     if (grant === Grant.ALLOW) return true;
 
     if (grant === Grant.SCOPED) {
+      const scopeAllowed = this.reflector.getAllAndOverride<boolean | undefined>(
+        CAPABILITY_SCOPED_META,
+        [context.getHandler(), context.getClass()],
+      );
+      // The handler opted into self-scoping (Spec §3): let it through, it MUST
+      // restrict rows to the caller's scope. Otherwise fail closed.
+      if (scopeAllowed) return true;
       this.logger.warn(
-        `SCOPED capability "${capability}" denied for ${user.role} — resource-level scope check not yet implemented`,
+        `SCOPED capability "${capability}" denied for ${user.role} — route did not opt into self-scoping`,
       );
     }
 

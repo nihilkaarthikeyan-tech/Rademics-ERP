@@ -7,8 +7,6 @@ import { Card, CardContent, EmptyState } from '@rademics/ui';
 // keeps every sidebar link functional (no 404s) during the build-out.
 const PHASE: Record<string, string> = {
   'my-work': 'Phase 3–4',
-  attendance: 'Phase 3',
-  projects: 'Phase 4',
   leave: 'Phase 7',
   finance: 'Phase 8',
   reports: 'Phase 9',

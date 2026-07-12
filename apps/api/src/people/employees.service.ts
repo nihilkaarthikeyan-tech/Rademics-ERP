@@ -11,6 +11,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuthService } from '../auth/auth.service';
 import { EncryptionService } from '../crypto/encryption.service';
 import { CapabilityService } from '../rbac/capability.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AuthUser } from '../auth/auth-user';
 import type { CreateEmployeeDto, ListEmployeesQuery, UpdateEmployeeDto } from './dto';
 
@@ -45,6 +46,7 @@ export class EmployeesService {
     private readonly auth: AuthService,
     private readonly encryption: EncryptionService,
     private readonly capabilities: CapabilityService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ── Directory list (Spec §19 table standards) ──
@@ -199,8 +201,9 @@ export class EmployeesService {
       where: { id },
       data: { status: 'DEACTIVATED', employmentStatus: 'EXITED', activeEngagement: false },
     });
-    // Immediately revoke sessions (Spec §5.2). Open-task reassignment lands in Phase 4.
+    // Immediately revoke sessions (Spec §5.2).
     await this.auth.revokeAllForUser(id);
+    const reassigned = await this.reassignOpenTasks(id, actor);
 
     await this.audit.record({
       actorId: actor.id,
@@ -209,10 +212,52 @@ export class EmployeesService {
       entityType: 'User',
       entityId: id,
       before: { status: user.status },
-      after: { status: 'DEACTIVATED' },
+      after: { status: 'DEACTIVATED', tasksReassigned: reassigned },
       ...meta,
     });
-    return { id, status: 'DEACTIVATED' };
+    return { id, status: 'DEACTIVATED', tasksReassigned: reassigned };
+  }
+
+  /**
+   * On deactivation, open tasks auto-return to ASSIGNED with the assignee cleared,
+   * and the project PM is notified (Spec §25). History is preserved (immutable §6).
+   */
+  private async reassignOpenTasks(userId: string, actor: AuthUser): Promise<number> {
+    const TERMINAL = ['COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED'] as const;
+    const open = await this.prisma.task.findMany({
+      where: { assigneeId: userId, status: { notIn: [...TERMINAL] } },
+      select: { id: true, title: true, status: true, project: { select: { pmId: true } } },
+    });
+
+    for (const task of open) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.task.update({
+          where: { id: task.id },
+          data: { assigneeId: null, status: 'ASSIGNED' },
+        });
+        await tx.taskStatusHistory.create({
+          data: {
+            taskId: task.id,
+            fromStatus: task.status,
+            toStatus: 'ASSIGNED',
+            action: 'REASSIGN',
+            actorId: actor.id,
+            actorEmail: actor.email,
+            comment: 'Auto-returned to the assignment pool on assignee deactivation (§25)',
+          },
+        });
+      });
+      await this.notifications.notify({
+        userId: task.project.pmId ?? '',
+        type: 'TASK_UNASSIGNED',
+        eventGroup: 'tasks',
+        title: 'A task needs reassignment',
+        body: `${task.title} returned to the pool after its assignee was deactivated`,
+        entityType: 'Task',
+        entityId: task.id,
+      });
+    }
+    return open.length;
   }
 
   // ── Salary (encrypted at rest; audited without the value) ──

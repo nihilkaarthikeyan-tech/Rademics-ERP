@@ -3,6 +3,7 @@ import { ForbiddenException, UnauthorizedException, type ExecutionContext } from
 import { Reflector } from '@nestjs/core';
 import { Grant } from '@rademics/permissions';
 import { CapabilityGuard } from './capability.guard';
+import { CAPABILITY_KEY_META, CAPABILITY_SCOPED_META } from './capability.decorator';
 import type { CapabilityService } from './capability.service';
 import type { AuthUser } from '../auth/auth-user';
 
@@ -14,8 +15,14 @@ function makeContext(user: AuthUser | undefined): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-function makeGuard(capability: string | undefined, grant: Grant) {
-  const reflector = { getAllAndOverride: vi.fn().mockReturnValue(capability) } as unknown as Reflector;
+function makeGuard(capability: string | undefined, grant: Grant, scopeAllowed = false) {
+  const reflector = {
+    getAllAndOverride: vi.fn((key: string) =>
+      key === CAPABILITY_SCOPED_META ? scopeAllowed : capability,
+    ),
+  } as unknown as Reflector;
+  // reference the key constant so a rename keeps this in sync
+  void CAPABILITY_KEY_META;
   const capabilities = { resolveGrant: vi.fn().mockResolvedValue(grant) } as unknown as CapabilityService;
   return new CapabilityGuard(reflector, capabilities);
 }
@@ -43,9 +50,14 @@ describe('CapabilityGuard (Spec §3, §10 — enforced at the API)', () => {
     await expect(guard.canActivate(makeContext(employee))).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('fails closed (403) on SCOPED until a scope check exists', async () => {
-    const guard = makeGuard('attendance.team.view', Grant.SCOPED);
+  it('fails closed (403) on SCOPED when the route did not opt into self-scoping', async () => {
+    const guard = makeGuard('attendance.team.view', Grant.SCOPED, false);
     await expect(guard.canActivate(makeContext(employee))).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('passes SCOPED when the route opts into self-scoping (handler enforces scope)', async () => {
+    const guard = makeGuard('attendance.team.view', Grant.SCOPED, true);
+    await expect(guard.canActivate(makeContext(employee))).resolves.toBe(true);
   });
 
   it('rejects (401) a capability-guarded route with no authenticated user', async () => {

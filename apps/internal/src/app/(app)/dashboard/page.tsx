@@ -1,44 +1,45 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle, EmptyState } from '@rademics/ui';
 import { useMe } from '@/lib/me-context';
+import { AttendanceCard } from '@/components/attendance-card';
+import { DashboardOverview } from '@/components/dashboard-overview';
+
+// Roles that clock in/out (Spec §3: Super Admin & Client never check in).
+const CAN_CHECK_IN = ['HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'];
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function displayName(email: string): string {
+  const base = email.split('@')[0] ?? email;
+  return base.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
 
 export default function DashboardPage() {
   const me = useMe();
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <h1 className="text-xl font-semibold text-slate-800">Dashboard</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Signed in as <span className="font-medium">{me.email}</span>
-      </p>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {['Tasks in progress', 'Awaiting acknowledgment', 'Overdue', 'Completed this week'].map((label) => (
-          <Card key={label}>
-            <CardHeader>
-              <CardTitle>{label}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold text-slate-300">—</div>
-            </CardContent>
-          </Card>
-        ))}
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          {greeting()}, {displayName(me.email)}
+        </h1>
+        <p className="mt-1 font-mono text-xs uppercase tracking-wide text-slate-400">
+          {new Date().toLocaleDateString(undefined, DATE_FMT)}
+        </p>
       </div>
 
-      <div className="mt-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>My Tasks Today</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <EmptyState
-              title="No tasks yet"
-              description="Task management arrives in Phase 4. Your assigned work will show up here."
-            />
-          </CardContent>
-        </Card>
-      </div>
+      {CAN_CHECK_IN.includes(me.role) ? <AttendanceCard /> : null}
+
+      {/* Studio overview — self-gating: renders only for roles with reports access. */}
+      <DashboardOverview />
     </div>
   );
 }

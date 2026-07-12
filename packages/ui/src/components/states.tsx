@@ -47,10 +47,10 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 py-12 text-center">
-      <AlertTriangle className="h-8 w-8 text-red-400" />
-      <p className="text-sm font-medium text-red-800">{title}</p>
-      {description ? <p className="max-w-sm text-sm text-red-600">{description}</p> : null}
+    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-50 py-12 text-center">
+      <AlertTriangle className="h-8 w-8 text-slate-700" />
+      <p className="text-sm font-medium text-slate-900">{title}</p>
+      {description ? <p className="max-w-sm text-sm text-slate-500">{description}</p> : null}
       {onRetry ? (
         <Button variant="outline" size="sm" className="mt-2" onClick={onRetry}>
           Retry
