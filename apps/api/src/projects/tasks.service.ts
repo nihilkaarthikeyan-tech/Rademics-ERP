@@ -122,11 +122,30 @@ export class TasksService {
     return task;
   }
 
+  /**
+   * §3 scope resolution for read access: ALLOW = see everything;
+   * SCOPED (TL/EMP via projects.view_own_team) = own projects only; else 403.
+   */
+  private async resolveViewScope(user: AuthUser): Promise<'ALL' | 'OWN'> {
+    const all = await this.capabilities.resolveGrant(user.role, user.resourceType, 'projects.view_all');
+    if (all === Grant.ALLOW) return 'ALL';
+    const own = await this.capabilities.resolveGrant(user.role, user.resourceType, 'projects.view_own_team');
+    if (own === Grant.ALLOW || own === Grant.SCOPED) return 'OWN';
+    throw new ForbiddenException('Missing capability: projects.view_all');
+  }
+
+  /** "Own project" (§3 view_own_team): the caller is its PM or holds a task in it. */
+  private ownProjectFilter(userId: string): Prisma.ProjectWhereInput {
+    return { OR: [{ pmId: userId }, { tasks: { some: { assigneeId: userId } } }] };
+  }
+
   async get(id: string, user: AuthUser) {
     const task = await this.prisma.task.findUnique({
       where: { id },
       select: {
         ...TASK_SELECT,
+        createdById: true,
+        project: { select: { id: true, name: true, pmId: true } },
         module: { select: { id: true, name: true } },
         subtasks: { select: { id: true, title: true, status: true, assignee: { select: { id: true, name: true } } } },
         checklist: { select: { id: true, text: true, done: true, position: true }, orderBy: { position: 'asc' } },
@@ -138,6 +157,16 @@ export class TasksService {
       },
     });
     if (!task) throw new NotFoundException('Task not found');
+
+    if ((await this.resolveViewScope(user)) === 'OWN') {
+      const involved =
+        task.assignee?.id === user.id ||
+        task.createdById === user.id ||
+        task.project.pmId === user.id ||
+        task.watchers.some((w) => w.user.id === user.id);
+      if (!involved) throw new ForbiddenException('You do not have access to this task');
+    }
+
     const comments = await this.listComments(id, user);
     return { ...task, comments, overdue: this.isOverdue(task) };
   }
@@ -184,20 +213,26 @@ export class TasksService {
     return task;
   }
 
-  async list(query: {
-    projectId?: string;
-    assigneeId?: string;
-    status?: string;
-    priority?: string;
-    page: number;
-    pageSize: number;
-  }) {
+  async list(
+    query: {
+      projectId?: string;
+      assigneeId?: string;
+      status?: string;
+      priority?: string;
+      page: number;
+      pageSize: number;
+    },
+    user: AuthUser,
+  ) {
     const where: Prisma.TaskWhereInput = {
       projectId: query.projectId,
       assigneeId: query.assigneeId,
       status: query.status as PrismaTaskStatus | undefined,
       priority: query.priority as Prisma.TaskWhereInput['priority'],
     };
+    if ((await this.resolveViewScope(user)) === 'OWN') {
+      where.project = this.ownProjectFilter(user.id);
+    }
     const [items, total] = await this.prisma.$transaction([
       this.prisma.task.findMany({
         where,
@@ -214,6 +249,16 @@ export class TasksService {
       page: query.page,
       pageSize: query.pageSize,
     };
+  }
+
+  /** The caller's work queue (My Work). CLOSED/CANCELLED are noise and excluded. */
+  async listMine(user: AuthUser) {
+    const items = await this.prisma.task.findMany({
+      where: { assigneeId: user.id, status: { notIn: ['CLOSED', 'CANCELLED'] } },
+      select: { ...TASK_SELECT, project: { select: { id: true, name: true } } },
+      orderBy: [{ deadline: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+    });
+    return { items: items.map((t) => ({ ...t, overdue: this.isOverdue(t) })) };
   }
 
   // ── Assign / Reassign (Spec §6, §24) ──

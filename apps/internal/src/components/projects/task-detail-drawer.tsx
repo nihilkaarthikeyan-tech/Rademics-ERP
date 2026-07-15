@@ -140,7 +140,8 @@ export function TaskDetailDrawer({
   }
 
   const actions = task ? availableActions(task.status) : [];
-  const canAssign = task && (task.status === 'DRAFT' || task.status === 'ASSIGNED');
+  // members is empty for roles without tasks.assign — hide the picker for them.
+  const canAssign = task && members.length > 0 && (task.status === 'DRAFT' || task.status === 'ASSIGNED');
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>

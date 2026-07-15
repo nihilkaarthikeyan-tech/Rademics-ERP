@@ -1,7 +1,15 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { Grant } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { CapabilityService } from '../rbac/capability.service';
 import type { AuthUser } from '../auth/auth-user';
 import type { CreateModuleDto, CreateProjectDto, UpdateProjectDto } from './dto';
 
@@ -33,6 +41,7 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly capabilities: CapabilityService,
   ) {}
 
   private stripBudget<T extends { budgetAmount: unknown }>(project: T, user: AuthUser): T | Omit<T, 'budgetAmount'> {
@@ -41,8 +50,35 @@ export class ProjectsService {
     return rest;
   }
 
+  /**
+   * §3 scope resolution for read access: ALLOW = every project;
+   * SCOPED (TL/EMP via projects.view_own_team) = own projects only; else 403.
+   */
+  private async resolveViewScope(user: AuthUser): Promise<'ALL' | 'OWN'> {
+    const all = await this.capabilities.resolveGrant(user.role, user.resourceType, 'projects.view_all');
+    if (all === Grant.ALLOW) return 'ALL';
+    const own = await this.capabilities.resolveGrant(user.role, user.resourceType, 'projects.view_own_team');
+    if (own === Grant.ALLOW || own === Grant.SCOPED) return 'OWN';
+    throw new ForbiddenException('Missing capability: projects.view_all');
+  }
+
+  /** "Own project" (§3 view_own_team): the caller is its PM or holds a task in it. */
+  private ownProjectFilter(userId: string): Prisma.ProjectWhereInput {
+    return { OR: [{ pmId: userId }, { tasks: { some: { assigneeId: userId } } }] };
+  }
+
+  private async assertProjectAccess(projectId: string, user: AuthUser): Promise<void> {
+    if ((await this.resolveViewScope(user)) === 'ALL') return;
+    const involved = await this.prisma.project.count({
+      where: { id: projectId, ...this.ownProjectFilter(user.id) },
+    });
+    if (!involved) throw new ForbiddenException('You do not have access to this project');
+  }
+
   async list(user: AuthUser) {
+    const scope = await this.resolveViewScope(user);
     const items = await this.prisma.project.findMany({
+      where: scope === 'OWN' ? this.ownProjectFilter(user.id) : undefined,
       select: PROJECT_SELECT,
       orderBy: { createdAt: 'desc' },
     });
@@ -50,6 +86,7 @@ export class ProjectsService {
   }
 
   async get(id: string, user: AuthUser) {
+    await this.assertProjectAccess(id, user);
     const project = await this.prisma.project.findUnique({
       where: { id },
       select: {
@@ -155,7 +192,8 @@ export class ProjectsService {
     }
   }
 
-  listModules(projectId: string) {
+  async listModules(projectId: string, user: AuthUser) {
+    await this.assertProjectAccess(projectId, user);
     return this.prisma.module.findMany({ where: { projectId }, orderBy: { position: 'asc' } });
   }
 

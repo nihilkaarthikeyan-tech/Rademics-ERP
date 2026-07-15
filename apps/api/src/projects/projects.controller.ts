@@ -11,8 +11,9 @@ import type { AuthUser } from '../auth/auth-user';
 export class ProjectsController {
   constructor(private readonly projects: ProjectsService) {}
 
+  // No declared capability: the service resolves projects.view_all vs the SCOPED
+  // projects.view_own_team (§3) — TL/EMP see only projects they hold tasks in or PM.
   @Get()
-  @RequireCapability('projects.view_all')
   list(@CurrentUser() user: AuthUser) {
     return this.projects.list(user);
   }
@@ -24,8 +25,8 @@ export class ProjectsController {
     return this.projects.listAssignableUsers();
   }
 
+  // No declared capability: same §3 scope resolution as list() (service-enforced).
   @Get(':id')
-  @RequireCapability('projects.view_all')
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.projects.get(id, user);
   }
@@ -47,10 +48,10 @@ export class ProjectsController {
     return this.projects.update(id, dto, actor, reqMeta(req));
   }
 
+  // No declared capability: same §3 scope resolution as get() (service-enforced).
   @Get(':id/modules')
-  @RequireCapability('projects.view_all')
-  modules(@Param('id', ParseUUIDPipe) id: string) {
-    return this.projects.listModules(id);
+  modules(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.projects.listModules(id, user);
   }
 
   @Post(':id/modules')

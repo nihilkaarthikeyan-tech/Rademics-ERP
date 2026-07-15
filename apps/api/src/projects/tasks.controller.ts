@@ -30,10 +30,19 @@ import type { AuthUser } from '../auth/auth-user';
 export class TasksController {
   constructor(private readonly tasks: TasksService) {}
 
+  // No declared capability: the service resolves projects.view_all vs the SCOPED
+  // projects.view_own_team (§3) itself — a single fixed key cannot express "all
+  // roles may list, but TL/EMP only see their own projects' tasks".
   @Get()
-  @RequireCapability('projects.view_all')
-  list(@Query() query: ListTasksQuery) {
-    return this.tasks.list(query);
+  list(@Query() query: ListTasksQuery, @CurrentUser() user: AuthUser) {
+    return this.tasks.list(query, user);
+  }
+
+  // Auth-only: strictly the caller's own assignments (My Work queue), so every
+  // internal role may call it — the where-clause IS the authorization.
+  @Get('mine')
+  mine(@CurrentUser() user: AuthUser) {
+    return this.tasks.listMine(user);
   }
 
   @Post()
@@ -42,8 +51,9 @@ export class TasksController {
     return this.tasks.create(dto, actor, reqMeta(req));
   }
 
+  // No declared capability: assignees/watchers/creators may open their own task
+  // even without projects.view_all — the service enforces that access rule (§3).
   @Get(':id')
-  @RequireCapability('projects.view_all')
   get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.tasks.get(id, user);
   }
