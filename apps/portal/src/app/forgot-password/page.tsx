@@ -38,7 +38,7 @@ export default function ForgotPasswordPage() {
           If an account exists for <span className="font-medium text-slate-700">{email}</span>,
           we&apos;ve sent a password reset link. It expires in 30 minutes.
         </p>
-        <Link href="/login" className="mt-6 block text-center text-sm font-medium text-brand-blue hover:underline">
+        <Link href="/login" className="mt-6 block text-center text-sm font-medium text-client-teal hover:underline">
           Back to sign in
         </Link>
       </AuthCard>
@@ -77,7 +77,7 @@ export default function ForgotPasswordPage() {
         </Button>
       </form>
 
-      <Link href="/login" className="mt-6 block text-center text-sm font-medium text-brand-blue hover:underline">
+      <Link href="/login" className="mt-6 block text-center text-sm font-medium text-client-teal hover:underline">
         Back to sign in
       </Link>
     </AuthCard>

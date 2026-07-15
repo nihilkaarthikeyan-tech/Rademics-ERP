@@ -29,7 +29,7 @@ export function PasswordTokenForm({ mode }: { mode: 'set' | 'reset' }) {
           This link is missing its token. Please use the link from your email, or request a new
           one.
         </p>
-        <Link href="/forgot-password" className="mt-4 block text-center text-sm font-medium text-brand-blue hover:underline">
+        <Link href="/forgot-password" className="mt-4 block text-center text-sm font-medium text-client-teal hover:underline">
           Request a new link
         </Link>
       </AuthCard>
@@ -148,10 +148,10 @@ export function AuthCard({
     <div className="flex min-h-screen items-center justify-center bg-white px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center justify-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-navy text-sm font-bold text-white">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-client-teal to-client-deep text-sm font-bold text-white">
             R
           </span>
-          <span className="text-xl font-bold tracking-tight text-brand-navy">Rademics</span>
+          <span className="text-xl font-bold tracking-tight text-client-deep">Rademics</span>
           <span className="ml-1 text-sm text-slate-500">Client Portal</span>
         </div>
 

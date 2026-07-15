@@ -43,11 +43,12 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen">
-      {/* ── Brand panel: light, soft bluish background (matches the internal app's identity). ── */}
-      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-blue-50 via-white to-blue-100/70 p-12 lg:flex">
-        {/* Ambient blue glow */}
-        <div className="pointer-events-none absolute -left-16 -top-16 h-72 w-72 rounded-full bg-blue-200/50 blur-3xl" />
-        <div className="pointer-events-none absolute right-8 top-1/3 h-64 w-64 rounded-full bg-brand-blue/10 blur-3xl" />
+      {/* ── Brand panel: light, soft teal background — deliberately distinct from
+          the internal app's blue, so the two logins don't read as the same product. ── */}
+      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-teal-50 via-white to-teal-100/70 p-12 lg:flex">
+        {/* Ambient teal glow */}
+        <div className="pointer-events-none absolute -left-16 -top-16 h-72 w-72 rounded-full bg-teal-200/50 blur-3xl" />
+        <div className="pointer-events-none absolute right-8 top-1/3 h-64 w-64 rounded-full bg-client-teal/10 blur-3xl" />
 
         {/* Layered waves along the bottom */}
         <svg
@@ -57,28 +58,28 @@ export default function LoginPage() {
           preserveAspectRatio="xMidYMax slice"
           aria-hidden="true"
         >
-          <path d="M0,360 C180,300 320,440 520,370 C660,322 740,392 800,360 L800,600 L0,600 Z" fill="#DBEAFE" fillOpacity="0.7" />
-          <path d="M0,440 C200,392 340,500 560,450 C700,418 760,470 800,450 L800,600 L0,600 Z" fill="#BFDBFE" fillOpacity="0.6" />
-          <path d="M0,520 C220,480 380,560 600,520 C720,498 770,532 800,520 L800,600 L0,600 Z" fill="#93C5FD" fillOpacity="0.45" />
+          <path d="M0,360 C180,300 320,440 520,370 C660,322 740,392 800,360 L800,600 L0,600 Z" fill="#CCFBF1" fillOpacity="0.7" />
+          <path d="M0,440 C200,392 340,500 560,450 C700,418 760,470 800,450 L800,600 L0,600 Z" fill="#99F6E4" fillOpacity="0.6" />
+          <path d="M0,520 C220,480 380,560 600,520 C720,498 770,532 800,520 L800,600 L0,600 Z" fill="#5EEAD4" fillOpacity="0.45" />
         </svg>
 
         {/* Wordmark */}
         <div className="relative z-10 flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-navy text-sm font-bold text-white shadow-lg shadow-brand-blue/30">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-client-teal to-client-deep text-sm font-bold text-white shadow-lg shadow-client-teal/30">
             R
           </span>
-          <span className="text-xl font-bold tracking-tight text-brand-navy">Rademics</span>
-          <span className="rounded border border-brand-navy/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-brand-navy/60">
+          <span className="text-xl font-bold tracking-tight text-client-deep">Rademics</span>
+          <span className="rounded border border-client-deep/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-client-deep/60">
             Client Portal
           </span>
         </div>
 
         {/* Headline */}
         <div className="relative z-10">
-          <h1 className="text-4xl font-bold leading-tight tracking-tight text-brand-navy text-balance">
+          <h1 className="text-4xl font-bold leading-tight tracking-tight text-client-deep text-balance">
             Your projects,<br />
             clear and{' '}
-            <span className="text-brand-blue">up to date.</span>
+            <span className="text-client-teal">up to date.</span>
           </h1>
           <p className="mt-5 max-w-md text-sm leading-relaxed text-slate-500">
             Track progress, review and approve deliverables, download shared files, and
@@ -95,10 +96,10 @@ export default function LoginPage() {
       <div className="flex w-full items-center justify-center bg-white px-6 py-12 lg:w-1/2">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2 lg:hidden">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-navy text-sm font-bold text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-client-teal to-client-deep text-sm font-bold text-white">
               R
             </span>
-            <span className="text-xl font-bold tracking-tight text-brand-navy">Rademics</span>
+            <span className="text-xl font-bold tracking-tight text-client-deep">Rademics</span>
             <span className="ml-1 text-sm text-slate-500">Client Portal</span>
           </div>
 
@@ -123,7 +124,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Password</Label>
                 <Link
                   href="/forgot-password"
-                  className="text-xs font-medium text-brand-blue hover:underline"
+                  className="text-xs font-medium text-client-teal hover:underline"
                 >
                   Forgot password?
                 </Link>
@@ -155,11 +156,11 @@ export default function LoginPage() {
                 {error}
               </p>
             ) : null}
-            {/* Login keeps its brand navy CTA (the interior's primary is near-black). */}
+            {/* Login keeps its client-teal CTA (the interior's primary is near-black). */}
             <Button
               type="submit"
               disabled={loading || (TURNSTILE_ENABLED && !captchaToken)}
-              className="mt-2 h-11 !bg-brand-navy hover:!bg-brand-navy/90"
+              className="mt-2 h-11 !bg-client-deep hover:!bg-client-deep/90"
             >
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
