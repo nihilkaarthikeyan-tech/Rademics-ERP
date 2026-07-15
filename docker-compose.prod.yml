@@ -1,0 +1,146 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Rademics ERP — production stack (single-VPS Docker deployment).
+#
+# One image (built from ./Dockerfile) runs three services — api / internal /
+# portal — alongside stateful infra (Postgres, Redis, MinIO). ClamAV is behind
+# the "scan" profile so it is opt-in (its ~1GB signature DB is heavy on a shared
+# box); enable it with `--profile scan` once file-upload scanning is needed.
+#
+# Runtime secrets come from ./.env.production (env_file). Public, build-time
+# values (baked into the browser bundle) are the build args below.
+#
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d postgres redis minio minio-setup
+#   docker compose -f docker-compose.prod.yml up -d api internal portal
+# ─────────────────────────────────────────────────────────────────────────────
+name: rademics-erp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env.production
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rademics} -d ${POSTGRES_DB:-rademics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks: [rademics]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks: [rademics]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    # MINIO_ROOT_USER / MINIO_ROOT_PASSWORD come from env_file. Do NOT add an
+    # environment: block with ${VAR:-default} here — compose substitutes those
+    # from the HOST shell (not env_file), silently starting MinIO with the
+    # fallback creds while the API signs with the real ones.
+    env_file: .env.production
+    ports:
+      - "9000:9000"   # S3 API — reachable by the browser for presigned upload/download URLs
+      - "9001:9001"   # MinIO console (admin)
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks: [rademics]
+
+  # One-shot: create the app buckets, then exit.
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file: .env.production
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/$${S3_BUCKET} &&
+      mc mb --ignore-existing local/$${S3_BUCKET}-quarantine &&
+      echo 'MinIO buckets ready';
+      "
+    networks: [rademics]
+
+  clamav:
+    image: clamav/clamav:latest
+    restart: unless-stopped
+    profiles: ["scan"]
+    volumes:
+      - clamavdata:/var/lib/clamav
+    networks: [rademics]
+
+  api:
+    image: rademics-erp:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "https://api.52digit.com/api"
+        PUBLIC_HTTPS: "true"
+    restart: unless-stopped
+    env_file: .env.production
+    working_dir: /app/apps/api
+    # Apply any pending migrations on boot (idempotent), then start the API.
+    command: sh -c "pnpm exec prisma migrate deploy && node dist/main.js"
+    ports:
+      - "3002:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [rademics]
+
+  internal:
+    image: rademics-erp:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    working_dir: /app/apps/internal
+    command: pnpm start
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks: [rademics]
+
+  portal:
+    image: rademics-erp:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    working_dir: /app/apps/portal
+    command: pnpm start
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+    networks: [rademics]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  clamavdata:
+
+networks:
+  rademics:
+    driver: bridge

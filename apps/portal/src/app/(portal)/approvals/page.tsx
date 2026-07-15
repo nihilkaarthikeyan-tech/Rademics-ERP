@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ClipboardCheck } from 'lucide-react';
 import { Badge, Button, Card, CardContent, EmptyState, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { AccessEnded } from '@/components/access-ended';
@@ -51,8 +52,15 @@ export default function ApprovalsPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-slate-800">Approvals</h1>
-      <p className="mt-1 text-sm text-slate-500">Deliverables awaiting your review.</p>
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+          <ClipboardCheck className="h-5 w-5" />
+        </span>
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Approvals</h1>
+          <p className="mt-0.5 text-sm text-slate-500">Deliverables awaiting your review.</p>
+        </div>
+      </div>
 
       <div className="mt-6">
         {state === 'loading' ? (
@@ -64,31 +72,29 @@ export default function ApprovalsPage() {
         ) : !items || items.length === 0 ? (
           <Card><CardContent className="pt-6"><EmptyState title="Nothing to approve" description="You're all caught up." /></CardContent></Card>
         ) : (
-          <Card>
-            <CardContent className="pt-4">
-              <ul className="flex flex-col divide-y divide-slate-100">
-                {items.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between gap-3 py-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-700">{d.title}</div>
-                      <Link href={`/projects/${d.project.id}`} className="text-xs text-slate-400 hover:underline">
-                        {d.project.name}
-                      </Link>
-                      {d.deadline ? <span className="ml-2 text-xs text-slate-400">Due {new Date(d.deadline).toLocaleDateString()}</span> : null}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <ul className="flex flex-col divide-y divide-slate-100">
+              {items.map((d) => (
+                <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-4">
+                  <div>
+                    <div className="text-sm font-medium text-slate-800">{d.title}</div>
+                    <Link href={`/projects/${d.project.id}`} className="text-xs text-slate-400 hover:underline">
+                      {d.project.name}
+                    </Link>
+                    {d.deadline ? <span className="ml-2 text-xs text-slate-400">Due {new Date(d.deadline).toLocaleDateString()}</span> : null}
+                  </div>
+                  {d.canApprove ? (
+                    <div className="flex shrink-0 gap-2">
+                      <Button size="sm" disabled={busyId === d.id} onClick={() => decide(d.id, 'approve')}>Approve</Button>
+                      <Button size="sm" variant="outline" disabled={busyId === d.id} onClick={() => decide(d.id, 'request-revision')}>Request revision</Button>
                     </div>
-                    {d.canApprove ? (
-                      <div className="flex shrink-0 gap-2">
-                        <Button size="sm" disabled={busyId === d.id} onClick={() => decide(d.id, 'approve')}>Approve</Button>
-                        <Button size="sm" variant="outline" disabled={busyId === d.id} onClick={() => decide(d.id, 'request-revision')}>Request revision</Button>
-                      </div>
-                    ) : (
-                      <Badge tone="slate">View only</Badge>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+                  ) : (
+                    <Badge tone="slate">View only</Badge>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </div>

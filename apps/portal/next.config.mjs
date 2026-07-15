@@ -15,6 +15,10 @@ function apiOrigins() {
 }
 
 const isProd = process.env.NODE_ENV === 'production';
+// HTTPS-only hardening (HSTS + upgrade-insecure-requests) is correct behind TLS but
+// breaks a plain-HTTP-by-IP deployment. Gate it on PUBLIC_HTTPS (default on; set
+// PUBLIC_HTTPS=false for the pre-domain IP:port phase).
+const httpsEnabled = process.env.PUBLIC_HTTPS !== 'false';
 
 /**
  * Content-Security-Policy + security headers (Spec §10). The client portal is the
@@ -22,7 +26,10 @@ const isProd = process.env.NODE_ENV === 'production';
  */
 function contentSecurityPolicy() {
   const [apiHttp, apiWs] = apiOrigins();
-  const scriptSrc = isProd ? "'self' 'unsafe-inline'" : "'self' 'unsafe-inline' 'unsafe-eval'";
+  const turnstile = 'https://challenges.cloudflare.com';
+  const scriptSrc = isProd
+    ? `'self' 'unsafe-inline' ${turnstile}`
+    : `'self' 'unsafe-inline' 'unsafe-eval' ${turnstile}`;
   return [
     "default-src 'self'",
     "base-uri 'self'",
@@ -33,8 +40,9 @@ function contentSecurityPolicy() {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ${apiHttp} ${apiWs}`,
-    ...(isProd ? ['upgrade-insecure-requests'] : []),
+    `connect-src 'self' ${apiHttp} ${apiWs} ${turnstile}`,
+    `frame-src ${turnstile}`, // Turnstile's own challenge widget (Spec §10 CAPTCHA)
+    ...(isProd && httpsEnabled ? ['upgrade-insecure-requests'] : []),
   ].join('; ');
 }
 
@@ -44,7 +52,9 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  ...(httpsEnabled
+    ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }]
+    : []),
 ];
 
 /** @type {import('next').NextConfig} */

@@ -31,7 +31,7 @@ export class MailService implements OnModuleInit {
     this.transporter = nodemailer.createTransport({
       host,
       port,
-      secure: false,
+      secure: port === 465, // implicit TLS on 465; STARTTLS (secure:false) on 587/25
       auth: user ? { user, pass } : undefined,
     });
   }

@@ -9,6 +9,7 @@ import { apiFetch, ApiError, type Me } from '@/lib/api';
 import { clearToken, getToken } from '@/lib/session';
 import { navForRole, NAV_GROUPS } from '@/lib/nav';
 import { MeContext } from '@/lib/me-context';
+import { AttendanceProvider } from '@/lib/attendance-context';
 import { NotificationsBell } from '@/components/notifications-bell';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -79,6 +80,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <MeContext.Provider value={me}>
+    <AttendanceProvider>
       {/* Skip link (WCAG 2.4.1): keyboard users bypass the nav straight to content. */}
       <a
         href="#main-content"
@@ -179,6 +181,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <main id="main-content" className="flex-1 p-6">{children}</main>
         </div>
       </div>
+    </AttendanceProvider>
     </MeContext.Provider>
   );
 }

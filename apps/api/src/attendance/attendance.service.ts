@@ -49,7 +49,7 @@ export class AttendanceService {
       lateThreshold: (r.lateThreshold as string) ?? '09:15',
       halfDayUnderHours: (r.halfDayUnderHours as number) ?? 4,
       overtimeOverHours: (r.overtimeOverHours as number) ?? 9,
-      idleMinutes: (r.idleMinutes as number) ?? 5,
+      idleMinutes: (r.idleMinutes as number) ?? 2,
       threeLatesDeduction:
         (r.threeLatesDeduction as AttendanceRules['threeLatesDeduction']) ?? {
           lateCount: 3,
@@ -145,6 +145,49 @@ export class AttendanceService {
       select: SESSION_PUBLIC,
     });
     return { idleSeconds: session.idleSeconds, checkedIn: true };
+  }
+
+  /**
+   * Auto-checkout anyone silent past the idle threshold (Spec §5.3 idle → logout).
+   * Runs on a 1-minute sweep (attendance.processor.ts). The checkout time is the
+   * exact moment the threshold was crossed, not "now" — the sweep interval itself
+   * shouldn't pad their worked time.
+   */
+  async autoCloseIdleSessions(now = new Date()): Promise<number> {
+    const rules = await this.getRules();
+    const cutoffAgo = new Date(now.getTime() - rules.idleMinutes * 60 * 1000);
+    const stale = await this.prisma.attendanceSession.findMany({
+      where: {
+        checkOutAt: null,
+        OR: [
+          { lastHeartbeatAt: { lt: cutoffAgo } },
+          { lastHeartbeatAt: null, checkInAt: { lt: cutoffAgo } },
+        ],
+      },
+      select: { id: true, userId: true, checkInAt: true, lastHeartbeatAt: true },
+    });
+
+    let closed = 0;
+    for (const s of stale) {
+      const lastSeen = s.lastHeartbeatAt ?? s.checkInAt;
+      const checkOutAt = new Date(lastSeen.getTime() + rules.idleMinutes * 60 * 1000);
+      const result = await this.prisma.attendanceSession.updateMany({
+        where: { id: s.id, checkOutAt: null }, // guard against a race with a manual checkout
+        data: { checkOutAt, autoClosed: true, idleSeconds: { increment: rules.idleMinutes * 60 } },
+      });
+      if (result.count === 0) continue; // already closed by a concurrent request
+      closed += 1;
+
+      if (!(await this.findOpenSession(s.userId))) this.presence.markCheckedOut(s.userId);
+      await this.audit.record({
+        actorId: s.userId,
+        action: 'ATTENDANCE_IDLE_CHECKOUT',
+        entityType: 'AttendanceSession',
+        entityId: s.id,
+        after: { idleMinutes: rules.idleMinutes },
+      });
+    }
+    return closed;
   }
 
   // ── Today's live status for the check-in card (Spec §17.1) ──

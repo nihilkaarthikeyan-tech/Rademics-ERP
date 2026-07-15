@@ -38,6 +38,11 @@ const EnvSchema = z.object({
 
   SENTRY_DSN: z.string().optional().default(''),
 
+  // Cloudflare Turnstile CAPTCHA (Spec §10 bot protection). Optional: when unset,
+  // verification is a safe no-op (same DSN-guarded pattern as Sentry above) — set it
+  // to actually start enforcing the check on login/forgot-password.
+  TURNSTILE_SECRET_KEY: z.string().optional().default(''),
+
   // AI provider keys — server-side only (Spec §7, §10). All optional: features
   // degrade gracefully (rule-based fallback) when the configured provider has no key.
   ANTHROPIC_API_KEY: z.string().optional().default(''),

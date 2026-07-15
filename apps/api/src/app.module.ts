@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './audit/audit.module';
@@ -31,6 +32,11 @@ import { CapabilityGuard } from './rbac/capability.guard';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    // Bot / abuse protection (Spec §10): baseline per-IP cap on every route. Sensitive
+    // auth endpoints (login, forgot-password, ...) override with a stricter limit — see
+    // the @Throttle() decorators in auth.controller.ts. Kept generous (not per-account
+    // tight) since many employees can share one office IP behind NAT.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }]),
     PrismaModule,
     AuditModule,
     RbacModule,
@@ -55,7 +61,9 @@ import { CapabilityGuard } from './rbac/capability.guard';
   ],
   controllers: [HealthController],
   providers: [
-    // Global guards run in order: authenticate first, then check capability (Spec §3, §10).
+    // Global guards run in order: throttle abuse first (before spending CPU on auth),
+    // then authenticate, then check capability (Spec §3, §10).
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: CapabilityGuard },
     // Report 5xx faults to Sentry (Spec §11); no-op without a DSN.

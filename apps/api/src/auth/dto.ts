@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsIn,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MaxLength,
   MinLength,
@@ -16,11 +17,21 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty()
   password!: string;
+
+  // Cloudflare Turnstile token (Spec §10 bot protection). Only enforced once
+  // TURNSTILE_SECRET_KEY is configured server-side — see TurnstileService.
+  @IsString()
+  @IsOptional()
+  captchaToken?: string;
 }
 
 export class ForgotPasswordDto {
   @IsEmail()
   email!: string;
+
+  @IsString()
+  @IsOptional()
+  captchaToken?: string;
 }
 
 export class SetPasswordDto {

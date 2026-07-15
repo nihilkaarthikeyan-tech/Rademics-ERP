@@ -145,8 +145,12 @@ export class PortalService {
       percentComplete: this.percent(project.tasks),
       milestones,
       deliverables,
-      // Client-visible task list (progress only — no internal metadata).
-      items: project.tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, deadline: t.deadline })),
+      // Client-visible task list, minus CLIENT_REVIEW tasks — those are already
+      // shown (with actions) in `deliverables` above; keeping them here too would
+      // list the same task twice.
+      items: project.tasks
+        .filter((t) => t.status !== 'CLIENT_REVIEW')
+        .map((t) => ({ id: t.id, title: t.title, status: t.status, deadline: t.deadline })),
     };
   }
 

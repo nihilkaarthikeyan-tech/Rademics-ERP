@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rademics ERP — Platform Overview</title>
+<style>
+  /* ============================================================
+     Rademics ERP — Management Overview (print / PDF optimised)
+     Open in Chrome → Ctrl/Cmd+P → Save as PDF → tick "Background graphics".
+     ============================================================ */
+  :root{
+    --brand:#163E66;        /* deep professional navy — headings, bands */
+    --brand-2:#1E5A86;      /* lighter navy */
+    --ink:#1B2129;          /* body text (high contrast) */
+    --muted:#47515F;        /* secondary text, still readable */
+    --faint:#6A7482;        /* captions / labels */
+    --paper:#FFFFFF;
+    --tint:#F5F8FB;         /* very light section tint */
+    --tint-2:#EEF3F8;
+    --line:#D8DFE7;         /* hairline */
+    --line-strong:#C3CDD8;
+    --accent:#0C6E5C;       /* restrained teal — links, positive */
+    --neutral:#5B6472; --neutral-bg:#EEF0F3;
+    --blue:#215FA6;   --blue-bg:#E4EEF9;
+    --teal:#0C6E5C;   --teal-bg:#DFF1EC;
+    --amber:#8A5A0E;  --amber-bg:#FBEFD8;
+    --purple:#5B45A8; --purple-bg:#ECE7F9;
+    --green:#1B7C46;  --green-bg:#DDF1E4;
+    --sans:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","Consolas","SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:#E9EDF1;color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;
+    -webkit-font-smoothing:antialiased}
+  .page{background:var(--paper);max-width:830px;margin:22px auto;padding:52px 56px;
+    box-shadow:0 6px 26px rgba(20,30,45,.14)}
+  h1,h2,h3,h4{margin:0;line-height:1.2;color:var(--brand)}
+  p{margin:0}
+  a{color:var(--accent);text-decoration:none}
+  .mono{font-family:var(--mono)}
+  .muted{color:var(--muted)}
+
+  /* print colour fidelity */
+  .band,.chip,.pill,.idx,.tag,thead th,.matrix .y,.matrix .s,.cover,.statnum,.tocnum,.callout,.legend span{
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+  /* ---------- Cover ---------- */
+  .cover{background:linear-gradient(150deg,var(--brand) 0%,#0E2C4A 100%);color:#fff;
+    padding:64px 56px 56px;min-height:940px;display:flex;flex-direction:column}
+  .cover .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+    color:#9Fc2e0;margin-bottom:auto}
+  .cover h1{color:#fff;font-size:52px;font-weight:800;letter-spacing:-.02em;line-height:1.05;margin-top:26px}
+  .cover .sub{color:#CFE0EF;font-size:20px;margin-top:20px;max-width:52ch;line-height:1.5}
+  .cover .rule{height:3px;width:74px;background:#5EC5AE;margin:34px 0 0;border-radius:3px}
+  .cover .meta{margin-top:40px;display:flex;gap:40px;flex-wrap:wrap;font-size:14px}
+  .cover .meta .l{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8FB4d6}
+  .cover .meta .v{color:#fff;margin-top:4px;font-weight:600}
+  .cover .foot{margin-top:44px;padding-top:20px;border-top:1px solid rgba(255,255,255,.18);
+    color:#AFC8DE;font-size:13px}
+  .cover .tags{display:flex;gap:9px;flex-wrap:wrap;margin-top:30px}
+  .cover .tags span{border:1px solid rgba(255,255,255,.32);color:#EAF2F9;border-radius:999px;
+    padding:5px 13px;font-size:12.5px;font-family:var(--mono)}
+
+  /* ---------- Section headings ---------- */
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);font-weight:700;margin-bottom:9px}
+  h2.sec{font-size:26px;font-weight:800;letter-spacing:-.01em}
+  .sec-intro{color:var(--muted);margin-top:10px;max-width:70ch}
+  .block{margin-top:34px}
+  .block:first-child{margin-top:0}
+  hr.div{border:0;border-top:1px solid var(--line);margin:0}
+
+  /* ---------- Contents ---------- */
+  .toc{display:grid;grid-template-columns:1fr 1fr;gap:10px 34px;margin-top:22px}
+  .toc a{display:flex;align-items:baseline;gap:12px;color:var(--ink);padding:7px 0;
+    border-bottom:1px solid var(--line)}
+  .tocnum{font-family:var(--mono);font-size:12px;color:#fff;background:var(--brand);
+    border-radius:6px;padding:2px 8px;flex:none}
+  .toc a .t{font-weight:600}
+
+  /* ---------- Stats ---------- */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:22px}
+  .stat{border:1px solid var(--line);border-radius:12px;padding:18px}
+  .statnum{font-size:32px;font-weight:800;color:var(--brand);letter-spacing:-.02em}
+  .stat .l{color:var(--muted);font-size:13px;margin-top:2px}
+
+  /* ---------- Access ---------- */
+  .access{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+  .acard{border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--tint)}
+  .acard h3{font-size:17px}
+  .acard .who{color:var(--muted);font-size:13.5px;margin:5px 0 12px}
+  .acard .link{font-family:var(--mono);font-size:13px;color:var(--brand);font-weight:700}
+  .cred{margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--muted);
+    background:#fff;border:1px dashed var(--line-strong);border-radius:8px;padding:9px 11px}
+  .cred b{color:var(--ink)}
+  .callout{background:var(--amber-bg);border-left:4px solid var(--amber);border-radius:6px;
+    padding:12px 15px;font-size:13.5px;margin-top:16px;color:#4a3712}
+  .callout b{color:var(--amber)}
+
+  /* ---------- Feature areas ---------- */
+  .feature{border:1px solid var(--line);border-radius:13px;padding:20px 22px;margin-top:14px;break-inside:avoid}
+  .feature .fh{display:flex;align-items:center;gap:12px}
+  .idx{font-family:var(--mono);font-size:12px;font-weight:700;color:#fff;background:var(--brand);
+    border-radius:7px;padding:3px 9px}
+  .feature h3{font-size:18px}
+  .feature .sum{color:var(--muted);font-size:13.7px;margin:7px 0 0}
+  .feature ul{margin:12px 0 0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:8px 26px}
+  .feature li{position:relative;padding-left:18px;font-size:13.8px}
+  .feature li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:2px;background:var(--accent)}
+  .feature.spot{border-color:var(--accent);border-width:1.5px;background:var(--teal-bg)}
+  .feature.spot .idx{background:var(--accent)}
+
+  .invflow{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:12px}
+  .chip{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .c-neutral{background:var(--neutral-bg);color:var(--neutral)}
+  .c-blue{background:var(--blue-bg);color:var(--blue)}
+  .c-teal{background:var(--teal-bg);color:var(--teal)}
+  .c-amber{background:var(--amber-bg);color:var(--amber)}
+  .c-purple{background:var(--purple-bg);color:var(--purple)}
+  .c-green{background:var(--green-bg);color:var(--green)}
+  .arrow{color:var(--faint);font-family:var(--mono);font-size:12px}
+
+  /* ---------- Roles ---------- */
+  .roles{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:22px}
+  .role{border:1px solid var(--line);border-radius:13px;padding:18px 19px;break-inside:avoid;display:flex;flex-direction:column}
+  .role .rt{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .role h3{font-size:17.5px}
+  .tag{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--tint-2);color:var(--brand-2);border-radius:5px;padding:3px 7px;white-space:nowrap}
+  .role .who{color:var(--muted);font-size:13px;margin:5px 0 11px}
+  .role ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+  .role li{position:relative;padding-left:18px;font-size:13.7px}
+  .role li::before{content:"";position:absolute;left:1px;top:8px;width:6px;height:6px;border-radius:2px;background:var(--accent)}
+  .role li.no{color:var(--muted)}
+  .role li.no::before{background:transparent;border:1.4px solid var(--faint);border-radius:50%;width:7px;height:7px;top:7px}
+  .role .login{margin-top:13px;padding-top:11px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.7}
+  .role .login b{color:var(--ink)}
+  .role.super{border-color:var(--brand);border-width:1.5px;background:var(--tint)}
+
+  /* ---------- Permission matrix ---------- */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;font-size:12.5px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .legend b{font-family:var(--mono);width:22px;height:20px;display:inline-grid;place-items:center;border-radius:5px;font-size:11px}
+  .lg-y{background:var(--green-bg);color:var(--green)}
+  .lg-s{background:var(--amber-bg);color:var(--amber)}
+  .lg-n{background:var(--neutral-bg);color:var(--neutral)}
+  .tablewrap{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:12px}
+  table{border-collapse:collapse;width:100%;font-size:13px;min-width:600px}
+  caption{text-align:left;font-size:12px;color:var(--faint);padding:0 0 8px}
+  thead th{background:var(--brand);color:#fff;font-weight:600;font-size:11.5px;padding:9px 8px;text-align:center}
+  thead th.cap{text-align:left;width:38%;padding-left:14px}
+  tbody td{border-top:1px solid var(--line);padding:8px;text-align:center;font-family:var(--mono);font-size:12px}
+  tbody td.cap{text-align:left;font-family:var(--sans);font-size:13px;color:var(--ink);padding-left:14px}
+  tbody tr:nth-child(even){background:var(--tint)}
+  .grp td{background:var(--tint-2);color:var(--brand);font-weight:700;font-size:11px;
+    font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;text-align:left;padding:7px 14px}
+  .matrix .y{color:var(--green);font-weight:700}
+  .matrix .s{color:var(--amber);font-weight:700}
+  .matrix .n{color:#AEB6C0}
+
+  /* ---------- Lifecycle ---------- */
+  .flow{margin-top:22px}
+  .step{display:grid;grid-template-columns:34px 1fr;gap:14px;break-inside:avoid}
+  .step .rail{display:flex;flex-direction:column;align-items:center}
+  .step .num{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+    font-family:var(--mono);font-size:12.5px;font-weight:700;background:var(--brand);color:#fff}
+  .step .line{flex:1;width:2px;background:var(--line-strong);margin:2px 0}
+  .step:last-child .line{display:none}
+  .step .body{padding-bottom:18px;padding-top:2px}
+  .step .st{font-weight:700;font-size:15px;display:inline-flex;align-items:center;gap:8px}
+  .step .desc{color:var(--muted);font-size:13.7px;margin-top:3px}
+  .step .who{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:3px}
+
+  /* ---------- Journeys / cards ---------- */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:22px}
+  .card{border:1px solid var(--line);border-radius:12px;padding:18px;break-inside:avoid}
+  .card h3{font-size:15.5px;display:flex;align-items:center;gap:9px}
+  .card .k{font-family:var(--mono);font-size:10.5px;color:var(--brand);border:1px solid var(--line-strong);border-radius:5px;padding:2px 7px}
+  .card ol{margin:11px 0 0;padding-left:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:7px}
+  .card ol li{counter-increment:s;position:relative;padding-left:27px;font-size:13.5px}
+  .card ol li::before{content:counter(s);position:absolute;left:0;top:0;width:19px;height:19px;border-radius:50%;
+    background:var(--tint-2);color:var(--brand);font-family:var(--mono);font-size:11px;font-weight:700;display:grid;place-items:center}
+  .card p{color:var(--muted);font-size:13.5px}
+  .card ul.plain{margin:9px 0 0;padding-left:17px;color:var(--muted);font-size:13px;display:flex;flex-direction:column;gap:4px}
+
+  /* ---------- Policies table ---------- */
+  .ptable{overflow-x:auto;margin-top:20px;border:1px solid var(--line);border-radius:12px}
+  .ptable table{min-width:460px}
+  .ptable th{text-align:left;padding-left:14px}
+  .ptable td{text-align:left;font-family:var(--sans);border-top:1px solid var(--line);padding:9px 14px;font-size:13px}
+  .ptable td.v{font-weight:700;color:var(--ink)}
+  .ptable td.k{color:var(--muted)}
+  .ptable tr:nth-child(even){background:var(--tint)}
+
+  footer{color:var(--faint);font-size:12px;margin-top:36px;padding-top:18px;border-top:1px solid var(--line)}
+
+  .printhint{max-width:830px;margin:22px auto 0;padding:12px 18px;background:#173a5c;color:#dce8f3;
+    border-radius:10px;font-size:13px;text-align:center}
+  .printhint b{color:#fff}
+
+  @page{size:A4;margin:13mm}
+  @media print{
+    body{background:#fff;font-size:11.6px}
+    .printhint{display:none}
+    .page{box-shadow:none;margin:0;max-width:none;padding:0}
+    .page-break{break-before:page}
+    .cover{min-height:auto;height:264mm;padding:30mm 24mm;break-after:page}
+    .feature ul{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:640px){
+    .page{padding:30px 20px;margin:12px}
+    .cover{padding:40px 24px;min-height:auto}
+    .cover h1{font-size:36px}
+    .cover .sub{font-size:16px}
+    .stats,.access,.roles,.grid2,.toc,.feature ul{grid-template-columns:1fr}
+    h2.sec{font-size:22px}
+    .cover .meta{gap:20px}
+  }
+</style>
+</head>
+<body>
+
+<div class="printhint">
+  📄 To make the PDF: press <b>Ctrl/Cmd + P</b> → Destination <b>Save as PDF</b> → open <b>More settings</b> and tick
+  <b>Background graphics</b> → <b>Save</b>. (This grey bar won't appear in the PDF.)
+</div>
+
+<!-- ================= COVER ================= -->
+<div class="page cover">
+  <div class="kicker">Rademics ERP · Version 1</div>
+  <div>
+    <h1>Platform Overview</h1>
+    <p class="sub">How the system works, what it does, and exactly what each role can do — a complete, plain-language guide for management.</p>
+    <div class="rule"></div>
+    <div class="tags">
+      <span>8 work areas</span><span>7 roles</span><span>2 apps</span><span>4 AI helpers</span>
+    </div>
+  </div>
+  <div class="meta">
+    <div><div class="l">Prepared for</div><div class="v">Management review</div></div>
+    <div><div class="l">Status</div><div class="v">Deployed &amp; running</div></div>
+    <div><div class="l">Product</div><div class="v">Rademics ERP (Web)</div></div>
+  </div>
+  <div class="foot">A single platform connecting employees, managers, and clients — attendance, projects, client approvals, leave, and finance in one place.</div>
+</div>
+
+<!-- ================= CONTENTS + OVERVIEW ================= -->
+<div class="page">
+  <div class="block">
+    <p class="eyebrow">Contents</p>
+    <h2 class="sec">What's in this document</h2>
+    <div class="toc">
+      <a href="#s1"><span class="tocnum">1</span><span class="t">What the system is &amp; how to open it</span></a>
+      <a href="#s2"><span class="tocnum">2</span><span class="t">Everything built — area by area</span></a>
+      <a href="#s3"><span class="tocnum">3</span><span class="t">The roles &amp; what each can do</span></a>
+      <a href="#s4"><span class="tocnum">4</span><span class="t">Who-can-do-what matrix</span></a>
+      <a href="#s5"><span class="tocnum">5</span><span class="t">How work flows through the system</span></a>
+      <a href="#s6"><span class="tocnum">6</span><span class="t">Everyday workflows &amp; built-in AI</span></a>
+      <a href="#s7"><span class="tocnum">7</span><span class="t">Company policies &amp; defaults</span></a>
+    </div>
+  </div>
+
+  <div class="block" id="s1">
+    <p class="eyebrow">Section 1 · Overview</p>
+    <h2 class="sec">One platform to run the whole agency</h2>
+    <p class="sec-intro">Rademics ERP covers the full operating loop — people &amp; roles, attendance &amp; productivity,
+      projects &amp; tasks, client collaboration &amp; approvals, leave, and finance &amp; invoicing — with reporting and an
+      AI layer on top. Because everything lives in one system, work flows straight through: an employee finishes a task →
+      a client approves it → Finance invoices it → the payment appears in profit &amp; loss. No spreadsheets or email chains in between.</p>
+    <div class="stats">
+      <div class="stat"><div class="statnum">8</div><div class="l">Work areas, end to end</div></div>
+      <div class="stat"><div class="statnum">7</div><div class="l">Roles, each with its own view</div></div>
+      <div class="stat"><div class="statnum">2</div><div class="l">Apps — staff &amp; clients, kept separate</div></div>
+      <div class="stat"><div class="statnum">4</div><div class="l">AI helpers built in</div></div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3 style="font-size:18px">How to open it</h3>
+    <p class="sec-intro" style="margin-top:8px">Staff use the internal app; clients get their own portal that only ever shows
+      their own projects. Sign in with any login below to see exactly what that person sees.</p>
+    <div class="access">
+      <div class="acard">
+        <h3>Staff app</h3>
+        <div class="who">For everyone inside the company — admin, HR, managers, team leads, employees, finance.</div>
+        <div class="link">http://187.127.145.132:3000</div>
+        <div class="cred">Sign in as <b>Admin</b> (sees everything):<br><b>admin.demo@rademics.local</b> · <b>Demo1234!</b></div>
+      </div>
+      <div class="acard">
+        <h3>Client portal</h3>
+        <div class="who">For client organisations — progress, shared files, approvals and invoices only.</div>
+        <div class="link">http://187.127.145.132:3001</div>
+        <div class="cred">Sign in as a <b>sample client</b>:<br><b>client.owner@northwind.example</b> · <b>Demo1234!</b></div>
+      </div>
+    </div>
+    <div class="callout"><b>Note —</b> these are temporary demo accounts on a preview address so you can explore. Sample data is
+      loaded (a project with tasks in every stage, two invoices, leave requests). Real accounts replace these at go-live.</div>
+  </div>
+</div>
+
+<!-- ================= AREA BY AREA ================= -->
+<div class="page page-break" id="s2">
+  <p class="eyebrow">Section 2 · Capabilities</p>
+  <h2 class="sec">Everything we built — area by area</h2>
+  <p class="sec-intro">Eight connected areas. Each lists, in plain terms, the concrete things it does.</p>
+
+  <div class="feature">
+    <div class="fh"><span class="idx">01</span><h3>People &amp; HR</h3></div>
+    <p class="sum">Every staff member and freelancer in one directory, with the organisation structure behind it.</p>
+    <ul>
+      <li>Full profiles: photo, contact, department, team, reporting manager, join date, skills, documents</li>
+      <li>Salary information kept <b>encrypted</b> and visible only to those allowed</li>
+      <li>Freelancers: pay-per-deliverable terms, contract &amp; NDA files, never in attendance/leave</li>
+      <li>Structure: Department → Team → Member, one Team Lead per team</li>
+      <li>Departments map to verticals (Publications, Design, Web, Support) for profit reporting</li>
+      <li>Offboarding logs the person out, reassigns open tasks, keeps all history</li>
+    </ul>
+  </div>
+
+  <div class="feature">
+    <div class="fh"><span class="idx">02</span><h3>Attendance &amp; productivity</h3></div>
+    <p class="sum">Trustworthy time data — designed to drive payroll without disputes.</p>
+    <ul>
+      <li>Check in / out from desk <b>or phone</b>; multiple sessions a day supported</li>
+      <li>Daily total = sum of sessions; worked vs. idle time shown in real time</li>
+      <li>Nothing tracked invisibly — idle minutes are always visible to the person</li>
+      <li>Late, half-day and overtime worked out automatically each night</li>
+      <li>Correction requests route to the Team Lead / HR to approve</li>
+      <li>Forgotten sessions auto-close at midnight; live “who’s online now” view</li>
+    </ul>
+  </div>
+
+  <div class="feature">
+    <div class="fh"><span class="idx">03</span><h3>Projects, work streams &amp; tasks</h3></div>
+    <p class="sum">The delivery engine — with a strict, recorded review flow so nothing skips a step.</p>
+    <ul>
+      <li>Structure: Project → Module → Task → Subtask, with priorities, estimates, deadlines</li>
+      <li><b>Work streams</b> for continuous work (support, moderation), measured by weekly throughput</li>
+      <li>Board (kanban), list and calendar views; filter by person, status, priority, deadline</li>
+      <li>Comments with @mentions, kept separate for internal vs. client-visible</li>
+      <li>Budget per project, visible only to managers and Finance</li>
+      <li>Every status change records who, when and why — and can never be edited</li>
+    </ul>
+  </div>
+
+  <div class="feature">
+    <div class="fh"><span class="idx">04</span><h3>Client portal</h3></div>
+    <p class="sum">A separate, secure app where clients follow work and sign off — without email chains.</p>
+    <ul>
+      <li>Each client user sees only granted projects, at milestone level with % complete</li>
+      <li>Two access levels: <b>Viewer</b> (see &amp; download) and <b>Approver</b> (also approve / request revision)</li>
+      <li>Internal task details, staff names and internal files are never visible</li>
+      <li>Approve or request a revision (with comment) from the portal — the PM is notified</li>
+      <li>See their own invoices and payment status</li>
+      <li>Notification style per user: real-time, daily digest, or weekly digest</li>
+    </ul>
+  </div>
+
+  <div class="feature">
+    <div class="fh"><span class="idx">05</span><h3>File management</h3></div>
+    <p class="sum">Safe file handling with full history and virus scanning.</p>
+    <ul>
+      <li><b>Every upload is a new version</b> — nothing is overwritten; full history kept</li>
+      <li>Each file is marked internal or client-visible; changing that is recorded</li>
+      <li><b>Every upload is virus-scanned</b> before anyone can open it; infected files quarantined</li>
+      <li>Images and PDFs preview in the browser; other files download</li>
+      <li>Files attach to tasks and to staff/freelancer profiles</li>
+      <li>Upload limit and handling configurable by the admin</li>
+    </ul>
+  </div>
+
+  <div class="feature">
+    <div class="fh"><span class="idx">06</span><h3>Leave management</h3></div>
+    <p class="sum">Balances, requests, approvals and a shared calendar — with the policy built in.</p>
+    <ul>
+      <li>Leave types with quotas: Casual, Sick, Earned (carry-forward), Unpaid</li>
+      <li>Balances accrue monthly and are always visible, including projected accrual</li>
+      <li>Request with type, dates (half-day supported) and reason → routed up the chain</li>
+      <li>Unactioned requests escalate automatically after 48 hours</li>
+      <li>Team leave calendar with an overlap warning when approving</li>
+      <li>Leave beyond balance auto-converts to unpaid and flags into payroll</li>
+    </ul>
+  </div>
+
+  <div class="feature spot">
+    <div class="fh"><span class="idx">07</span><h3>Finance &amp; invoicing</h3></div>
+    <p class="sum">The full money side — invoices, payments, expenses, profit, and payroll export.</p>
+    <div class="invflow">
+      <span class="mono muted" style="font-size:11px">Invoice life:</span>
+      <span class="chip c-neutral">Draft</span><span class="arrow">→</span>
+      <span class="chip c-blue">Sent</span><span class="arrow">→</span>
+      <span class="chip c-amber">Partially Paid</span><span class="arrow">→</span>
+      <span class="chip c-green">Paid</span><span class="arrow">·</span>
+      <span class="chip c-purple">Overdue (auto)</span>
+    </div>
+    <ul>
+      <li><b>Invoices</b> against a client &amp; project, with line items — description, quantity, rate, GST %</li>
+      <li>Branded PDF, emailed to the client and shown in their portal; numbered <span class="mono">RAD-YYYY-####</span></li>
+      <li><b>Payments</b> recorded against invoices; <b>partial payments</b> supported</li>
+      <li>Invoices go <b>Overdue automatically</b> after the due date; reminders sent</li>
+      <li>Dues view per client with <b>ageing</b> (0–30 / 31–60 / 61–90 / 90+ days)</li>
+      <li><b>Expenses</b> logged per project (freelancer payouts, tools) with receipts</li>
+      <li><b>Profit &amp; loss per vertical</b>: revenue minus expenses, any date range</li>
+      <li><b>Payroll export</b>: monthly CSV of payable days (loss-of-pay applied), for Tally/Zoho</li>
+    </ul>
+  </div>
+
+  <div class="feature">
+    <div class="fh"><span class="idx">08</span><h3>Reports, AI &amp; audit</h3></div>
+    <p class="sum">Dashboards for every role, four AI helpers, and a tamper-proof record of sensitive actions.</p>
+    <ul>
+      <li>Attendance, productivity, project-status and finance reports — export CSV/PDF</li>
+      <li>Every role has a tailored dashboard; every number clicks through to the list</li>
+      <li>Reports are scoped — a Team Lead sees their team, a PM their projects</li>
+      <li>Four built-in AI helpers (detailed in Section 6)</li>
+      <li><b>Audit log</b>: append-only record — no one can edit or delete it</li>
+      <li>Skills &amp; capacity view so work goes to real available bandwidth</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ================= ROLES ================= -->
+<div class="page page-break" id="s3">
+  <p class="eyebrow">Section 3 · Roles</p>
+  <h2 class="sec">The roles &amp; what each can do</h2>
+  <p class="sec-intro">A person has exactly one role, and the system decides what they can open and change. Each card shows the
+    role's powers in plain terms, with a login you can try.</p>
+  <div class="roles">
+
+    <div class="role super">
+      <div class="rt"><h3>Super Admin</h3><span class="tag">Founders / top mgmt</span></div>
+      <div class="who">Full control of the whole system.</div>
+      <ul>
+        <li>Sees all data, including salaries</li>
+        <li>Sets up the company: work hours, leave policy, holidays, branding</li>
+        <li>Manages roles &amp; permissions and integrations</li>
+        <li>Reviews the audit log and system health</li>
+      </ul>
+      <div class="login"><b>Log in:</b> admin.demo@rademics.local · <b>Demo1234!</b></div>
+    </div>
+
+    <div class="role">
+      <div class="rt"><h3>HR</h3><span class="tag">HR staff</span></div>
+      <div class="who">Runs people, attendance and leave.</div>
+      <ul>
+        <li>Creates and manages employees &amp; freelancers</li>
+        <li>Sets attendance rules and makes corrections</li>
+        <li>Owns leave policy and approvals</li>
+        <li>Runs payroll export; can see salary</li>
+      </ul>
+      <div class="login"><b>Log in:</b> hr.demo@rademics.local · <b>Demo1234!</b></div>
+    </div>
+
+    <div class="role">
+      <div class="rt"><h3>Project Manager</h3><span class="tag">Vertical heads</span></div>
+      <div class="who">Owns projects and client deadlines.</div>
+      <ul>
+        <li>Creates projects, work streams and tasks</li>
+        <li>Assigns team leads and approves submitted work</li>
+        <li>Nudges clients on pending approvals</li>
+        <li>Flags completed work as ready to invoice</li>
+      </ul>
+      <div class="login"><b>Log in:</b> pm.demo@rademics.local · <b>Demo1234!</b></div>
+    </div>
+
+    <div class="role">
+      <div class="rt"><h3>Team Lead</h3><span class="tag">Senior over 3–8</span></div>
+      <div class="who">Runs the day-to-day for one team.</div>
+      <ul>
+        <li>Assigns and reviews the team's tasks</li>
+        <li>First check on submitted work (approve / send back)</li>
+        <li>Approves the team's leave &amp; corrections</li>
+        <li>Watches live team attendance and workload</li>
+      </ul>
+      <div class="login"><b>Log in:</b> tl.frontend@rademics.local · <b>Demo1234!</b></div>
+    </div>
+
+    <div class="role">
+      <div class="rt"><h3>Employee</h3><span class="tag">Internal staff</span></div>
+      <div class="who">Does the work and tracks their day.</div>
+      <ul>
+        <li>Checks in / out and sees their own hours</li>
+        <li>Works assigned tasks and submits for review</li>
+        <li>Uploads draft files to tasks</li>
+        <li>Requests leave and attendance corrections</li>
+      </ul>
+      <div class="login"><b>Log in:</b> emp.rohan@rademics.local · <b>Demo1234!</b></div>
+    </div>
+
+    <div class="role">
+      <div class="rt"><h3>Finance</h3><span class="tag">Accounts staff</span></div>
+      <div class="who">Handles the money side.</div>
+      <ul>
+        <li>Creates invoices and records payments</li>
+        <li>Tracks outstanding and overdue dues</li>
+        <li>Logs expenses and views profit per vertical</li>
+        <li>Runs payroll export</li>
+      </ul>
+      <div class="login"><b>Log in:</b> finance.demo@rademics.local · <b>Demo1234!</b></div>
+    </div>
+
+    <div class="role">
+      <div class="rt"><h3>Client</h3><span class="tag">Client portal</span></div>
+      <div class="who">Sees only their own organisation's work.</div>
+      <ul>
+        <li>Follows project progress and milestones</li>
+        <li>Downloads files shared with them</li>
+        <li>Approves or requests revisions on deliverables</li>
+        <li>Views their invoices and payment status</li>
+      </ul>
+      <div class="login"><b>Log in (portal):</b> client.owner@northwind.example · <b>Demo1234!</b></div>
+    </div>
+
+    <div class="role">
+      <div class="rt"><h3>Freelancer</h3><span class="tag">External resource</span></div>
+      <div class="who">An employee paid per deliverable.</div>
+      <ul>
+        <li>Works assigned tasks and submits deliverables</li>
+        <li>Contract / NDA files kept on their profile</li>
+        <li class="no">No check-in / attendance</li>
+        <li class="no">No leave — paid per project instead</li>
+      </ul>
+      <div class="login"><b>Log in:</b> freelancer.demo@rademics.local · <b>Demo1234!</b></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================= MATRIX ================= -->
+<div class="page page-break" id="s4">
+  <p class="eyebrow">Section 4 · Permissions</p>
+  <h2 class="sec">Who can do what — at a glance</h2>
+  <p class="sec-intro">The exact powers of each role across the system. These are set as adjustable permissions, so the admin
+    can change them without any developer.</p>
+  <div class="legend">
+    <span><b class="lg-y">Y</b> Yes — allowed</span>
+    <span><b class="lg-s">S</b> Scoped — only their own team / projects / records</span>
+    <span><b class="lg-n">–</b> Not allowed</span>
+  </div>
+  <div class="tablewrap matrix">
+    <table>
+      <thead><tr>
+        <th class="cap">Capability</th>
+        <th>Super&nbsp;Admin</th><th>HR</th><th>PM</th><th>Team&nbsp;Lead</th><th>Employee</th><th>Client</th><th>Finance</th>
+      </tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="8">People &amp; organisation</td></tr>
+        <tr><td class="cap">Create / edit employee</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">Assign / change roles</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">View / edit salary</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="s">S</td></tr>
+
+        <tr class="grp"><td colspan="8">Attendance</td></tr>
+        <tr><td class="cap">Check in / out (self)</td><td class="n">–</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="y">Y</td></tr>
+        <tr><td class="cap">View team attendance</td><td class="y">Y</td><td class="y">Y</td><td class="s">S</td><td class="s">S</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">Approve attendance correction</td><td class="y">Y</td><td class="y">Y</td><td class="s">S</td><td class="s">S</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+
+        <tr class="grp"><td colspan="8">Projects &amp; tasks</td></tr>
+        <tr><td class="cap">Create / edit project</td><td class="y">Y</td><td class="n">–</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">Assign / reassign tasks</td><td class="y">Y</td><td class="n">–</td><td class="y">Y</td><td class="s">S</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">Review: approve / send back</td><td class="y">Y</td><td class="n">–</td><td class="y">Y</td><td class="s">S</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">Update status of own tasks</td><td class="y">Y</td><td class="n">–</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">View all projects</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="y">Y</td></tr>
+
+        <tr class="grp"><td colspan="8">Files &amp; client portal</td></tr>
+        <tr><td class="cap">Mark file visible to client</td><td class="y">Y</td><td class="n">–</td><td class="y">Y</td><td class="s">S</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">Approve / request revision (deliverable)</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="s">S</td><td class="n">–</td></tr>
+        <tr><td class="cap">Manage client users &amp; access</td><td class="y">Y</td><td class="n">–</td><td class="s">S</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+
+        <tr class="grp"><td colspan="8">Leave</td></tr>
+        <tr><td class="cap">Request leave (self)</td><td class="n">–</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="y">Y</td></tr>
+        <tr><td class="cap">Approve team leave</td><td class="y">Y</td><td class="y">Y</td><td class="s">S</td><td class="s">S</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">Configure leave policy</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+
+        <tr class="grp"><td colspan="8">Finance</td></tr>
+        <tr><td class="cap">Create / edit invoices</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="y">Y</td></tr>
+        <tr><td class="cap">Record payments &amp; dues</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="y">Y</td></tr>
+        <tr><td class="cap">View profit &amp; loss</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="y">Y</td></tr>
+        <tr><td class="cap">Run payroll export</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="y">Y</td></tr>
+
+        <tr class="grp"><td colspan="8">Reports, AI &amp; admin</td></tr>
+        <tr><td class="cap">Use AI assistant (own scope)</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="y">Y</td><td class="n">–</td><td class="y">Y</td></tr>
+        <tr><td class="cap">View audit log</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+        <tr><td class="cap">Manage system settings</td><td class="y">Y</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ================= LIFECYCLE ================= -->
+<div class="page page-break" id="s5">
+  <p class="eyebrow">Section 5 · How it works</p>
+  <h2 class="sec">The life of a task — from created to closed</h2>
+  <p class="sec-intro">Every piece of work follows the same controlled path. It moves one step at a time, and the system records
+    who did what and when. Sending work back or requesting a revision always needs a written comment.</p>
+  <div class="flow">
+    <div class="step"><div class="rail"><div class="num">1</div><div class="line"></div></div>
+      <div class="body"><span class="st"><span class="chip c-neutral">Draft</span></span>
+        <div class="desc">A manager or team lead creates the task and assigns it.</div>
+        <div class="who">→ becomes “Assigned”</div></div></div>
+    <div class="step"><div class="rail"><div class="num">2</div><div class="line"></div></div>
+      <div class="body"><span class="st"><span class="chip c-blue">Assigned</span></span>
+        <div class="desc">The person it's given to acknowledges they've picked it up.</div>
+        <div class="who">Assignee → “Acknowledged”</div></div></div>
+    <div class="step"><div class="rail"><div class="num">3</div><div class="line"></div></div>
+      <div class="body"><span class="st"><span class="chip c-blue">Acknowledged</span></span>
+        <div class="desc">They start the work.</div>
+        <div class="who">Assignee → “In Progress”</div></div></div>
+    <div class="step"><div class="rail"><div class="num">4</div><div class="line"></div></div>
+      <div class="body"><span class="st"><span class="chip c-teal">In Progress</span></span>
+        <div class="desc">Work happens; draft files are uploaded, then submitted for review.</div>
+        <div class="who">Assignee → “Submitted for Review”</div></div></div>
+    <div class="step"><div class="rail"><div class="num">5</div><div class="line"></div></div>
+      <div class="body"><span class="st"><span class="chip c-amber">Submitted for Review</span></span>
+        <div class="desc">A manager approves it — or sends it back with a comment. Client-facing work goes to the client next; internal work is done.</div>
+        <div class="who">Manager → “Client Review” or “Completed”</div></div></div>
+    <div class="step"><div class="rail"><div class="num">6</div><div class="line"></div></div>
+      <div class="body"><span class="st"><span class="chip c-purple">Client Review</span></span>
+        <div class="desc">The client opens the deliverable and either approves it or requests a revision with a comment.</div>
+        <div class="who">Client → “Completed” or back to “In Progress”</div></div></div>
+    <div class="step"><div class="rail"><div class="num">7</div><div class="line"></div></div>
+      <div class="body"><span class="st"><span class="chip c-green">Completed</span></span>
+        <div class="desc">Finance marks it invoiced; the manager then closes it. (Internal tasks can close without an invoice.)</div>
+        <div class="who">Finance → “Invoiced” → Manager → “Closed”</div></div></div>
+    <div class="step"><div class="rail"><div class="num">8</div><div class="line"></div></div>
+      <div class="body"><span class="st"><span class="chip c-neutral">Closed</span></span>
+        <div class="desc">The task is finished and locked, with its full history preserved.</div>
+        <div class="who">End of the line</div></div></div>
+  </div>
+</div>
+
+<!-- ================= JOURNEYS + AI + CROSS ================= -->
+<div class="page page-break" id="s6">
+  <p class="eyebrow">Section 6 · In practice</p>
+  <h2 class="sec">Everyday workflows</h2>
+  <div class="grid2">
+    <div class="card"><h3><span class="k">Employee</span> A working day</h3>
+      <ol>
+        <li>Log in and <b>check in</b> (desk or phone)</li>
+        <li>Open <b>My Tasks Today</b>, acknowledge a new task</li>
+        <li>Start work, upload a draft, <b>submit for review</b></li>
+        <li>Get a “sent back” note, fix it, resubmit</li>
+        <li><b>Check out</b> — tomorrow's summary ready next morning</li>
+      </ol></div>
+    <div class="card"><h3><span class="k">Leave</span> Request &amp; approval</h3>
+      <ol>
+        <li>Employee opens <b>My Leave</b>, picks type &amp; dates</li>
+        <li>Shows as pending; balance checked automatically</li>
+        <li>Team lead (or HR) <b>approves</b> inline</li>
+        <li>Employee notified; balance updates</li>
+        <li>Unactioned requests escalate automatically</li>
+      </ol></div>
+    <div class="card"><h3><span class="k">Client</span> Approving a deliverable</h3>
+      <ol>
+        <li>Client gets a “deliverable ready” email</li>
+        <li>Logs into the portal → <b>Approvals</b></li>
+        <li>Previews the file and its versions</li>
+        <li><b>Approves</b>, or requests a revision with a comment</li>
+        <li>Progress view updates for everyone instantly</li>
+      </ol></div>
+    <div class="card"><h3><span class="k">Finance</span> Invoice to payment</h3>
+      <ol>
+        <li>Completed work appears in the <b>ready-to-invoice</b> queue</li>
+        <li>Finance creates a branded invoice (GST applied)</li>
+        <li>Sends it — client sees it in portal &amp; email</li>
+        <li>Records payments; overdue invoices flag automatically</li>
+        <li>Once paid, profit &amp; loss reflects it</li>
+      </ol></div>
+  </div>
+
+  <div class="block">
+    <h3 style="font-size:19px;color:var(--brand)">Four AI helpers — always within a person's own access</h3>
+    <p class="sec-intro" style="margin-top:8px">The assistant can never show someone data they couldn't already open themselves, and every AI answer is labelled AI-generated.</p>
+    <div class="grid2">
+      <div class="card"><h3>Daily summary</h3><p>A one-click end-of-day recap for a manager: what each member completed, what's in progress or blocked, plus attendance anomalies.</p></div>
+      <div class="card"><h3>Completion forecast</h3><p>Predicts a project's finish date and flags deadline risk with the reason — e.g. “the review stage is the bottleneck”.</p></div>
+      <div class="card"><h3>Assignment suggestion</h3><p>Suggests the best people for a task, ranked by skill and current workload. The human always makes the final pick.</p></div>
+      <div class="card"><h3>Ask-anything assistant</h3><p>A chat panel to ask about your own work — “what's overdue on Project X?”, “who's free this week?” — with sources cited.</p></div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3 style="font-size:19px;color:var(--brand)">Built-in across the whole system</h3>
+    <div class="grid2">
+      <div class="card"><h3>Security &amp; access</h3>
+        <ul class="plain">
+          <li>Invite-only accounts — no public sign-up</li>
+          <li>Locks for 15 min after 5 failed logins</li>
+          <li>Password reset links expire in 30 minutes</li>
+          <li>Staff and client sessions fully isolated</li>
+        </ul></div>
+      <div class="card"><h3>Notifications</h3>
+        <ul class="plain">
+          <li>In-app (real-time) and email for key events</li>
+          <li>Assignments, approvals, @mentions, leave, invoices</li>
+          <li>Deadline reminders 24h before, and when missed</li>
+          <li>Each person chooses in-app, email, or mute</li>
+        </ul></div>
+      <div class="card"><h3>Audit trail</h3>
+        <ul class="plain">
+          <li>Logs logins, permission &amp; salary changes, exports</li>
+          <li>Shows who, what, before/after, when, from where</li>
+          <li><b>Append-only</b> — no one can edit or delete it</li>
+        </ul></div>
+      <div class="card"><h3>Skills &amp; capacity</h3>
+        <ul class="plain">
+          <li>Skill tags on every profile</li>
+          <li>Open work vs. weekly capacity, traffic-light</li>
+          <li>Assign against real free bandwidth</li>
+        </ul></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= POLICIES + GO-LIVE ================= -->
+<div class="page page-break" id="s7">
+  <p class="eyebrow">Section 7 · Policies</p>
+  <h2 class="sec">Company policies &amp; defaults</h2>
+  <p class="sec-intro">Pre-configured with sensible defaults, all editable in Settings without a developer — so policy stays in your hands.</p>
+  <div class="ptable">
+    <table>
+      <thead><tr><th>Policy</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Working days &amp; hours</td><td class="v">Mon–Sat · 9:00 AM – 6:00 PM IST</td></tr>
+        <tr><td class="k">Late mark</td><td class="v">Check-in after 9:15 AM</td></tr>
+        <tr><td class="k">Half-day</td><td class="v">Less than 4 hours worked</td></tr>
+        <tr><td class="k">Overtime flag</td><td class="v">More than 9 hours worked</td></tr>
+        <tr><td class="k">Idle threshold</td><td class="v">No activity for 5 minutes</td></tr>
+        <tr><td class="k">3-lates rule</td><td class="v">3 lates in a month = ½-day deduction</td></tr>
+        <tr><td class="k">Casual leave</td><td class="v">12 days / year (1 per month)</td></tr>
+        <tr><td class="k">Sick leave</td><td class="v">6 days / year</td></tr>
+        <tr><td class="k">Earned leave</td><td class="v">15 days / year (carry-forward up to 30)</td></tr>
+        <tr><td class="k">Leave escalation</td><td class="v">Unactioned 48h → moves up a level</td></tr>
+        <tr><td class="k">Invoice numbering</td><td class="v">RAD-YYYY-#### (automatic)</td></tr>
+        <tr><td class="k">Tax on invoices</td><td class="v">GST 18% (editable per line)</td></tr>
+        <tr><td class="k">Currency</td><td class="v">INR</td></tr>
+        <tr><td class="k">File upload limit</td><td class="v">100 MB per file</td></tr>
+        <tr><td class="k">Holiday calendar</td><td class="v">Tamil Nadu list seeded, admin-maintained</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    Rademics ERP · Version 1 · Complete platform overview for management review. Prepared as a plain-language summary of the
+    deployed system. Demo logins are for exploring only and are replaced with real accounts at go-live.
+  </footer>
+</div>
+
+</body>
+</html>

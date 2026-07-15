@@ -2,8 +2,8 @@
 
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download } from 'lucide-react';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState } from '@rademics/ui';
+import { ArrowLeft, ClipboardCheck, Download, ListChecks, Milestone as MilestoneIcon } from 'lucide-react';
+import { Badge, Button, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 
 interface Milestone { id: string; name: string; percentComplete: number }
@@ -76,17 +76,27 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
         <ArrowLeft className="h-4 w-4" /> Dashboard
       </Link>
 
-      <div className="mt-2 flex items-center gap-2">
-        <h1 className="text-xl font-semibold text-slate-800">{project.name}</h1>
-        <Badge tone="green">{project.percentComplete}% complete</Badge>
+      <div className="mt-3 flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+          <ListChecks className="h-5 w-5" />
+        </span>
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">{project.name}</h1>
+            <Badge tone="green">{project.percentComplete}% complete</Badge>
+          </div>
+          {project.description ? <p className="mt-0.5 text-sm text-slate-500">{project.description}</p> : null}
+        </div>
       </div>
-      {project.description ? <p className="mt-1 text-sm text-slate-500">{project.description}</p> : null}
 
       {/* Awaiting approval */}
       {project.deliverables.length > 0 ? (
-        <Card className="mt-5 border-amber-200">
-          <CardHeader><CardTitle>Awaiting your approval</CardTitle></CardHeader>
-          <CardContent>
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4 text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-800">Awaiting your approval</h3>
+          </div>
+          <div>
             <ul className="flex flex-col gap-2">
               {project.deliverables.map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-3">
@@ -106,52 +116,54 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : null}
 
       {/* Milestones */}
       {project.milestones.length > 0 ? (
-        <Card className="mt-5">
-          <CardHeader><CardTitle>Milestones</CardTitle></CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-3">
-              {project.milestones.map((m) => (
-                <li key={m.id}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-700">{m.name}</span>
-                    <span className="text-slate-400">{m.percentComplete}%</span>
-                  </div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${m.percentComplete}%` }} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <MilestoneIcon className="h-4 w-4 text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-800">Milestones</h3>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {project.milestones.map((m) => (
+              <li key={m.id}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-700">{m.name}</span>
+                  <span className="font-medium tabular-nums text-slate-400">{m.percentComplete}%</span>
+                </div>
+                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${m.percentComplete}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       {/* Progress items */}
-      <Card className="mt-5">
-        <CardHeader><CardTitle>Progress</CardTitle></CardHeader>
-        <CardContent>
-          {project.items.length === 0 ? (
-            <p className="text-sm text-slate-400">No shared items yet.</p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-slate-100">
-              {project.items.map((t) => (
-                <li key={t.id} className="flex items-center justify-between py-2 text-sm">
-                  <span className="text-slate-700">{t.title}</span>
-                  <Badge tone={t.status === 'CLIENT_REVIEW' ? 'amber' : ['COMPLETED', 'INVOICED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
-                    {STATUS_LABEL[t.status] ?? t.status}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <ListChecks className="h-4 w-4 text-slate-500" />
+          <h3 className="text-sm font-semibold text-slate-800">Progress</h3>
+        </div>
+        {project.items.length === 0 ? (
+          <p className="text-sm text-slate-400">No shared items yet.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-slate-100">
+            {project.items.map((t) => (
+              <li key={t.id} className="flex items-center justify-between py-2.5 text-sm">
+                <span className="text-slate-700">{t.title}</span>
+                <Badge tone={t.status === 'CLIENT_REVIEW' ? 'amber' : ['COMPLETED', 'INVOICED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
+                  {STATUS_LABEL[t.status] ?? t.status}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

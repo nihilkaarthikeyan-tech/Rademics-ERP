@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button, Input, Label } from '@rademics/ui';
 import { apiFetch, type Me } from '@/lib/api';
 import { setToken } from '@/lib/session';
+import { Turnstile, TURNSTILE_ENABLED } from '@/components/turnstile';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,6 +16,7 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +25,7 @@ export default function LoginPage() {
     try {
       const res = await apiFetch<{ accessToken: string; user: Me }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, captchaToken }),
       });
       setToken(res.accessToken);
       router.push('/dashboard');
@@ -110,7 +113,15 @@ export default function LoginPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-brand-blue hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
@@ -133,6 +144,8 @@ export default function LoginPage() {
               </div>
             </div>
 
+            <Turnstile onToken={setCaptchaToken} />
+
             {error ? (
               <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">
                 {error}
@@ -140,7 +153,11 @@ export default function LoginPage() {
             ) : null}
 
             {/* Login keeps its brand navy CTA (the interior's primary is now near-black). */}
-            <Button type="submit" disabled={loading} className="mt-2 h-11 !bg-brand-navy hover:!bg-brand-navy/90">
+            <Button
+              type="submit"
+              disabled={loading || (TURNSTILE_ENABLED && !captchaToken)}
+              className="mt-2 h-11 !bg-brand-navy hover:!bg-brand-navy/90"
+            >
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>

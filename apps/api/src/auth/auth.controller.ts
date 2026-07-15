@@ -1,7 +1,9 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService, type IssuedTokens } from './auth.service';
+import { TurnstileService } from './turnstile.service';
 import { ForgotPasswordDto, InviteUserDto, LoginDto, SetPasswordDto } from './dto';
 import { CurrentUser, Public } from './decorators';
 import { RequireCapability } from '../rbac/capability.decorator';
@@ -14,12 +16,15 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly config: ConfigService,
+    private readonly turnstile: TurnstileService,
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } }) // per-IP, on top of the 5-fail account lockout; generous for a shared office IP
   @Post('login')
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.turnstile.verify(dto.captchaToken, req.ip);
     const tokens = await this.auth.login(dto.email, dto.password, meta(req));
     return this.respondWithTokens(res, tokens);
   }
@@ -42,14 +47,17 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } }) // stricter: prevents email-bombing a victim's inbox
   @Post('forgot-password')
   @HttpCode(202)
   async forgotPassword(@Body() dto: ForgotPasswordDto, @Req() req: Request): Promise<{ ok: true }> {
+    await this.turnstile.verify(dto.captchaToken, req.ip);
     await this.auth.forgotPassword(dto.email, meta(req));
     return { ok: true };
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } }) // defense-in-depth against token-guessing
   @Post('set-password')
   @HttpCode(204)
   async setPassword(@Body() dto: SetPasswordDto, @Req() req: Request): Promise<void> {
@@ -57,6 +65,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } }) // defense-in-depth against token-guessing
   @Post('reset-password')
   @HttpCode(204)
   async resetPassword(@Body() dto: SetPasswordDto, @Req() req: Request): Promise<void> {
