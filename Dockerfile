@@ -34,9 +34,15 @@ ARG PUBLIC_HTTPS=false
 # Turnstile site key is public by design (embedded in the login page's HTML) —
 # empty default keeps the widget a no-op (Turnstile component) until configured.
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=""
+# Browser error reporting (Spec §11) — one var per Next.js app since both build from
+# this same image; empty defaults keep Sentry a no-op until configured.
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG NEXT_PUBLIC_PORTAL_SENTRY_DSN=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV PUBLIC_HTTPS=$PUBLIC_HTTPS
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
+ENV NEXT_PUBLIC_PORTAL_SENTRY_DSN=$NEXT_PUBLIC_PORTAL_SENTRY_DSN
 ENV NODE_ENV=production
 # Cap the heap and build one package at a time — this box is memory-constrained.
 ENV NODE_OPTIONS=--max-old-space-size=2048

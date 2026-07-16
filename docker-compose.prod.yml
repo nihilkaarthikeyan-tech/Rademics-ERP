@@ -6,12 +6,14 @@
 # the "scan" profile so it is opt-in (its ~1GB signature DB is heavy on a shared
 # box); enable it with `--profile scan` once file-upload scanning is needed.
 #
-# Runtime secrets come from ./.env.production (env_file). Public, build-time
-# values (baked into the browser bundle) are the build args below.
+# Runtime secrets come from ./.env.production (env_file). Build-time values
+# (baked into the browser bundle) are the build args below — their real values
+# ALSO live only in .env.production, substituted in via --env-file so nothing
+# secret-shaped (DSNs, site keys) ever gets typed into this git-tracked file.
 #
-#   docker compose -f docker-compose.prod.yml build
-#   docker compose -f docker-compose.prod.yml up -d postgres redis minio minio-setup
-#   docker compose -f docker-compose.prod.yml up -d api internal portal
+#   docker compose --env-file .env.production -f docker-compose.prod.yml build
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d postgres redis minio minio-setup
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d api internal portal
 # ─────────────────────────────────────────────────────────────────────────────
 name: rademics-erp
 
@@ -95,9 +97,11 @@ services:
       args:
         NEXT_PUBLIC_API_URL: "https://api.52digit.com/api"
         PUBLIC_HTTPS: "true"
-        # Public by design (rendered into the login page HTML) — matching secret
-        # (TURNSTILE_SECRET_KEY) lives only in .env.production, never here.
-        NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAAD28tPjtuZ5KvO2e"
+        # Real values come from .env.production via --env-file (see header note) —
+        # nothing secret-shaped is typed directly into this tracked file.
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: "${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}"
+        NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
+        NEXT_PUBLIC_PORTAL_SENTRY_DSN: "${NEXT_PUBLIC_PORTAL_SENTRY_DSN:-}"
     restart: unless-stopped
     env_file: .env.production
     working_dir: /app/apps/api
@@ -117,6 +121,10 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # Server-side error reporting (Spec §11) — same project/DSN as this app's
+      # browser reporting (NEXT_PUBLIC_SENTRY_DSN build arg above), value from
+      # .env.production via --env-file.
+      SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
     working_dir: /app/apps/internal
     command: pnpm start
     ports:
@@ -130,6 +138,10 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # Server-side error reporting (Spec §11) — same project/DSN as this app's
+      # browser reporting (NEXT_PUBLIC_PORTAL_SENTRY_DSN build arg above), value
+      # from .env.production via --env-file.
+      SENTRY_DSN: "${NEXT_PUBLIC_PORTAL_SENTRY_DSN:-}"
     working_dir: /app/apps/portal
     command: pnpm start
     ports:
