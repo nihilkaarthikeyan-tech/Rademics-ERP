@@ -53,9 +53,13 @@ services:
     # from the HOST shell (not env_file), silently starting MinIO with the
     # fallback creds while the API signs with the real ones.
     env_file: .env.production
+    # Localhost-only: Docker's iptables rules bypass ufw, so a plain "9000:9000"
+    # is reachable from the internet even with the firewall up. All public traffic
+    # comes through nginx (storage.52digit.com → 127.0.0.1:9000); the console on
+    # 9001 is admin-only — reach it via an SSH tunnel, never the open internet.
     ports:
-      - "9000:9000"   # S3 API — reachable by the browser for presigned upload/download URLs
-      - "9001:9001"   # MinIO console (admin)
+      - "127.0.0.1:9000:9000"   # S3 API — browser reaches it via the nginx vhost
+      - "127.0.0.1:9001:9001"   # MinIO console (admin, SSH tunnel only)
     volumes:
       - miniodata:/data
     healthcheck:
@@ -107,8 +111,11 @@ services:
     working_dir: /app/apps/api
     # Apply any pending migrations on boot (idempotent), then start the API.
     command: sh -c "pnpm exec prisma migrate deploy && node dist/main.js"
+    # Localhost-only (see minio note): nginx terminates TLS and proxies
+    # api.52digit.com → 127.0.0.1:3002. Direct-IP access would bypass both
+    # ufw (Docker punches through it) and Cloudflare, so never publish wide.
     ports:
-      - "3002:4000"
+      - "127.0.0.1:3002:4000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -128,7 +135,7 @@ services:
     working_dir: /app/apps/internal
     command: pnpm start
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000" # nginx-only (see minio note)
     depends_on:
       - api
     networks: [rademics]
@@ -145,7 +152,7 @@ services:
     working_dir: /app/apps/portal
     command: pnpm start
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001" # nginx-only (see minio note)
     depends_on:
       - api
     networks: [rademics]
