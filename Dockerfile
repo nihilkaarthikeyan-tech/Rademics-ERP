@@ -31,8 +31,12 @@ RUN pnpm --filter @rademics/api prisma:generate
 # served over plain HTTP by IP (flip to true once a domain + TLS are in place).
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api
 ARG PUBLIC_HTTPS=false
+# Turnstile site key is public by design (embedded in the login page's HTML) —
+# empty default keeps the widget a no-op (Turnstile component) until configured.
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV PUBLIC_HTTPS=$PUBLIC_HTTPS
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NODE_ENV=production
 # Cap the heap and build one package at a time — this box is memory-constrained.
 ENV NODE_OPTIONS=--max-old-space-size=2048

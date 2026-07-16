@@ -95,6 +95,9 @@ services:
       args:
         NEXT_PUBLIC_API_URL: "https://api.52digit.com/api"
         PUBLIC_HTTPS: "true"
+        # Public by design (rendered into the login page HTML) — matching secret
+        # (TURNSTILE_SECRET_KEY) lives only in .env.production, never here.
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAAAD28tPjtuZ5KvO2e"
     restart: unless-stopped
     env_file: .env.production
     working_dir: /app/apps/api

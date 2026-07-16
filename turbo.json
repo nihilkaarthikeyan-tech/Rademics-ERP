@@ -5,7 +5,7 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["PUBLIC_HTTPS", "NEXT_PUBLIC_API_URL"]
+      "env": ["PUBLIC_HTTPS", "NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_TURNSTILE_SITE_KEY"]
     },
     "dev": {
       "cache": false,
