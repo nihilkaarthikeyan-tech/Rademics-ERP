@@ -92,7 +92,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* ── Sidebar ── */}
         <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white sm:flex">
           <div className="flex h-16 items-center gap-2 px-5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
               R
             </span>
             <span className="text-lg font-bold tracking-tight text-slate-900">Rademics</span>

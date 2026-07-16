@@ -1,11 +1,11 @@
 /**
  * Shared Tailwind preset — one design system across both apps (Spec §9).
  *
- * INTERIOR IS MONOCHROME (user direction): the app chrome uses a pure neutral ramp
- * and near-black primary/accent — no hue. We achieve this app-wide by remapping
- * `slate` (used throughout the codebase) to a pure-neutral scale, so existing
- * `slate-*` classes render black-and-white without touching every screen. Status is
- * conveyed by weight/icon/label, never color (see Badge / dashboard-overview).
+ * Interior chrome is a light neutral ramp (no hue) with ONE restrained indigo
+ * accent (#4F46E5) reserved for interactive elements — primary buttons, focus
+ * rings, active nav/tab states, links, progress bars. Everything else (surfaces,
+ * borders, body text) stays neutral. Status badges still encode meaning via
+ * weight/icon/label, never color (see Badge / dashboard-overview).
  *
  * The `brand` blue/navy/gold remain ONLY for the login screen, which keeps its
  * light bluish identity (navy #1B2A4A, blue #2563EB, gold #C9A227).
@@ -38,13 +38,13 @@ module.exports = {
           blue: '#2563EB',
           gold: '#C9A227',
         },
-        // Interior primary action + focus ring = near-black.
+        // Interior primary action + focus ring = one restrained indigo accent.
         primary: {
-          DEFAULT: '#171717',
+          DEFAULT: '#4F46E5',
           foreground: '#FFFFFF',
         },
         accent: {
-          DEFAULT: '#171717',
+          DEFAULT: '#4F46E5',
           foreground: '#FFFFFF',
         },
         // Remap slate → pure neutral so the whole app goes black-and-white at once.

@@ -127,7 +127,7 @@ export function DashboardOverview() {
                   </div>
                   <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className="h-full rounded-full bg-slate-900"
+                      className="h-full rounded-full bg-primary"
                       style={{ width: `${Math.max(2, Math.min(100, p.pctComplete))}%` }}
                     />
                   </div>
