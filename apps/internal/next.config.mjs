@@ -14,6 +14,17 @@ function apiOrigins() {
   }
 }
 
+/** Origin the browser SDK posts error envelopes to, parsed from the DSN's host. */
+function sentryIngestOrigin() {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  if (!dsn) return null;
+  try {
+    return new URL(dsn).origin;
+  } catch {
+    return null;
+  }
+}
+
 const isProd = process.env.NODE_ENV === 'production';
 // HTTPS-only hardening (HSTS + upgrade-insecure-requests) is correct behind TLS but
 // breaks a plain-HTTP-by-IP deployment. Gate it on PUBLIC_HTTPS (default on; set
@@ -28,6 +39,7 @@ const httpsEnabled = process.env.PUBLIC_HTTPS !== 'false';
 function contentSecurityPolicy() {
   const [apiHttp, apiWs] = apiOrigins();
   const turnstile = 'https://challenges.cloudflare.com';
+  const sentry = sentryIngestOrigin();
   const scriptSrc = isProd
     ? `'self' 'unsafe-inline' ${turnstile}`
     : `'self' 'unsafe-inline' 'unsafe-eval' ${turnstile}`;
@@ -41,7 +53,9 @@ function contentSecurityPolicy() {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ${apiHttp} ${apiWs} ${turnstile}`,
+    // Browser Sentry SDK posts error envelopes here (Spec §11) — no-op (thus safe
+    // to omit) if NEXT_PUBLIC_SENTRY_DSN isn't set.
+    `connect-src 'self' ${apiHttp} ${apiWs} ${turnstile}${sentry ? ` ${sentry}` : ''}`,
     `frame-src ${turnstile}`, // Turnstile's own challenge widget (Spec §10 CAPTCHA)
     ...(isProd && httpsEnabled ? ['upgrade-insecure-requests'] : []),
   ].join('; ');
