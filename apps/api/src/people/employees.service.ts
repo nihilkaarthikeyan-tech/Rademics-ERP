@@ -30,6 +30,7 @@ const DIRECTORY_SELECT = {
   employmentStatus: true,
   phone: true,
   employeeCode: true,
+  loginCode: true, // anonymized login/handle for client-facing employees (shown to SA/HR)
   joinDate: true,
   activeEngagement: true,
   department: { select: { id: true, name: true, vertical: true } },

@@ -10,8 +10,18 @@ import { Grant } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CapabilityService } from '../rbac/capability.service';
+import { anonymizedHandle, canSeeRealIdentity } from '../common/login-code';
 import type { AuthUser } from '../auth/auth-user';
 import type { CreateModuleDto, CreateProjectDto, UpdateProjectDto } from './dto';
+
+/** Shape of the client reference selected on a project (see PROJECT_SELECT). */
+interface ClientRef {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string;
+  loginCode: string | null;
+}
 
 interface Meta {
   ip?: string | null;
@@ -32,7 +42,8 @@ const PROJECT_SELECT = {
   cadence: true,
   budgetAmount: true,
   pm: { select: { id: true, name: true, email: true } },
-  client: { select: { id: true, name: true, email: true } },
+  // loginCode + role let us anonymize the client for non-broker viewers (§ double-blind).
+  client: { select: { id: true, name: true, email: true, role: true, loginCode: true } },
   _count: { select: { tasks: true, modules: true } },
 } satisfies Prisma.ProjectSelect;
 
@@ -48,6 +59,23 @@ export class ProjectsService {
     if (BUDGET_ROLES.has(user.role)) return project;
     const { budgetAmount: _omit, ...rest } = project;
     return rest;
+  }
+
+  /**
+   * Double-blind: replace the client's real name/email with their anonymized handle
+   * for non-broker viewers (Employee, Team Lead). Brokers (SA/HR/PM/Finance) see the
+   * real client. A client without a loginCode (e.g. legacy) shows a neutral placeholder.
+   */
+  private anonymizeClient<T extends { client: ClientRef | null }>(project: T, user: AuthUser): T {
+    if (canSeeRealIdentity(user.role) || !project.client) return project;
+    const c = project.client;
+    const handle = c.loginCode ? anonymizedHandle(c.loginCode, c.role) : 'Client (hidden)';
+    return { ...project, client: { id: c.id, name: handle, email: null, role: c.role, loginCode: null } };
+  }
+
+  /** Apply every viewer-scoped projection (budget + client anonymization) in one place. */
+  private project<T extends { budgetAmount: unknown; client: ClientRef | null }>(p: T, user: AuthUser) {
+    return this.stripBudget(this.anonymizeClient(p, user), user);
   }
 
   /**
@@ -82,7 +110,7 @@ export class ProjectsService {
       select: PROJECT_SELECT,
       orderBy: { createdAt: 'desc' },
     });
-    return items.map((p) => this.stripBudget(p, user));
+    return items.map((p) => this.project(p, user));
   }
 
   async get(id: string, user: AuthUser) {
@@ -95,7 +123,7 @@ export class ProjectsService {
       },
     });
     if (!project) throw new NotFoundException('Project not found');
-    return this.stripBudget(project, user);
+    return this.project(project, user);
   }
 
   async create(dto: CreateProjectDto, actor: AuthUser, meta: Meta) {
@@ -131,7 +159,7 @@ export class ProjectsService {
       after: { name: project.name, type: project.type },
       ...meta,
     });
-    return this.stripBudget(project, actor);
+    return this.project(project, actor);
   }
 
   async update(id: string, dto: UpdateProjectDto, actor: AuthUser, meta: Meta) {
@@ -164,7 +192,7 @@ export class ProjectsService {
       after: { fields: Object.keys(dto) },
       ...meta,
     });
-    return this.stripBudget(project, actor);
+    return this.project(project, actor);
   }
 
   /** Active internal users who can hold tasks (Spec §5.9 assignment screens, §24). */

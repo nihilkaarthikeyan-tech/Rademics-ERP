@@ -28,6 +28,11 @@ export default function NewEmployeePage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // After creating a CLIENT / EMPLOYEE we surface their anonymized login code so the
+  // Super Admin can hand it over — it's how they'll sign in, and it's never emailed
+  // in the clear across the client↔worker boundary.
+  const [created, setCreated] = useState<{ name: string; loginCode: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     apiFetch<Option[]>('/departments').then(setDepartments).catch(() => undefined);
@@ -43,7 +48,7 @@ export default function NewEmployeePage() {
     setError(null);
     setSaving(true);
     try {
-      await apiFetch('/employees', {
+      const rec = await apiFetch<{ name: string; loginCode: string | null; role: string }>('/employees', {
         method: 'POST',
         body: JSON.stringify({
           email: form.email,
@@ -55,7 +60,10 @@ export default function NewEmployeePage() {
           phone: form.phone || undefined,
         }),
       });
-      router.push('/people');
+      // If a login code was issued (CLIENT/EMPLOYEE), show it before leaving so it can
+      // be copied. Internal staff get no code → go straight back to the list.
+      if (rec.loginCode) setCreated({ name: rec.name, loginCode: rec.loginCode });
+      else router.push('/people');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create employee');
     } finally {
@@ -65,6 +73,60 @@ export default function NewEmployeePage() {
 
   const selectClass =
     'flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+
+  // ── Post-create: show the anonymized login code to hand over. ──
+  if (created) {
+    return (
+      <div className="mx-auto max-w-xl">
+        <Card className="mt-8">
+          <CardContent className="pt-6">
+            <h1 className="text-xl font-semibold text-slate-800">{created.name} created</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              They also received an email invite to set their password. Share the login ID below —
+              it’s how they sign in, and it’s the only identity the other side of a project ever sees.
+            </p>
+            <div className="mt-5">
+              <Label>Login ID</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <code className="flex-1 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-lg tracking-wider text-slate-900">
+                  {created.loginCode}
+                </code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (created.loginCode) void navigator.clipboard?.writeText(created.loginCode);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  }}
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                Save it now — for security it isn’t shown again on the profile in plain view.
+              </p>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <Button type="button" onClick={() => router.push('/people')}>
+                Done
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCreated(null);
+                  setForm((f) => ({ ...f, email: '', name: '', phone: '' }));
+                }}
+              >
+                Add another
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-xl">

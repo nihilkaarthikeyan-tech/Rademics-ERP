@@ -25,12 +25,12 @@ export default function LoginPage() {
     try {
       const res = await apiFetch<{ accessToken: string; user: Me }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password, captchaToken }),
+        body: JSON.stringify({ identifier: email, password, captchaToken }),
       });
       setToken(res.accessToken);
       router.push('/dashboard');
     } catch {
-      setError('Invalid email or password');
+      setError('Invalid login or password');
     } finally {
       setLoading(false);
     }
@@ -100,12 +100,12 @@ export default function LoginPage() {
 
           <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email">Email address</Label>
+              <Label htmlFor="email">Email or login ID</Label>
               <Input
                 id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@company.com"
+                type="text"
+                autoComplete="username"
+                placeholder="you@company.com or RDM-XXXXXX"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

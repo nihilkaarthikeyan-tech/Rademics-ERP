@@ -15,6 +15,7 @@ import { AuditService } from '../audit/audit.service';
 import { EmailProducer } from '../queue/email.producer';
 import { randomUUID } from 'node:crypto';
 import { generateOpaqueToken, hashToken } from './tokens';
+import { isLoginCode, generateLoginCode } from '../common/login-code';
 import type { AuthUser } from './auth-user';
 
 interface RequestMeta {
@@ -45,15 +46,20 @@ export class AuthService {
 
   // ─── Login ────────────────────────────────────────────────────────────────
 
-  async login(email: string, password: string, meta: RequestMeta): Promise<IssuedTokens> {
-    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  async login(identifier: string, password: string, meta: RequestMeta): Promise<IssuedTokens> {
+    // Route by shape: a login code (RDM-XXXXXX) resolves the anonymized client/worker;
+    // anything else is treated as an email. Codes are stored uppercase, emails lowercase.
+    const trimmed = identifier.trim();
+    const user = isLoginCode(trimmed)
+      ? await this.prisma.user.findUnique({ where: { loginCode: trimmed.toUpperCase() } })
+      : await this.prisma.user.findUnique({ where: { email: trimmed.toLowerCase() } });
 
     // Generic failure to avoid user enumeration (Spec §5.1).
-    const invalid = () => new UnauthorizedException('Invalid email or password');
+    const invalid = () => new UnauthorizedException('Invalid login or password');
 
     if (!user || !user.passwordHash || user.status !== 'ACTIVE') {
       await this.audit.record({
-        actorEmail: email,
+        actorEmail: trimmed,
         action: 'LOGIN_FAILED',
         entityType: 'User',
         entityId: user?.id,
@@ -193,10 +199,16 @@ export class AuthService {
     actor: AuthUser,
     input: { email: string; name: string; role: Role; resourceType: ResourceType },
     meta: RequestMeta,
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; loginCode: string | null }> {
     const email = input.email.toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException('A user with this email already exists');
+
+    // Double-blind identity: CLIENT and EMPLOYEE users get an anonymized login code
+    // (used both to sign in and as the handle the other side sees). Internal staff
+    // (SA/HR/PM/TL/Finance) stay email-only — no code.
+    const needsCode = input.role === Role.CLIENT || input.role === Role.EMPLOYEE;
+    const loginCode = needsCode ? await this.reserveLoginCode() : null;
 
     const user = await this.prisma.user.create({
       data: {
@@ -205,6 +217,7 @@ export class AuthService {
         role: input.role,
         resourceType: input.resourceType,
         status: 'INVITED',
+        loginCode,
       },
     });
 
@@ -226,7 +239,17 @@ export class AuthService {
       ...meta,
     });
 
-    return { id: user.id };
+    return { id: user.id, loginCode };
+  }
+
+  /** Generate a login code and confirm it's free, retrying on the rare collision. */
+  private async reserveLoginCode(): Promise<string> {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const code = generateLoginCode();
+      const clash = await this.prisma.user.findUnique({ where: { loginCode: code }, select: { id: true } });
+      if (!clash) return code;
+    }
+    throw new ConflictException('Could not allocate a unique login code — please retry');
   }
 
   async setPasswordFromToken(rawToken: string, password: string, meta: RequestMeta): Promise<void> {

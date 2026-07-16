@@ -14,6 +14,7 @@ import {
   QUEUE_FILES,
   type ScanJobData,
 } from './files.constants';
+import { anonymizedHandle } from '../common/login-code';
 import type { AuthUser } from '../auth/auth-user';
 import type { InitUploadDto } from './dto';
 
@@ -152,13 +153,30 @@ export class FilesService {
           select: {
             id: true, versionNumber: true, originalName: true, sizeBytes: true, contentType: true,
             scanStatus: true, visibility: true, note: true, uploadedAt: true,
-            uploadedBy: { select: { id: true, name: true } },
+            uploadedBy: { select: { id: true, name: true, role: true, loginCode: true } },
           },
         },
       },
     });
     // A client sees an asset only if it has at least one visible+clean version.
-    return assets.filter((a) => !isClient || a.versions.length > 0);
+    const filtered = assets.filter((a) => !isClient || a.versions.length > 0);
+    // Double-blind: a client must never see the worker who uploaded a deliverable —
+    // replace the uploader's name with their anonymized handle.
+    if (!isClient) return filtered;
+    return filtered.map((a) => ({
+      ...a,
+      versions: a.versions.map((v) => ({
+        ...v,
+        uploadedBy: v.uploadedBy
+          ? {
+              id: v.uploadedBy.id,
+              name: v.uploadedBy.loginCode
+                ? anonymizedHandle(v.uploadedBy.loginCode, v.uploadedBy.role)
+                : 'Worker (hidden)',
+            }
+          : null,
+      })),
+    }));
   }
 
   // ── Presigned download — only AVAILABLE versions; clients need CLIENT_VISIBLE (§5.6) ──

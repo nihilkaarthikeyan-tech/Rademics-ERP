@@ -18,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CapabilityService } from '../rbac/capability.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { anonymizedHandle, canSeeRealIdentity } from '../common/login-code';
 import type { AuthUser } from '../auth/auth-user';
 import type {
   CreateCommentDto,
@@ -151,7 +152,10 @@ export class TasksService {
         checklist: { select: { id: true, text: true, done: true, position: true }, orderBy: { position: 'asc' } },
         watchers: { select: { user: { select: { id: true, name: true } } } },
         history: {
-          select: { id: true, fromStatus: true, toStatus: true, action: true, actorEmail: true, comment: true, createdAt: true },
+          select: {
+            id: true, fromStatus: true, toStatus: true, action: true, actorEmail: true, comment: true, createdAt: true,
+            actor: { select: { role: true, loginCode: true, name: true } },
+          },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -167,8 +171,37 @@ export class TasksService {
       if (!involved) throw new ForbiddenException('You do not have access to this task');
     }
 
+    // Double-blind: across the client↔worker boundary, a non-broker viewer sees the
+    // other party's history entries and comments as an anonymized handle, never a name
+    // or email. Brokers (SA/HR/PM/Finance) see the real actor.
+    const history = task.history.map((h) => ({
+      id: h.id, fromStatus: h.fromStatus, toStatus: h.toStatus, action: h.action,
+      comment: h.comment, createdAt: h.createdAt,
+      actorEmail: canSeeRealIdentity(user.role) ? h.actorEmail : null,
+      actorLabel: this.displayName(user.role, h.actor, h.actorEmail),
+    }));
+
     const comments = await this.listComments(id, user);
-    return { ...task, comments, overdue: this.isOverdue(task) };
+    return { ...task, history, comments, overdue: this.isOverdue(task) };
+  }
+
+  /**
+   * Name to show for an actor/author to a given viewer. Brokers see the real name;
+   * across the client↔worker boundary a non-broker viewer sees an anonymized handle
+   * (fails closed to "…(hidden)" if the counterparty has no code).
+   */
+  private displayName(
+    viewerRole: string,
+    actor: { role: string; loginCode: string | null; name: string | null } | null,
+    fallbackEmail?: string | null,
+  ): string {
+    if (!actor) return fallbackEmail ?? 'Unknown';
+    const real = actor.name ?? fallbackEmail ?? 'Unknown';
+    if (canSeeRealIdentity(viewerRole)) return real;
+    const crossesBoundary = (actor.role === 'CLIENT') !== (viewerRole === 'CLIENT');
+    if (!crossesBoundary) return real;
+    if (actor.loginCode) return anonymizedHandle(actor.loginCode, actor.role);
+    return actor.role === 'CLIENT' ? 'Client (hidden)' : 'Worker (hidden)';
   }
 
   async update(id: string, dto: UpdateTaskDto, actor: AuthUser, meta: Meta) {
@@ -429,15 +462,26 @@ export class TasksService {
   }
 
   async listComments(taskId: string, user: AuthUser) {
-    return this.prisma.comment.findMany({
+    const rows = await this.prisma.comment.findMany({
       where: {
         taskId,
         // Clients only ever see client-visible comments (§5.5).
         visibility: user.role === 'CLIENT' ? 'CLIENT_VISIBLE' : undefined,
       },
       orderBy: { createdAt: 'asc' },
-      include: { author: { select: { id: true, name: true } } },
+      include: { author: { select: { id: true, name: true, role: true, loginCode: true } } },
     });
+    // Double-blind: replace a cross-boundary author's name with their anonymized handle.
+    return rows.map((c) => ({
+      id: c.id,
+      taskId: c.taskId,
+      body: c.body,
+      visibility: c.visibility,
+      createdAt: c.createdAt,
+      author: c.author
+        ? { id: c.author.id, name: this.displayName(user.role, c.author) }
+        : null,
+    }));
   }
 
   // ── Checklist (Spec §5.4) ──

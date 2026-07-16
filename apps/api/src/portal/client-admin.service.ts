@@ -49,7 +49,7 @@ export class ClientAdminService {
     const org = await this.prisma.clientOrg.findUnique({ where: { id: orgId }, select: { id: true } });
     if (!org) throw new NotFoundException('Client organization not found');
 
-    const { id } = await this.auth.invite(
+    const { id, loginCode } = await this.auth.invite(
       actor,
       { email: dto.email, name: dto.name, role: 'CLIENT', resourceType: 'INTERNAL' },
       meta,
@@ -60,7 +60,9 @@ export class ClientAdminService {
       action: 'CLIENT_USER_CREATED', entityType: 'User', entityId: id,
       after: { orgId, email: dto.email }, ...meta,
     });
-    return { id, email: dto.email, orgId };
+    // loginCode is what the client uses to sign in — surfaced to the Super Admin so
+    // they can hand it over; the client's email is never shown to the worker side.
+    return { id, email: dto.email, orgId, loginCode };
   }
 
   /** Grant a client user Viewer/Approver access to a project (§5.5). */

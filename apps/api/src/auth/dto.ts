@@ -11,8 +11,12 @@ import {
 import { Role, ResourceType } from '@rademics/permissions';
 
 export class LoginDto {
-  @IsEmail()
-  email!: string;
+  // Email (internal staff) OR anonymized login code like RDM-7K2P9X (clients &
+  // client-facing employees). The service routes the lookup by shape.
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  identifier!: string;
 
   @IsString()
   @IsNotEmpty()

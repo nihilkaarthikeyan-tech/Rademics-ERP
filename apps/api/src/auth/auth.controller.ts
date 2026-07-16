@@ -25,7 +25,7 @@ export class AuthController {
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.turnstile.verify(dto.captchaToken, req.ip);
-    const tokens = await this.auth.login(dto.email, dto.password, meta(req));
+    const tokens = await this.auth.login(dto.identifier, dto.password, meta(req));
     return this.respondWithTokens(res, tokens);
   }
 

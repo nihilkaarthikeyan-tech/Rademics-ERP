@@ -29,7 +29,7 @@ interface TaskDetail {
   module: { id: string; name: string } | null;
   subtasks: { id: string; title: string; status: string }[];
   checklist: { id: string; text: string; done: boolean }[];
-  history: { id: string; fromStatus: string | null; toStatus: string; action: string; actorEmail: string | null; comment: string | null; createdAt: string }[];
+  history: { id: string; fromStatus: string | null; toStatus: string; action: string; actorEmail: string | null; actorLabel?: string | null; comment: string | null; createdAt: string }[];
   comments: { id: string; body: string; visibility: string; author: { name: string } | null; createdAt: string }[];
 }
 
@@ -300,7 +300,7 @@ export function TaskDetailDrawer({
                     <span className="text-slate-600">
                       {h.fromStatus ? `${h.fromStatus.replace(/_/g, ' ')} → ` : ''}
                       <span className="font-medium">{h.toStatus.replace(/_/g, ' ')}</span>
-                      {h.actorEmail ? ` · ${h.actorEmail}` : ''}
+                      {h.actorLabel || h.actorEmail ? ` · ${h.actorLabel ?? h.actorEmail}` : ''}
                       {h.comment ? ` — "${h.comment}"` : ''}
                     </span>
                   </li>

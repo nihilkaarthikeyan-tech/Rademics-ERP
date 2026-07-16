@@ -222,6 +222,14 @@ model User {
   resourceType ResourceType @default(INTERNAL)
   status       UserStatus   @default(INVITED)
 
+  // Anonymized cross-boundary identity (double-blind client↔worker). Serves two
+  // roles at once: a login identifier (alternative to email) AND the handle each
+  // side sees instead of the other's real name. Only CLIENT and client-facing
+  // EMPLOYEE users get one; internal staff (SA/HR/PM/TL/Finance) stay email-only.
+  // The private `email` above is retained purely for password reset — never shown
+  // across the boundary.
+  loginCode String? @unique
+
   // Failed-login lockout (Spec §5.1): lock 15 min after 5 consecutive failures.
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime?
