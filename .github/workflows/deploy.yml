@@ -17,8 +17,11 @@ name: Deploy
 # or the runner — rsync explicitly excludes them below.
 
 on:
-  push:
-    branches: [main]
+  # Manual only. Auto-deploy-on-push is intentionally OFF: staging isn't in use and
+  # prod deploys are done deliberately. To enable CD later, add the DEPLOY_* secrets
+  # (see below) and uncomment the push trigger.
+  # push:
+  #   branches: [main]
   workflow_dispatch:
     inputs:
       target:
