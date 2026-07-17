@@ -20,7 +20,7 @@ function ProgressBar({ percent }: { percent: number }) {
   return (
     <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
       <div
-        className="h-full rounded-full bg-primary"
+        className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#A855F7]"
         style={{ width: `${Math.max(2, Math.min(100, percent))}%` }}
       />
     </div>
@@ -39,10 +39,10 @@ function Kpi({
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-500">{label}</span>
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-white">
           <Icon className="h-4 w-4" />
         </span>
       </div>
@@ -100,10 +100,10 @@ export default function PortalDashboard() {
             <div className="grid gap-4 sm:grid-cols-2">
               {projects.map((p) => (
                 <Link key={p.id} href={`/projects/${p.id}`}>
-                  <div className="h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-slate-300">
+                  <div className="h-full rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass transition-colors hover:border-white/90">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-white">
                           {p.percentComplete >= 100 ? <CheckCircle2 className="h-4 w-4" /> : <FolderKanban className="h-4 w-4" />}
                         </span>
                         <h3 className="font-semibold text-slate-900">{p.name}</h3>

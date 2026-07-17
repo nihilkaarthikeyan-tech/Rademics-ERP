@@ -348,6 +348,17 @@ export class TasksService {
     }
     this.assertActor(transition.actors, actor, task);
 
+    // A CLIENT reaching this shared endpoint must be an APPROVER on THIS task's
+    // project. assertActor only checks the CLIENT_APPROVER role, not org scope — so
+    // without this a client could approve/reject another client's deliverable by
+    // POSTing here directly, bypassing the org-scoped portal path (§5.5, §10).
+    if (actor.role === 'CLIENT') {
+      const approver = await this.prisma.clientProjectAccess.count({
+        where: { clientUserId: actor.id, projectId: task.projectId, level: 'APPROVER' },
+      });
+      if (!approver) throw new ForbiddenException('You do not have access to this deliverable');
+    }
+
     if (transition.requiresComment && !comment?.trim()) {
       throw new BadRequestException('A comment is required for this action (§6)');
     }

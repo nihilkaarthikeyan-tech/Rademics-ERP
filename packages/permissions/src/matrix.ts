@@ -69,7 +69,7 @@ const SEED: Record<CapabilityKey, string> = {
   'portal.files.download': '-----Y-',
   'portal.deliverable.approve': '-----S-',
   'portal.invoices.view': '-----Y-',
-  'portal.users.manage': 'Y-S----',
+  'portal.users.manage': 'Y------',
 
   // — Leave —
   'leave.request': '-YYYY-Y',

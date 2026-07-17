@@ -1,0 +1,142 @@
+name: Deploy
+
+# Continuous deployment (Spec §11, §12; runbook §4).
+#
+#   push to main            → auto-deploy to STAGING (after tests pass)
+#   manual "Run workflow"   → deploy to PROD (staging validated first, §4 policy)
+#
+# This replaces the manual SFTP push (which let the VPS and git silently drift):
+# the same commit that's on main is rsync'd to the box and rebuilt in place.
+#
+# ── Required repo secrets (Settings → Secrets and variables → Actions) ──────────
+#   DEPLOY_SSH_KEY   private half of the ed25519 deploy key; its public half is in
+#                    /root/.ssh/authorized_keys on the VPS (the `claude-ops` key)
+#   DEPLOY_HOST      187.127.145.132
+#   DEPLOY_USER      root
+# The real .env.production / .env.staging live ONLY on the VPS and are never in git
+# or the runner — rsync explicitly excludes them below.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deploy target"
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+concurrency:
+  group: deploy-${{ github.event.inputs.target || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  # ── Gate: never deploy a red build ────────────────────────────────────────────
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://user:pass@localhost:5432/db?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @rademics/api prisma:generate
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    # push → staging; manual dispatch → whatever was chosen.
+    env:
+      TARGET: ${{ github.event.inputs.target || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target (compose file / project / env / health URL)
+        id: cfg
+        run: |
+          if [ "$TARGET" = "production" ]; then
+            echo "compose=docker-compose.prod.yml"      >> "$GITHUB_OUTPUT"
+            echo "project=rademics-erp"                 >> "$GITHUB_OUTPUT"
+            echo "envfile=.env.production"              >> "$GITHUB_OUTPUT"
+            echo "image=rademics-erp:latest"            >> "$GITHUB_OUTPUT"
+            echo "health=https://api.52digit.com/api/health" >> "$GITHUB_OUTPUT"
+          else
+            echo "compose=docker-compose.staging.yml"   >> "$GITHUB_OUTPUT"
+            echo "project=rademics-staging"             >> "$GITHUB_OUTPUT"
+            echo "envfile=.env.staging"                 >> "$GITHUB_OUTPUT"
+            echo "image=rademics-erp:staging"           >> "$GITHUB_OUTPUT"
+            echo "health=https://staging-api.52digit.com/api/health" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Rsync working tree → VPS (secrets & build artifacts excluded)
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude 'dist' \
+            --exclude '.env' \
+            --exclude '.env.production' \
+            --exclude '.env.staging' \
+            ./ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/rademics-erp/"
+
+      - name: Build + recreate + health-gate on the VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            TARGET="$TARGET" \
+            COMPOSE="${{ steps.cfg.outputs.compose }}" \
+            PROJECT="${{ steps.cfg.outputs.project }}" \
+            ENVFILE="${{ steps.cfg.outputs.envfile }}" \
+            IMAGE="${{ steps.cfg.outputs.image }}" \
+            HEALTH="${{ steps.cfg.outputs.health }}" \
+            SHA="${{ github.sha }}" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/rademics-erp
+
+          # Tag every Sentry event with the deployed SHA (runbook §5.4) and keep the
+          # previous image tagged :rollback so a failed health check can revert.
+          export SENTRY_RELEASE="$(echo "$SHA" | cut -c1-7)"
+          dc() { docker compose --env-file "$ENVFILE" -p "$PROJECT" -f "$COMPOSE" "$@"; }
+
+          docker image tag "$IMAGE" "${IMAGE%:*}:rollback" 2>/dev/null || true
+
+          echo "── build ($TARGET @ $SENTRY_RELEASE) ──"
+          dc build
+
+          echo "── up (migrations run in the api container's start command) ──"
+          dc up -d postgres redis minio minio-setup
+          dc up -d api internal portal
+
+          echo "── health gate ──"
+          ok=0
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$HEALTH" || true)
+            if [ "$code" = "200" ]; then ok=1; break; fi
+            echo "  attempt $i: $code — retrying"; sleep 6
+          done
+
+          if [ "$ok" != "1" ]; then
+            echo "!! health check failed — rolling back to previous image"
+            docker image tag "${IMAGE%:*}:rollback" "$IMAGE" || true
+            dc up -d api internal portal
+            exit 1
+          fi
+          echo "✔ $TARGET healthy at $HEALTH ($SENTRY_RELEASE)"
+          REMOTE

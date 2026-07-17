@@ -171,7 +171,7 @@ function TaskCard({ task, onOpen }: { task: TaskRow; onOpen: (id: string) => voi
   return (
     <button
       onClick={() => onOpen(task.id)}
-      className="w-full rounded-md border border-slate-200 bg-white p-2.5 text-left shadow-sm hover:border-slate-300"
+      className="w-full rounded-md border border-white/70 bg-white/65 p-2.5 text-left shadow-glass backdrop-blur-xl hover:border-white/90"
     >
       <div className="text-sm font-medium text-slate-800">{task.title}</div>
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">

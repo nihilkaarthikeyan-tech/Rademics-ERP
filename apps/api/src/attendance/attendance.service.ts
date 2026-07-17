@@ -147,48 +147,10 @@ export class AttendanceService {
     return { idleSeconds: session.idleSeconds, checkedIn: true };
   }
 
-  /**
-   * Auto-checkout anyone silent past the idle threshold (Spec §5.3 idle → logout).
-   * Runs on a 1-minute sweep (attendance.processor.ts). The checkout time is the
-   * exact moment the threshold was crossed, not "now" — the sweep interval itself
-   * shouldn't pad their worked time.
-   */
-  async autoCloseIdleSessions(now = new Date()): Promise<number> {
-    const rules = await this.getRules();
-    const cutoffAgo = new Date(now.getTime() - rules.idleMinutes * 60 * 1000);
-    const stale = await this.prisma.attendanceSession.findMany({
-      where: {
-        checkOutAt: null,
-        OR: [
-          { lastHeartbeatAt: { lt: cutoffAgo } },
-          { lastHeartbeatAt: null, checkInAt: { lt: cutoffAgo } },
-        ],
-      },
-      select: { id: true, userId: true, checkInAt: true, lastHeartbeatAt: true },
-    });
-
-    let closed = 0;
-    for (const s of stale) {
-      const lastSeen = s.lastHeartbeatAt ?? s.checkInAt;
-      const checkOutAt = new Date(lastSeen.getTime() + rules.idleMinutes * 60 * 1000);
-      const result = await this.prisma.attendanceSession.updateMany({
-        where: { id: s.id, checkOutAt: null }, // guard against a race with a manual checkout
-        data: { checkOutAt, autoClosed: true, idleSeconds: { increment: rules.idleMinutes * 60 } },
-      });
-      if (result.count === 0) continue; // already closed by a concurrent request
-      closed += 1;
-
-      if (!(await this.findOpenSession(s.userId))) this.presence.markCheckedOut(s.userId);
-      await this.audit.record({
-        actorId: s.userId,
-        action: 'ATTENDANCE_IDLE_CHECKOUT',
-        entityType: 'AttendanceSession',
-        entityId: s.id,
-        after: { idleMinutes: rules.idleMinutes },
-      });
-    }
-    return closed;
-  }
+  // Idle no longer auto-checks-out (Spec §5.3 revised). A silent session stays open —
+  // people working outside the ERP tab (VS Code, design tools, calls) must not be
+  // signed out. Idle time is still tracked (heartbeat commits each gap; checkout and
+  // the nightly end-of-day close finalize it; today() adds the live ongoing gap).
 
   // ── Today's live status for the check-in card (Spec §17.1) ──
   async today(user: AuthUser) {
@@ -203,11 +165,15 @@ export class AttendanceService {
     });
     const sessions = recent.filter((s) => businessDateKey(s.checkInAt, rules.timezone) === todayKey);
 
-    // Treat an open session as running-to-now for the live worked/idle figures.
+    // Treat an open session as running-to-now for the live worked/idle figures. For
+    // the open session, add the current silent gap so idle reflects an in-progress
+    // idle stretch (otherwise it's only committed on the next heartbeat / checkout).
     const forMarks: SessionInput[] = sessions.map((s) => ({
       checkInAt: s.checkInAt,
       checkOutAt: s.checkOutAt ?? now,
-      idleSeconds: s.idleSeconds,
+      idleSeconds: s.checkOutAt
+        ? s.idleSeconds
+        : s.idleSeconds + this.idleGap(s.lastHeartbeatAt ?? s.checkInAt, now, rules.idleMinutes),
     }));
     const weekday = zonedParts(now, rules.timezone).weekday;
     const marks = computeDayMarks(forMarks, rules, weekday);

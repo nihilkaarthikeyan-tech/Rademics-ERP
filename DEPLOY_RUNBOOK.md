@@ -82,11 +82,27 @@ Required per deployable:
 
 ## 4. CI/CD (GitHub Actions, Spec §12)
 
-- **On PR**: lint, typecheck, test, build (existing CI).
-- **On merge to main**: build → run `prisma migrate deploy` → deploy the three services →
-  post-deploy `GET /api/health` gate; roll back on failure. **[needs VPS/domains]**
+- **On PR / push**: lint, typecheck, test, build — [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+- **On merge to main**: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs the
+  same verify gate, then rsyncs the commit to the VPS and rebuilds **staging** in place
+  (`docker compose build && up -d`), `prisma migrate deploy` runs in the api container's
+  start command, then a `GET /api/health` gate — rolls back to the `:rollback`-tagged
+  image on failure. This replaces the old manual SFTP push (which let the VPS and git drift).
+- **Deploy to prod**: same workflow, **manual** "Run workflow" → target `production`
+  (so §11's staging-first policy is a deliberate act, not an accident of merging).
 - **Release policy (§11)**: any change touching **Attendance or Payroll** ships to
   **staging first** and is validated there before production.
+
+**Activation (one-time), all [needs VPS/domains]:**
+1. Add repo secrets `DEPLOY_SSH_KEY` (private half of the `claude-ops` ed25519 key),
+   `DEPLOY_HOST`, `DEPLOY_USER`. The public half must be in the VPS's
+   `/root/.ssh/authorized_keys`.
+2. On the VPS: `cp .env.staging.example .env.staging` and fill fresh staging-only
+   secrets (never copy prod's — see the file header).
+3. Bring staging up once manually (see `docker-compose.staging.yml` header), seed it with
+   `demo:seed` (anonymized data, never prod PII).
+4. nginx: point `staging.52digit.com` / `staging-clientportal.52digit.com` /
+   `staging-api.52digit.com` / `staging-storage.52digit.com` at `127.0.0.1:3100/3101/3102/9100`.
 
 ---
 

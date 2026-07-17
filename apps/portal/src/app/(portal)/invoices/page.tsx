@@ -28,10 +28,10 @@ const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigi
 
 function Kpi({ icon: Icon, label, value, sub }: { icon: typeof Wallet; label: string; value: string; sub: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-500">{label}</span>
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-white">
           <Icon className="h-4 w-4" />
         </span>
       </div>
@@ -67,7 +67,7 @@ export default function InvoicesPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="mt-6 overflow-hidden rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl shadow-glass">
         {rows === null ? (
           <div className="p-6">
             <LoadingState />

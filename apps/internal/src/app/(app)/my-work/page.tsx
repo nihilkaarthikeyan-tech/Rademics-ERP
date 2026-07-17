@@ -90,7 +90,7 @@ export default function MyWorkPage() {
                   <button
                     key={t.id}
                     onClick={() => setOpenTaskId(t.id)}
-                    className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-white/70 bg-white/65 backdrop-blur-xl px-4 py-3 text-left shadow-glass transition-colors hover:border-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-slate-800">{t.title}</div>

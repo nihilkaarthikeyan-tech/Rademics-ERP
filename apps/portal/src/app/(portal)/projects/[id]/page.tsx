@@ -77,7 +77,7 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
       </Link>
 
       <div className="mt-3 flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-white">
           <ListChecks className="h-5 w-5" />
         </span>
         <div>
@@ -91,7 +91,7 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
 
       {/* Awaiting approval */}
       {project.deliverables.length > 0 ? (
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mt-5 rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
           <div className="mb-3 flex items-center gap-2">
             <ClipboardCheck className="h-4 w-4 text-slate-500" />
             <h3 className="text-sm font-semibold text-slate-800">Awaiting your approval</h3>
@@ -122,7 +122,7 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
 
       {/* Milestones */}
       {project.milestones.length > 0 ? (
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mt-5 rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
           <div className="mb-3 flex items-center gap-2">
             <MilestoneIcon className="h-4 w-4 text-slate-500" />
             <h3 className="text-sm font-semibold text-slate-800">Milestones</h3>
@@ -135,7 +135,7 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
                   <span className="font-medium tabular-nums text-slate-400">{m.percentComplete}%</span>
                 </div>
                 <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${m.percentComplete}%` }} />
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#A855F7]" style={{ width: `${m.percentComplete}%` }} />
                 </div>
               </li>
             ))}
@@ -144,7 +144,7 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
       ) : null}
 
       {/* Progress items */}
-      <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mt-5 rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
         <div className="mb-3 flex items-center gap-2">
           <ListChecks className="h-4 w-4 text-slate-500" />
           <h3 className="text-sm font-semibold text-slate-800">Progress</h3>

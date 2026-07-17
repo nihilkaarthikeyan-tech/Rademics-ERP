@@ -1,0 +1,165 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Rademics ERP — STAGING stack (Spec §11, §12; runbook §4 release policy).
+#
+# A second, fully isolated compose project on the SAME VPS as prod:
+#   - project name `rademics-staging` (prod is `rademics-erp`) → separate containers
+#   - its own volumes (pgdata-staging / …) → staging data never touches prod data
+#   - its own published ports (31xx / 91xx) → no collision with prod's 30xx / 90xx
+#   - its own secrets file `.env.staging`
+#
+# Purpose (runbook §4): any change touching Attendance or Payroll ships here first
+# and is validated before prod. Seed it with the ANONYMIZED demo dataset
+# (`demo:seed`), never a copy of prod PII.
+#
+#   docker compose --env-file .env.staging -p rademics-staging -f docker-compose.staging.yml build
+#   docker compose --env-file .env.staging -p rademics-staging -f docker-compose.staging.yml up -d postgres redis minio minio-setup
+#   docker compose --env-file .env.staging -p rademics-staging -f docker-compose.staging.yml up -d api internal portal
+#
+# nginx maps staging-*.52digit.com → these 127.0.0.1 ports, exactly like prod.
+# ─────────────────────────────────────────────────────────────────────────────
+name: rademics-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env.staging
+    volumes:
+      - pgdata-staging:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rademics} -d ${POSTGRES_DB:-rademics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks: [rademics]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata-staging:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks: [rademics]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    # See prod compose note: no environment: block — env_file supplies both the
+    # root creds and what the API signs with, or MinIO silently uses fallbacks.
+    env_file: .env.staging
+    ports:
+      - "127.0.0.1:9100:9000"   # staging S3 API (nginx → staging-storage.*)
+      - "127.0.0.1:9101:9001"   # staging MinIO console (SSH tunnel only)
+    volumes:
+      - miniodata-staging:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    networks: [rademics]
+
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file: .env.staging
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/$${S3_BUCKET} &&
+      mc mb --ignore-existing local/$${S3_BUCKET}-quarantine &&
+      echo 'MinIO buckets ready';
+      "
+    networks: [rademics]
+
+  clamav:
+    image: clamav/clamav:latest
+    restart: unless-stopped
+    profiles: ["scan"]
+    volumes:
+      - clamavdata-staging:/var/lib/clamav
+    networks: [rademics]
+
+  api:
+    image: rademics-erp:staging
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Staging talks to the staging API subdomain. Everything secret-shaped is
+        # substituted from .env.staging via --env-file (empty defaults keep the
+        # feature a no-op if unset), never typed into this tracked file.
+        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-https://staging-api.52digit.com/api}"
+        PUBLIC_HTTPS: "true"
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: "${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}"
+        NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
+        NEXT_PUBLIC_PORTAL_SENTRY_DSN: "${NEXT_PUBLIC_PORTAL_SENTRY_DSN:-}"
+        SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+        SENTRY_ORG: "${SENTRY_ORG:-}"
+        SENTRY_PROJECT: "${SENTRY_PROJECT:-}"
+        SENTRY_PORTAL_PROJECT: "${SENTRY_PORTAL_PROJECT:-}"
+        SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN:-}"
+    restart: unless-stopped
+    env_file: .env.staging
+    environment:
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+    working_dir: /app/apps/api
+    command: sh -c "pnpm exec prisma migrate deploy && node dist/main.js"
+    ports:
+      - "127.0.0.1:3102:4000"   # nginx → staging-api.52digit.com
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [rademics]
+
+  internal:
+    image: rademics-erp:staging
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-}"
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+    working_dir: /app/apps/internal
+    command: pnpm start
+    ports:
+      - "127.0.0.1:3100:3000"   # nginx → staging.52digit.com
+    depends_on:
+      - api
+    networks: [rademics]
+
+  portal:
+    image: rademics-erp:staging
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      SENTRY_DSN: "${NEXT_PUBLIC_PORTAL_SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-}"
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+    working_dir: /app/apps/portal
+    command: pnpm start
+    ports:
+      - "127.0.0.1:3101:3001"   # nginx → staging-clientportal.52digit.com
+    depends_on:
+      - api
+    networks: [rademics]
+
+volumes:
+  pgdata-staging:
+  redisdata-staging:
+  miniodata-staging:
+  clamavdata-staging:
+
+networks:
+  rademics:
+    driver: bridge

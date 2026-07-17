@@ -10,7 +10,7 @@ export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'nodejs' || process.env.NEXT_RUNTIME === 'edge') {
     Sentry.init({
       dsn,
-      environment: process.env.NODE_ENV,
+      environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
       release: process.env.SENTRY_RELEASE || undefined,
       tracesSampleRate: 0.1,
     });

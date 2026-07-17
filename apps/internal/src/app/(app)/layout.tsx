@@ -88,11 +88,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         Skip to content
       </a>
-      <div className="flex min-h-screen bg-slate-50">
+      <div className="flex min-h-screen">
         {/* ── Sidebar ── */}
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white sm:flex">
+        <aside className="glass-chrome hidden w-64 shrink-0 flex-col border-r border-white/50 sm:flex">
           <div className="flex h-16 items-center gap-2 px-5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-xs font-bold text-white shadow-[0_8px_18px_-6px_rgba(124,108,246,0.7)]">
               R
             </span>
             <span className="text-lg font-bold tracking-tight text-slate-900">Rademics</span>
@@ -120,13 +120,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                           href={item.href}
                           aria-current={active ? 'page' : undefined}
                           className={cn(
-                            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                            'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                             active
-                              ? 'bg-slate-100 font-semibold text-slate-900'
-                              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                              ? 'bg-gradient-to-r from-accent-soft to-accent-soft/40 font-semibold text-primary before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-gradient-to-b before:from-[#7C6CF6] before:to-[#A855F7]'
+                              : 'text-slate-600 hover:bg-white/60 hover:text-slate-900',
                           )}
                         >
-                          <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-slate-900' : 'text-slate-400')} />
+                          <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-slate-400')} />
                           {item.label}
                         </Link>
                       );
@@ -138,9 +138,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* User block */}
-          <div className="border-t border-slate-200 p-3">
+          <div className="border-t border-white/50 p-3">
             <div className="flex items-center gap-3 rounded-lg px-2 py-1.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-xs font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]">
                 {initials(displayName(me.email))}
               </div>
               <div className="min-w-0 flex-1">
@@ -161,8 +161,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* ── Main column ── */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur">
-            <div className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-400">
+          <header className="glass-chrome sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/50 px-6">
+            <div className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/60 px-3.5 py-2 text-sm text-slate-400">
               <Search className="h-4 w-4" />
               <span className="hidden sm:inline">Search…</span>
             </div>
@@ -172,7 +172,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <div className="text-sm font-medium text-slate-700">{displayName(me.email)}</div>
                 <div className="text-xs text-slate-400">{roleLabel}</div>
               </div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground sm:hidden">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-xs font-semibold text-white sm:hidden">
                 {initials(displayName(me.email))}
               </div>
             </div>

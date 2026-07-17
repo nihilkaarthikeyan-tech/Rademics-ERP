@@ -2,9 +2,9 @@ import * as React from 'react';
 import { cn } from '../lib/cn';
 
 /**
- * Small status chip. Interior is monochrome (user direction): severity is encoded by
- * FILL WEIGHT, not hue — neutral → outlined (positive) → mid-grey (warning) → solid
- * black (critical). Callers keep the same `tone` API; only the rendering is B&W.
+ * Small status chip. Aurora Glass direction (2026-07-18): severity reads by soft
+ * colour + label — pale green (positive) → sky (info) → amber (warning) → rose
+ * (critical). Callers keep the same `tone` API.
  */
 export function Badge({
   className,
@@ -15,15 +15,15 @@ export function Badge({
 }) {
   const tones: Record<string, string> = {
     slate: 'bg-slate-100 text-slate-600',
-    blue: 'bg-slate-100 text-slate-700',
-    green: 'border border-slate-300 bg-white text-slate-700',
-    amber: 'bg-slate-200 text-slate-800',
-    red: 'bg-slate-900 text-white',
+    blue: 'bg-info-soft text-info',
+    green: 'bg-success-soft text-success',
+    amber: 'bg-warning-soft text-warning',
+    red: 'bg-danger-soft text-danger',
   };
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold',
         tones[tone],
         className,
       )}

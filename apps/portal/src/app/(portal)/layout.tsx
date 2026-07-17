@@ -65,15 +65,15 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       >
         Skip to content
       </a>
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <header className="glass-chrome sticky top-0 z-40 border-b border-white/50">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
           <div className="flex items-center gap-6">
             <Link href="/dashboard" className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-sm font-bold text-white shadow-[0_8px_18px_-6px_rgba(124,108,246,0.7)]">
                 R
               </span>
               <span className="hidden text-base font-bold tracking-tight text-slate-900 sm:inline">Rademics</span>
-              <span className="hidden rounded border border-slate-200 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-400 sm:inline">
+              <span className="hidden rounded border border-white/60 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-slate-500 sm:inline">
                 Portal
               </span>
             </Link>
@@ -86,7 +86,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                     href={item.href}
                     className={cn(
                       'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-                      active ? 'bg-primary text-primary-foreground' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
+                      active
+                        ? 'bg-gradient-to-r from-[#4F46E5] to-[#7C6CF6] text-white shadow-[0_8px_18px_-8px_rgba(79,70,229,0.6)]'
+                        : 'text-slate-500 hover:bg-white/60 hover:text-slate-900',
                     )}
                   >
                     {item.label}
@@ -97,14 +99,14 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden items-center gap-2 sm:flex">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-xs font-semibold text-white">
                 {me.email.slice(0, 1).toUpperCase()}
               </span>
               <span className="text-sm text-slate-500">{me.email}</span>
             </div>
             <button
               onClick={logout}
-              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+              className="rounded-md p-1.5 text-slate-400 hover:bg-white/60 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
               title="Log out"
               aria-label="Log out"
             >

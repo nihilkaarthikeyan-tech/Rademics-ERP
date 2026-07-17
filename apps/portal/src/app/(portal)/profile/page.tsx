@@ -14,7 +14,7 @@ export default function ProfilePage() {
       <h1 className="text-xl font-semibold text-slate-900">Profile</h1>
       <p className="mt-1 text-sm text-slate-500">Your account details.</p>
 
-      <div className="mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mt-6 max-w-md rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-6 shadow-glass">
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-semibold text-slate-700">
             {me?.email.slice(0, 1).toUpperCase() ?? '—'}

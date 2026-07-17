@@ -13,7 +13,10 @@ export const sentryEnabled = Boolean(dsn);
 if (dsn) {
   Sentry.init({
     dsn,
-    environment: process.env.NODE_ENV ?? 'development',
+    // SENTRY_ENVIRONMENT lets staging tag its events "staging" (else they'd read as
+    // "production" via NODE_ENV and trip the prod alert rules). || not ?? so an empty
+    // string falls through to NODE_ENV.
+    environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
     // Stamps every event with the deployed commit, so an issue says which release
     // introduced it and regressions are detected on redeploy (Spec §11). Baked in at
     // image build time from the git SHA; undefined => Sentry just won't group by release.

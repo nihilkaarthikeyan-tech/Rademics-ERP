@@ -4,6 +4,40 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 font-sans text-slate-900 antialiased;
+    @apply font-sans text-slate-900 antialiased;
+    /* Aurora Glass ground (2026-07-18 direction, user-approved) — same recipe as the
+       internal app so the whole system reads as one product. */
+    background:
+      radial-gradient(760px 520px at 8% -6%, rgba(124, 108, 246, 0.5) 0%, transparent 60%),
+      radial-gradient(720px 560px at 98% 2%, rgba(34, 211, 238, 0.4) 0%, transparent 58%),
+      radial-gradient(680px 620px at 82% 108%, rgba(236, 72, 153, 0.38) 0%, transparent 60%),
+      radial-gradient(720px 600px at 12% 112%, rgba(168, 85, 247, 0.4) 0%, transparent 62%),
+      linear-gradient(160deg, #eef0ff 0%, #eaf2ff 50%, #f4ecff 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-2xl border border-white/70 bg-white/55 shadow-glass backdrop-blur-xl;
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  }
+  .glass-hero {
+    @apply relative overflow-hidden rounded-3xl border border-white/80 bg-white/45 backdrop-blur-2xl;
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow:
+      0 26px 60px -26px rgba(124, 108, 246, 0.5),
+      0 8px 22px -14px rgba(236, 72, 153, 0.22);
+  }
+  .glass-chrome {
+    @apply bg-white/55 backdrop-blur-xl;
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none !important;
   }
 }

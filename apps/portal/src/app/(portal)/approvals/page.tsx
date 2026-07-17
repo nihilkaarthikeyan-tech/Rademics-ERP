@@ -53,7 +53,7 @@ export default function ApprovalsPage() {
   return (
     <div>
       <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-white">
           <ClipboardCheck className="h-5 w-5" />
         </span>
         <div>
@@ -72,7 +72,7 @@ export default function ApprovalsPage() {
         ) : !items || items.length === 0 ? (
           <Card><CardContent className="pt-6"><EmptyState title="Nothing to approve" description="You're all caught up." /></CardContent></Card>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl shadow-glass">
             <ul className="flex flex-col divide-y divide-slate-100">
               {items.map((d) => (
                 <li key={d.id} className="flex items-center justify-between gap-3 px-5 py-4">
