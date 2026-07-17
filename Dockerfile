@@ -38,15 +38,30 @@ ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=""
 # this same image; empty defaults keep Sentry a no-op until configured.
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ARG NEXT_PUBLIC_PORTAL_SENTRY_DSN=""
+# Release identifier (Spec §11): the deployed git SHA, stamped onto every Sentry event
+# and used as the key the source maps are uploaded under. Public (it's just a SHA).
+ARG SENTRY_RELEASE=""
+# Source map upload targets. Slugs aren't secret; the auth token IS — see the RUN below.
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
+ARG SENTRY_PORTAL_PROJECT=""
+ARG SENTRY_AUTH_TOKEN=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV PUBLIC_HTTPS=$PUBLIC_HTTPS
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_PORTAL_SENTRY_DSN=$NEXT_PUBLIC_PORTAL_SENTRY_DSN
+ENV NEXT_PUBLIC_SENTRY_RELEASE=$SENTRY_RELEASE
+ENV SENTRY_ORG=$SENTRY_ORG
+ENV SENTRY_PROJECT=$SENTRY_PROJECT
+ENV SENTRY_PORTAL_PROJECT=$SENTRY_PORTAL_PROJECT
 ENV NODE_ENV=production
 # Cap the heap and build one package at a time — this box is memory-constrained.
 ENV NODE_OPTIONS=--max-old-space-size=2048
-RUN pnpm exec turbo run build --concurrency=1
+# SENTRY_AUTH_TOKEN is passed inline rather than via ENV on purpose: this build stage
+# IS the runtime image (see below), so an ENV would bake the token into every running
+# container. Inline, it lives only for this RUN. Scope the token to project:releases.
+RUN SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN pnpm exec turbo run build --concurrency=1
 
 # The build stage IS the runtime image: it already contains every app's compiled
 # output plus the full node_modules (incl. Prisma CLI for migrate/seed).

@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /**
  * Derive the API origin (+ its websocket origin for Socket.IO) from the public API
  * URL so connect-src stays correct across environments (Spec §10 CSP, §12 Socket.IO).
@@ -84,4 +86,28 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * Source map upload (Spec §11). Without it a browser stack trace points at minified
+ * bundle offsets and is unreadable, which makes the whole error-reporting chain much
+ * less useful. Needs SENTRY_AUTH_TOKEN + org/project at BUILD time; when they're
+ * absent we export the plain config untouched, so local/dev builds stay offline and
+ * no secret is required to build. Upload is keyed on `release`, which must match the
+ * value instrumentation-client.ts inits with.
+ */
+const sentryBuildEnabled = Boolean(
+  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT,
+);
+
+export default sentryBuildEnabled
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      release: { name: process.env.NEXT_PUBLIC_SENTRY_RELEASE || undefined },
+      // Upload maps for readable traces, then delete them from the build output so
+      // they're never served to the browser (Spec §10 — don't ship internals).
+      sourcemaps: { deleteSourcemapsAfterUpload: true },
+      silent: true,
+      disableLogger: true,
+    })
+  : nextConfig;

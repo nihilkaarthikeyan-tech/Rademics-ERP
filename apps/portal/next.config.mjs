@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /**
  * Derive the API origin (+ its websocket origin for Socket.IO) from the public API
  * URL so connect-src stays correct across environments (Spec §10 CSP, §12 Socket.IO).
@@ -81,4 +83,25 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * Source map upload (Spec §11). See apps/internal/next.config.mjs for the rationale.
+ * Portal reports to its OWN Sentry project, so the project slug comes from
+ * SENTRY_PORTAL_PROJECT — same reason NEXT_PUBLIC_PORTAL_SENTRY_DSN is separate: both
+ * apps build from one Docker image, and a shared slug would collapse them together.
+ * Org + auth token are shared. No token/org/project => plain config, no upload.
+ */
+const sentryBuildEnabled = Boolean(
+  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PORTAL_PROJECT,
+);
+
+export default sentryBuildEnabled
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PORTAL_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      release: { name: process.env.NEXT_PUBLIC_SENTRY_RELEASE || undefined },
+      sourcemaps: { deleteSourcemapsAfterUpload: true },
+      silent: true,
+      disableLogger: true,
+    })
+  : nextConfig;

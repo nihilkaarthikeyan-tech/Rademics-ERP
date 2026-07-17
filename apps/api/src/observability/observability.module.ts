@@ -2,6 +2,7 @@ import { Global, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { MetricsService } from './metrics.service';
 import { MetricsController } from './metrics.controller';
 import { MetricsMiddleware } from './metrics.middleware';
+import { RequestIdMiddleware } from './request-id.middleware';
 
 /** Phase 10 — Observability (Spec §11): Prometheus /metrics + request instrumentation.
  *  Sentry is initialised in instrument.ts (before app bootstrap) and reported via the
@@ -14,6 +15,8 @@ import { MetricsMiddleware } from './metrics.middleware';
 })
 export class ObservabilityModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(MetricsMiddleware).forRoutes('*');
+    // Request id first: everything downstream (metrics, guards, the exception filter)
+    // reads req.requestId.
+    consumer.apply(RequestIdMiddleware, MetricsMiddleware).forRoutes('*');
   }
 }

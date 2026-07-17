@@ -40,7 +40,15 @@ Legend: 🟢 not blocking anything yet · 🟡 needed before that phase ships ·
 
 - [ ] **Linux VPS** (host + SSH access) for staging + production (Spec §12, Assumption #12). 🔴
 - [ ] **Domains**: main app domain + the **client-portal subdomain** (e.g. `app.rademics.com` + `portal.rademics.com`) and DNS access (Cloudflare per §12). 🔴
-- [ ] **Sentry DSN** (error tracking, Spec §11) — free tier is fine. 🟡
+- [ ] **Sentry DSN** (error tracking, Spec §11) — free tier is fine. Three projects:
+      API, internal, portal (they're kept separate so reports don't collapse together). 🟡
+- [ ] **Sentry org + project slugs** (`SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_PORTAL_PROJECT`)
+      and a **`SENTRY_AUTH_TOKEN`** scoped to `project:releases`. Build-time only, used to
+      upload source maps. Without them errors still report — the browser stack traces just
+      stay minified and are painful to debug. 🟡
+- [ ] **Email alert rules + an external uptime monitor** — dashboard/ops config I can't do
+      from code; see Runbook §5.2 and §5.3. Until these exist, production errors are
+      recorded but nobody is told, and a full outage goes unnoticed. 🔴
 - [ ] **GitHub repo settings** (optional): branch protection on `main`, and any CI **secrets** (e.g. deploy keys) when we reach CD. 🟢
 
 ---

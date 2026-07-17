@@ -92,12 +92,78 @@ Required per deployable:
 
 ## 5. Observability (Spec §11)
 
-- **Sentry**: set `SENTRY_DSN` (+ `NEXT_PUBLIC_SENTRY_DSN`). Confirm each deployable
-  reports:
+### 5.1 Error reporting — Sentry
+
+- Set `SENTRY_DSN` (+ `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_PORTAL_SENTRY_DSN`). Confirm
+  each deployable reports:
   - API — `GET /api/health/debug-sentry` as Super Admin (throws a 500 → captured).
   - internal / portal — open `/debug-sentry`, click "Throw unhandled error".
+- Only **5xx** reaches Sentry. 4xx (401/403/404/validation) is expected traffic and is
+  never reported, so the issue stream stays signal.
+- Every event carries `request_id`, `release`, and — once authenticated — the user id
+  plus `user_role` / `resource_type` tags. No email or name is sent (`sendDefaultPii:false`);
+  the audit log stays the system of record for who-did-what.
+
+### 5.2 Getting told — email alert rules **[ops task, Sentry dashboard]**
+
+Capture without delivery is just a log nobody reads. In **each** of the two Sentry
+projects (internal and portal) plus the API project: **Alerts → Create Alert → Issues**.
+
+| Rule | Condition | Action |
+| --- | --- | --- |
+| New issue | A new issue is created | Email your address |
+| Regression | An issue changes state from resolved to unresolved | Email |
+| Spike | An issue is seen more than 20 times in 1 hour | Email |
+
+Set **Alerts → Settings → personal notifications** to "on" for these, and verify delivery
+by triggering `/api/health/debug-sentry` — if no mail arrives, the rest of this section is
+decorative. Check spam once, then allowlist `noreply@md.getsentry.com`.
+
+### 5.3 Knowing it's down — uptime monitoring **[ops task, external]**
+
+Critical: if a container is down, Sentry receives **nothing**. Silence looks identical to
+"no errors", so an external poller is the only thing that catches a total outage.
+
+`GET /api/health` is the probe. **The status code is the contract**: `200` healthy,
+`503` degraded (DB unreachable). The body carries `{status, db, release, time}` — `release`
+is useful to confirm which build is actually live.
+
+Point any external monitor (Better Stack, UptimeRobot, or Sentry's own Uptime Monitors)
+at `https://api.<domain>/api/health` every 1–5 min, alerting to the same email after 2
+consecutive failures. It **must** run off-VPS — a monitor on the box it watches dies with it.
+
+### 5.4 Releases + source maps
+
+`SENTRY_RELEASE` (the deployed git SHA) tags every event and keys the source map upload.
+Without a matching release the browser stack traces stay minified and unreadable.
+
+Export it **before building** so it reaches both the build args and the runtime env:
+
+```sh
+export SENTRY_RELEASE=$(git rev-parse --short HEAD)
+docker compose --env-file .env.production -f docker-compose.prod.yml build
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d api internal portal
+```
+
+Source map upload additionally needs `SENTRY_ORG`, `SENTRY_PROJECT`,
+`SENTRY_PORTAL_PROJECT` and `SENTRY_AUTH_TOKEN` at **build** time. Scope the token to
+`project:releases` only. It is passed inline to the build step, never as an `ENV`, because
+the build stage is also the runtime image — an `ENV` would bake the token into every
+running container. If any of the four is unset the build still succeeds and errors still
+report; only the un-minifying is lost.
+
+### 5.5 Correlating a user report
+
+Every response carries an `X-Request-Id` header, and 5xx bodies include `requestId`. When a
+user reports a failure, search Sentry for `request_id:<value>` to land on the exact event.
+An inbound `X-Request-Id` is reused when it's well-formed, so one id survives a
+portal → API hop.
+
+### 5.6 Metrics + logs
+
 - **Prometheus**: scrape `GET /api/metrics` (Node process metrics + `http_requests_total`
   + `http_request_duration_seconds`). Firewall this path to the monitoring network in prod.
+  Nothing scrapes it yet — no Prometheus service is in `docker-compose.prod.yml`. **[ops task]**
 - **Grafana**: point at Prometheus; build request-rate / p99-latency / error-rate panels. **[ops task]**
 - **Structured logs**: NestJS logger to stdout; ship to your log stack.
 

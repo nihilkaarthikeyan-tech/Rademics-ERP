@@ -14,6 +14,10 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: process.env.NODE_ENV ?? 'development',
+    // Stamps every event with the deployed commit, so an issue says which release
+    // introduced it and regressions are detected on redeploy (Spec §11). Baked in at
+    // image build time from the git SHA; undefined => Sentry just won't group by release.
+    release: process.env.SENTRY_RELEASE || undefined,
     tracesSampleRate: 0.1,
     // Keep PII server-side; the audit log is the system of record for who-did-what.
     sendDefaultPii: false,

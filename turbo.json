@@ -10,7 +10,12 @@
         "NEXT_PUBLIC_API_URL",
         "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
         "NEXT_PUBLIC_SENTRY_DSN",
-        "NEXT_PUBLIC_PORTAL_SENTRY_DSN"
+        "NEXT_PUBLIC_PORTAL_SENTRY_DSN",
+        "NEXT_PUBLIC_SENTRY_RELEASE",
+        "SENTRY_ORG",
+        "SENTRY_PROJECT",
+        "SENTRY_PORTAL_PROJECT",
+        "SENTRY_AUTH_TOKEN"
       ]
     },
     "dev": {

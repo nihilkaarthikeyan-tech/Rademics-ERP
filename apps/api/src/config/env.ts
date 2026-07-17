@@ -37,6 +37,10 @@ const EnvSchema = z.object({
   CLAMAV_PORT: z.coerce.number().default(3310),
 
   SENTRY_DSN: z.string().optional().default(''),
+  // Deployed git SHA (Spec §11). Read directly from process.env by instrument.ts,
+  // which runs before Nest boots — declared here so it survives validation and shows
+  // up in /api/health. Empty => events simply carry no release tag.
+  SENTRY_RELEASE: z.string().optional().default(''),
 
   // Cloudflare Turnstile CAPTCHA (Spec §10 bot protection). Optional: when unset,
   // verification is a safe no-op (same DSN-guarded pattern as Sentry above) — set it

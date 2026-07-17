@@ -106,8 +106,20 @@ services:
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: "${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}"
         NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
         NEXT_PUBLIC_PORTAL_SENTRY_DSN: "${NEXT_PUBLIC_PORTAL_SENTRY_DSN:-}"
+        # Release + source map upload (Spec §11). SENTRY_RELEASE should be the git SHA
+        # being deployed — the runbook exports it from `git rev-parse` before building.
+        # Unset => no release tag and no upload; the build still succeeds.
+        SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+        SENTRY_ORG: "${SENTRY_ORG:-}"
+        SENTRY_PROJECT: "${SENTRY_PROJECT:-}"
+        SENTRY_PORTAL_PROJECT: "${SENTRY_PORTAL_PROJECT:-}"
+        SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN:-}"
     restart: unless-stopped
     env_file: .env.production
+    environment:
+      # Tags API events with the deployed build. Same value as the build arg above, but
+      # needed at RUNTIME here since the API reads it from the live process env.
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
     working_dir: /app/apps/api
     # Apply any pending migrations on boot (idempotent), then start the API.
     command: sh -c "pnpm exec prisma migrate deploy && node dist/main.js"
@@ -132,6 +144,7 @@ services:
       # browser reporting (NEXT_PUBLIC_SENTRY_DSN build arg above), value from
       # .env.production via --env-file.
       SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
     working_dir: /app/apps/internal
     command: pnpm start
     ports:
@@ -149,6 +162,7 @@ services:
       # browser reporting (NEXT_PUBLIC_PORTAL_SENTRY_DSN build arg above), value
       # from .env.production via --env-file.
       SENTRY_DSN: "${NEXT_PUBLIC_PORTAL_SENTRY_DSN:-}"
+      SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
     working_dir: /app/apps/portal
     command: pnpm start
     ports:

@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import * as Sentry from '@sentry/node';
 import type { Request } from 'express';
 import { IS_PUBLIC_META } from './decorators';
 import type { AuthUser } from './auth-user';
@@ -51,10 +52,24 @@ export class JwtAuthGuard implements CanActivate {
         role: payload.role,
         resourceType: payload.resourceType,
       };
+      this.tagSentry(req.user);
       return true;
     } catch {
       throw new UnauthorizedException('Invalid or expired access token');
     }
+  }
+
+  /**
+   * Attach the principal to this request's Sentry isolation scope (Spec §11) so a
+   * production error says *who* hit it and whether one role/tenant is affected or
+   * everyone. Id only — no email or name, keeping sendDefaultPii:false honest; the
+   * audit log stays the system of record for who-did-what (Spec §5.10).
+   */
+  private tagSentry(user: AuthUser): void {
+    const scope = Sentry.getIsolationScope();
+    scope.setUser({ id: user.id });
+    scope.setTag('user_role', user.role);
+    scope.setTag('resource_type', user.resourceType);
   }
 
   private extractToken(req: Request): string | null {
