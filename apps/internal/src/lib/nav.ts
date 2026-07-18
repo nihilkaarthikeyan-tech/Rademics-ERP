@@ -10,6 +10,7 @@ import {
   BarChart3,
   Sparkles,
   Settings,
+  ScrollText,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -38,6 +39,7 @@ export const NAV: NavItem[] = [
   { label: 'Reports', href: '/reports', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: BarChart3, group: 'Insights' },
   { label: 'AI Assistant', href: '/assistant', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Sparkles, group: 'Insights' },
   { label: 'Admin', href: '/admin', roles: ['SUPER_ADMIN'], icon: Settings, group: 'Manage' },
+  { label: 'Audit Log', href: '/audit', roles: ['SUPER_ADMIN'], icon: ScrollText, group: 'Manage' },
 ];
 
 export function navForRole(role: string): NavItem[] {

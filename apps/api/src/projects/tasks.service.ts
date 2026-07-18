@@ -127,6 +127,13 @@ export class TasksService {
    * SCOPED (TL/EMP via projects.view_own_team) = own projects only; else 403.
    */
   private async resolveViewScope(user: AuthUser): Promise<'ALL' | 'OWN'> {
+    // Clients never use the internal task surface — they have the portal (§5.5).
+    // Their projects.view_own_team=SCOPED grant is for portal scoping, not here;
+    // without this, the list endpoint would answer them with an empty 200 instead
+    // of a clean 403.
+    if (user.role === 'CLIENT') {
+      throw new ForbiddenException('Clients access their work through the portal');
+    }
     const all = await this.capabilities.resolveGrant(user.role, user.resourceType, 'projects.view_all');
     if (all === Grant.ALLOW) return 'ALL';
     const own = await this.capabilities.resolveGrant(user.role, user.resourceType, 'projects.view_own_team');
