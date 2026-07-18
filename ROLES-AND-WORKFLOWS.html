@@ -1,0 +1,400 @@
+<title>Rademics ERP — Roles, Workflows & Client Flow (Simple Guide)</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --ink: #1a1c2b;
+    --muted: #5c6079;
+    --line: #e6e8f0;
+    --accent: #4F46E5;
+    --accent-soft: #eef0ff;
+    --green: #0f9d6a;
+    --green-soft: #e7f7ef;
+    --amber: #b7791f;
+    --amber-soft: #fdf4e3;
+    --blue: #2563eb;
+    --blue-soft: #e8f0ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e0f1a; --card: #171826; --ink: #eceef6; --muted: #a4a8c0;
+      --line: #262838; --accent: #8b87ff; --accent-soft: #20213a;
+      --green: #4ade9c; --green-soft: #14271f; --amber: #e6c06a; --amber-soft: #2a2415;
+      --blue: #7aa2ff; --blue-soft: #17203a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.6; font-size: 16px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.top {
+    background: linear-gradient(135deg, var(--accent) 0%, #7c6cf0 100%);
+    color: #fff; border-radius: 20px; padding: 34px 30px; margin-bottom: 10px;
+  }
+  header.top h1 { margin: 0 0 6px; font-size: 30px; letter-spacing: -0.5px; }
+  header.top p { margin: 0; opacity: 0.92; font-size: 16px; max-width: 640px; }
+  .toc {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 34px;
+  }
+  .toc a {
+    text-decoration: none; color: var(--ink); background: var(--card);
+    border: 1px solid var(--line); padding: 7px 13px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 600;
+  }
+  .toc a:hover { border-color: var(--accent); color: var(--accent); }
+  section { margin-bottom: 46px; scroll-margin-top: 20px; }
+  h2 {
+    font-size: 22px; margin: 0 0 4px; letter-spacing: -0.3px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .n {
+    background: var(--accent); color: #fff; width: 30px; height: 30px;
+    border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 15px; flex: none;
+  }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px 22px; margin-bottom: 16px;
+  }
+  .role-head { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .role-head h3 { margin: 0; font-size: 18px; }
+  .pill {
+    font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+    letter-spacing: 0.3px; text-transform: uppercase;
+  }
+  .pill.staff { background: var(--blue-soft); color: var(--blue); }
+  .pill.client { background: var(--green-soft); color: var(--green); }
+  .pill.top { background: var(--accent-soft); color: var(--accent); }
+  .tag { color: var(--muted); font-size: 13.5px; }
+  .who { font-style: italic; color: var(--muted); margin: 2px 0 14px; }
+  .lbl { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 14px 0 6px; }
+  ul.clean { margin: 0; padding-left: 20px; }
+  ul.clean li { margin: 4px 0; }
+  .steps { counter-reset: step; list-style: none; margin: 0; padding: 0; }
+  .steps li {
+    counter-increment: step; position: relative; padding: 4px 0 16px 44px; margin: 0;
+    border-left: 2px solid var(--line); margin-left: 14px;
+  }
+  .steps li:last-child { border-left: 2px solid transparent; padding-bottom: 0; }
+  .steps li::before {
+    content: counter(step); position: absolute; left: -15px; top: 0;
+    background: var(--accent); color: #fff; width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+  }
+  .steps li b { display: block; }
+  .note {
+    background: var(--amber-soft); border: 1px solid transparent; border-left: 3px solid var(--amber);
+    border-radius: 8px; padding: 12px 16px; margin: 14px 0; color: var(--ink); font-size: 14.5px;
+  }
+  .good {
+    background: var(--green-soft); border-left: 3px solid var(--green);
+    border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 14.5px;
+  }
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin: 8px 0 4px;
+  }
+  .flow .box {
+    background: var(--accent-soft); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; flex: 1 1 150px; min-width: 140px;
+  }
+  .flow .box b { display: block; font-size: 14px; }
+  .flow .box span { font-size: 12.5px; color: var(--muted); }
+  .flow .arrow { align-self: center; color: var(--accent); font-size: 22px; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: var(--accent-soft); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  td.y { color: var(--green); font-weight: 700; }
+  td.n { color: var(--muted); }
+  td.s { color: var(--amber); font-weight: 700; }
+  code {
+    background: var(--accent-soft); color: var(--accent); padding: 1px 6px;
+    border-radius: 5px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px;
+  }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 30px; }
+  @media (max-width: 560px) { .flow .arrow { display: none; } header.top h1 { font-size: 24px; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Rademics ERP — How It All Works</h1>
+    <p>A plain-language guide to the roles, what each person does, and exactly how a client is brought in, logs in, and talks to your staff. No jargon.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#apps">The two apps</a>
+    <a href="#roles">The 7 roles</a>
+    <a href="#login">How login works</a>
+    <a href="#client">Bringing a client in</a>
+    <a href="#contact">Client ↔ Staff contact</a>
+    <a href="#empinfo">How staff see client info</a>
+    <a href="#matrix">Quick permission map</a>
+  </nav>
+
+  <!-- ============ TWO APPS ============ -->
+  <section id="apps">
+    <h2><span class="n">1</span> Two separate doors</h2>
+    <p class="lead">Everyone does <b>not</b> log into the same place. There are two websites.</p>
+    <div class="flow">
+      <div class="box"><b>Internal App (Staff)</b><span>Your team logs in here — HR, PMs, employees, finance, and the super admin. Full ERP.</span></div>
+      <div class="arrow">|</div>
+      <div class="box"><b>Client Portal</b><span>Only clients log in here. A small, safe window that shows just their own projects.</span></div>
+    </div>
+    <div class="note"><b>Why this matters:</b> a client can never wander into your HR, salary, or attendance screens. They only ever reach the portal, and the portal only ever shows them their own projects.</div>
+  </section>
+
+  <!-- ============ ROLES ============ -->
+  <section id="roles">
+    <h2><span class="n">2</span> The 7 roles &amp; what each one does</h2>
+    <p class="lead">Every person is given <b>one role</b>. The role decides what they see and what they can do.</p>
+
+    <!-- SUPER ADMIN -->
+    <div class="card">
+      <div class="role-head">
+        <h3>Super Admin</h3><span class="pill top">Owner / Top</span>
+      </div>
+      <p class="who">The boss account. There should be very few of these — ideally just you.</p>
+      <div class="lbl">Their job</div>
+      <ul class="clean">
+        <li>Controls the whole system and its settings.</li>
+        <li><b>Creates clients</b> and gives them access (this is the key onboarding step — see section 4).</li>
+        <li>Assigns roles to staff (only Super Admin can change who is HR, PM, etc.).</li>
+        <li>Can view the audit log — a record of every important action anyone took.</li>
+      </ul>
+      <div class="lbl">Features they have</div>
+      <ul class="clean"><li>Everything. Finance, HR, projects, client management, settings, audit log.</li></ul>
+    </div>
+
+    <!-- HR -->
+    <div class="card">
+      <div class="role-head"><h3>HR</h3><span class="pill staff">Staff</span></div>
+      <p class="who">Handles people — hiring, records, attendance rules, leave, payroll.</p>
+      <div class="lbl">Their job</div>
+      <ul class="clean">
+        <li>Adds and edits employees, manages departments, deactivates people who leave.</li>
+        <li>Views salaries, sees everyone's attendance, sets attendance &amp; leave policies.</li>
+        <li>Approves leave and can export payroll.</li>
+      </ul>
+      <div class="lbl">Features they have</div>
+      <ul class="clean"><li>People directory, attendance (all staff), leave policies, payroll export. <b>No</b> project or client-portal control.</li></ul>
+    </div>
+
+    <!-- PM -->
+    <div class="card">
+      <div class="role-head"><h3>PM — Project Manager</h3><span class="pill staff">Staff</span></div>
+      <p class="who">Runs the actual client work. The main bridge between the client and the team.</p>
+      <div class="lbl">Their job</div>
+      <ul class="clean">
+        <li>Creates and edits projects, closes/archives them.</li>
+        <li>Creates tasks and assigns them to team members.</li>
+        <li>Reviews finished work and decides what the client is allowed to see.</li>
+        <li><b>Marks files "client-visible"</b> — this is how a client actually receives a deliverable.</li>
+      </ul>
+      <div class="lbl">Features they have</div>
+      <ul class="clean"><li>Full project &amp; task control, file uploads, reports, expenses on their own projects.</li></ul>
+    </div>
+
+    <!-- TEAM LEAD -->
+    <div class="card">
+      <div class="role-head"><h3>Team Lead</h3><span class="pill staff">Staff</span></div>
+      <p class="who">A senior employee who leads a small team under a PM.</p>
+      <div class="lbl">Their job</div>
+      <ul class="clean">
+        <li>Creates and assigns tasks <b>within their own team/projects only</b>.</li>
+        <li>Reviews their team's work, approves their team's attendance fixes and leave.</li>
+        <li>Does their own tasks too.</li>
+      </ul>
+      <div class="lbl">Features they have</div>
+      <ul class="clean"><li>Team-level view of projects, tasks, attendance, and leave — scoped to their team, not the whole company.</li></ul>
+    </div>
+
+    <!-- EMPLOYEE -->
+    <div class="card">
+      <div class="role-head"><h3>Employee</h3><span class="pill staff">Staff</span></div>
+      <p class="who">The team member who does the hands-on work.</p>
+      <div class="lbl">Their job</div>
+      <ul class="clean">
+        <li>Checks in/out for attendance, requests leave, requests attendance corrections.</li>
+        <li>Works on tasks assigned to them and updates their own task status.</li>
+        <li>Uploads their work files and comments on tasks.</li>
+      </ul>
+      <div class="lbl">Features they have</div>
+      <ul class="clean"><li>Their own tasks, their own attendance/leave, projects they're part of, the AI assistant. They can't see salaries, finance, or other teams.</li></ul>
+    </div>
+
+    <!-- FINANCE -->
+    <div class="card">
+      <div class="role-head"><h3>Finance</h3><span class="pill staff">Staff</span></div>
+      <p class="who">Handles money — invoices, payments, expenses, payroll.</p>
+      <div class="lbl">Their job</div>
+      <ul class="clean">
+        <li>Creates invoices, records payments, logs expenses.</li>
+        <li>Views profit &amp; loss and exports payroll.</li>
+        <li>Can see their own salary record.</li>
+      </ul>
+      <div class="lbl">Features they have</div>
+      <ul class="clean"><li>The full finance area. <b>No</b> HR editing, no project control.</li></ul>
+    </div>
+
+    <!-- CLIENT -->
+    <div class="card">
+      <div class="role-head"><h3>Client</h3><span class="pill client">External</span></div>
+      <p class="who">Your customer. Logs into the <b>Portal</b> only — never the staff app.</p>
+      <div class="lbl">Their job</div>
+      <ul class="clean">
+        <li>Watches the progress of their own project(s).</li>
+        <li>Downloads files your team has marked as client-visible.</li>
+        <li>Views their invoices.</li>
+        <li>If given <b>Approver</b> access: approves a deliverable or asks for a revision.</li>
+      </ul>
+      <div class="lbl">Features they have</div>
+      <ul class="clean"><li>A read-only window into just their projects, files, and invoices — plus approve/revise if they're an Approver. Nothing else in the company is visible to them.</li></ul>
+    </div>
+  </section>
+
+  <!-- ============ LOGIN ============ -->
+  <section id="login">
+    <h2><span class="n">3</span> How login works (same for everyone)</h2>
+    <p class="lead">Nobody sets their own password from scratch or self-registers. They are <b>invited</b>, then they set a password. This is true for staff and clients alike.</p>
+    <ol class="steps">
+      <li><b>An account is created (invite)</b>An authorised person creates the account with an email, a name, and a role. The account starts as “Invited” — it cannot log in yet.</li>
+      <li><b>An email is sent automatically</b>The person gets a “You've been invited to Rademics ERP” email with a <b>Set your password</b> link. The link expires in 7 days.</li>
+      <li><b>They set their password</b>They click the link, choose a password (minimum length + must contain a number). The account becomes “Active”.</li>
+      <li><b>They log in</b>From now on they log in with <b>email + password</b>. Staff links point to the Internal App; client links point to the Portal — the system picks the right door automatically based on the role.</li>
+    </ol>
+    <div class="good"><b>Built-in safety:</b> after too many wrong passwords the account locks for a while (and an email warns them). Forgot-password sends a fresh reset link. Changing a password logs the person out of all devices.</div>
+    <div class="note"><b>In short:</b> Invite → email → set password → log in. That's the whole login story.</div>
+  </section>
+
+  <!-- ============ CLIENT ONBOARDING ============ -->
+  <section id="client">
+    <h2><span class="n">4</span> Bringing a client in — the "client id" &amp; login</h2>
+    <p class="lead">This is the part you asked about most. A client is not one loose account — first you create a <b>Client Organization</b> (think of this as the client's “id” / their company folder), then you invite people into it, then you give them access to specific projects.</p>
+
+    <div class="flow">
+      <div class="box"><b>1. Create Client Org</b><span>The client's identity in the system</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>2. Invite client user</b><span>A login is created inside that org</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>3. Grant project access</b><span>Viewer or Approver on a project</span></div>
+      <div class="arrow">→</div>
+      <div class="box"><b>4. Client logs into Portal</b><span>Sees only what you allowed</span></div>
+    </div>
+
+    <ol class="steps" style="margin-top:22px">
+      <li>
+        <b>Super Admin creates the Client Organization</b>
+        Only the Super Admin can do this. You give it a name (e.g. “Acme Ltd”). This org <b>is</b> the client id — everything about that client (their people, their projects) hangs off this one org. Names must be unique, so no two client orgs can clash.
+      </li>
+      <li>
+        <b>Super Admin invites a client user into that org</b>
+        You add the client's contact person by email + name. The system creates a login with the <b>Client</b> role, tied to that org, and emails them the “set your password” link (same invite flow as section 3). You can invite several people from the same client company into the same org.
+      </li>
+      <li>
+        <b>Super Admin (or PM) grants project access</b>
+        A client login on its own shows nothing yet. You attach the client user to a specific project with one of two levels:
+        <ul class="clean" style="margin-top:8px">
+          <li><b>Viewer</b> — can watch progress, download client-visible files, and see invoices.</li>
+          <li><b>Approver</b> — everything a Viewer can do, <b>plus</b> approve a deliverable or request a revision.</li>
+        </ul>
+        The first time you grant access, that project is locked to this client's org, so it can never accidentally show up for a different client.
+      </li>
+      <li>
+        <b>The client logs into the Portal</b>
+        They open the Client Portal, log in with email + password, and see <b>only their own projects</b> — the ones you granted, nothing else. No staff data, no other clients.
+      </li>
+    </ol>
+
+    <div class="note"><b>Turning a client off:</b> if you deactivate a Client Org, every login inside it is instantly signed out and blocked. Clean “access ended”, one click.</div>
+    <div class="good"><b>Simple mental model:</b> <b>Org</b> = the client. <b>Client user</b> = a person at the client who can log in. <b>Project access (Viewer/Approver)</b> = which projects that person is allowed to watch. Every action here is recorded in the audit log.</div>
+  </section>
+
+  <!-- ============ CONTACT ============ -->
+  <section id="contact">
+    <h2><span class="n">5</span> How the client and your staff talk to each other</h2>
+    <p class="lead">Contact happens <b>inside the portal</b>, around the work itself — not by giving the client your team's phone numbers or internal chat. Everything stays tied to the project and is logged.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>What happens</th><th>Staff side</th><th>Client side</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>Sharing a deliverable</b></td>
+            <td>PM/staff upload a file and mark it <b>“client-visible”</b>.</td>
+            <td>The file appears in the portal for the client to download.</td>
+          </tr>
+          <tr>
+            <td><b>Approving work</b></td>
+            <td>Team submits a deliverable for the client to sign off.</td>
+            <td>An <b>Approver</b> client clicks Approve, or Request Revision with a reason.</td>
+          </tr>
+          <tr>
+            <td><b>Discussion</b></td>
+            <td>Staff comment on tasks; client comments come back on the shared items.</td>
+            <td>The client can leave comments on the work they can see.</td>
+          </tr>
+          <tr>
+            <td><b>Progress updates</b></td>
+            <td>As staff update task status, progress moves automatically.</td>
+            <td>Client watches live progress — no need to ask “where are we?”.</td>
+          </tr>
+          <tr>
+            <td><b>Money</b></td>
+            <td>Finance issues invoices against the project.</td>
+            <td>Client views their invoices in the portal.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note"><b>Key rule:</b> a client only ever sees a file if a staff member deliberately marked it client-visible. Nothing leaks by accident — the default is private.</div>
+  </section>
+
+  <!-- ============ EMPLOYEE INFO ============ -->
+  <section id="empinfo">
+    <h2><span class="n">6</span> How your staff get information about a client</h2>
+    <p class="lead">Staff don't need the client's login. They see the client through the <b>project</b>.</p>
+    <ul class="clean">
+      <li><b>PM &amp; Team Lead:</b> open the project to see who the client is, what's been shared, what the client approved or sent back, and the client's comments.</li>
+      <li><b>Employees:</b> see the project and tasks they're assigned to. They see the client's requests and comments on those tasks, but not the client's private account details.</li>
+      <li><b>Finance:</b> sees the client through invoices and payments on that project.</li>
+      <li><b>The link is the project:</b> a client is joined to a project, staff are joined to the same project, so both sides meet on that shared project — each seeing their own allowed slice.</li>
+    </ul>
+    <div class="good"><b>One line to remember:</b> the <b>project</b> is the meeting point. Client on one side, staff on the other, and the portal decides exactly what crosses over.</div>
+  </section>
+
+  <!-- ============ MATRIX ============ -->
+  <section id="matrix">
+    <h2><span class="n">7</span> Quick "who can do what" map</h2>
+    <p class="lead"><b>Yes</b> = full, <b>Own</b> = only their own team/projects/record, <b>—</b> = no access.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Action</th><th>Super Admin</th><th>HR</th><th>PM</th><th>Team Lead</th><th>Employee</th><th>Finance</th><th>Client</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Manage employees</td><td class="y">Yes</td><td class="y">Yes</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Assign roles</td><td class="y">Yes</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Create / edit projects</td><td class="y">Yes</td><td class="n">—</td><td class="y">Yes</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Create &amp; assign tasks</td><td class="y">Yes</td><td class="n">—</td><td class="y">Yes</td><td class="s">Own</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Update own task status</td><td class="y">Yes</td><td class="n">—</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Mark file client-visible</td><td class="y">Yes</td><td class="n">—</td><td class="y">Yes</td><td class="s">Own</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Approve leave</td><td class="y">Yes</td><td class="y">Yes</td><td class="s">Own</td><td class="s">Own</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Invoices &amp; payments</td><td class="y">Yes</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">Yes</td><td class="n">—</td></tr>
+          <tr><td>Manage client logins</td><td class="y">Yes</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>View progress (portal)</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">Yes</td></tr>
+          <tr><td>Approve deliverable</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="s">If Approver</td></tr>
+          <tr><td>View audit log</td><td class="y">Yes</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><b>Good to know:</b> the Super Admin can fine-tune these permissions later without a code change — this table is the starting setup.</div>
+  </section>
+
+  <footer>Rademics ERP · Roles &amp; Workflow guide · This reflects how the system is actually built.</footer>
+</div>
