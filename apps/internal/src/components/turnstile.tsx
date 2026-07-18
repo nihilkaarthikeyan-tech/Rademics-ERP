@@ -29,6 +29,14 @@ export function Turnstile({ onToken }: { onToken: (token: string | null) => void
   // hard lockout when the third-party script is unreachable).
   const [errored, setErrored] = useState(false);
 
+  // Cloudflare's api.js loads once and is reused across client-side (soft) navigations.
+  // On a soft nav the <Script> below does NOT re-fire onLoad, so if the global is
+  // already present we must flag it ourselves — otherwise the widget never renders and
+  // the submit button stays disabled until a hard refresh.
+  useEffect(() => {
+    if (window.turnstile) setScriptLoaded(true);
+  }, []);
+
   useEffect(() => {
     if (!scriptLoaded || !ref.current || !window.turnstile) return;
     window.turnstile.render(ref.current, {
