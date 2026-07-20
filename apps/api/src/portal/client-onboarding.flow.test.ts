@@ -174,6 +174,7 @@ const SA: AuthUser = {
   email: 'admin@rademics.local',
   role: 'SUPER_ADMIN',
   resourceType: 'INTERNAL',
+  desktopCheckInRequired: false,
 };
 const meta = { ip: '127.0.0.1', userAgent: 'vitest' };
 const CLIENT_PASSWORD = 'ClientPass123'; // ≥10 chars + a number

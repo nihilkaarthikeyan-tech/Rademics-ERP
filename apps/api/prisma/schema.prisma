@@ -72,6 +72,12 @@ enum AttendanceDayStatus {
   ON_LEAVE // reserved for Phase 7 leave integration
 }
 
+/// Which client created an attendance session — desktop agent vs. the website.
+enum AttendanceSource {
+  WEB
+  DESKTOP
+}
+
 /// Lifecycle of an attendance regularization request (Spec §5.3).
 enum RegularizationStatus {
   PENDING
@@ -226,6 +232,11 @@ model User {
   failedLoginCount Int       @default(0)
   lockedUntil      DateTime?
   lastLoginAt      DateTime?
+
+  // Desktop Agent rollout (per-employee toggle, HR/Admin-set): once true, the
+  // website hides its check-in button in favor of the desktop app. Phased, not a
+  // hard block — see the desktop agent implementation plan for the rationale.
+  desktopCheckInRequired Boolean @default(false)
 
   // ── People & Org profile (Spec §5.2) ──
   phone            String?
@@ -473,6 +484,10 @@ model AttendanceSession {
 
   // Auto-closed by the 11:59 PM job (Spec §5.3, §25) — prompts regularization next login.
   autoClosed Boolean @default(false)
+
+  // Which client checked this session in — desktop agent's OS-level activity signal
+  // is more accurate than the browser tab heartbeat, so this is set once at check-in.
+  source AttendanceSource @default(WEB)
 
   checkInIp         String?
   checkInUserAgent  String?

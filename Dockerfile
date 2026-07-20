@@ -21,6 +21,10 @@ FROM base AS build
 # Copy the whole workspace (node_modules excluded via .dockerignore) and install
 # with dev deps present — the build needs nest/next/tsup/ts-node/typescript.
 COPY . .
+# apps/desktop depends on electron; this image never launches it (it only builds
+# api/internal/portal), so skip the ~80-120MB binary download electron's
+# postinstall would otherwise trigger on every image build.
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 RUN pnpm install --frozen-lockfile
 
 # Prisma client must be generated before the API is compiled.

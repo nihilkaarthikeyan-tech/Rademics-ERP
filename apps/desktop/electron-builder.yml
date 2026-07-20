@@ -1,0 +1,28 @@
+# Packaging config for the desktop agent's Windows installer. Only touched by
+# the `dist:win` script — never by `turbo run build`/`test`, so a normal web
+# deploy never triggers electron-builder (see the implementation plan, step 1).
+appId: com.rademics.erp.desktop-agent
+productName: Rademics ERP Desktop Agent
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asar: true
+
+win:
+  target: nsis
+  artifactName: 'ERP-Agent-Setup.${ext}'
+
+nsis:
+  # Per-user install: no admin rights required, matches a per-employee rollout.
+  perMachine: false
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  # Hard requirement (Spec: no auto-start): the installer must never register a
+  # Startup shortcut or a Run registry key. electron-builder's NSIS target does
+  # not do this by default — deliberately not opting into `runAfterFinish`-style
+  # auto-launch-on-boot behavior. Do not add one without revisiting that requirement.

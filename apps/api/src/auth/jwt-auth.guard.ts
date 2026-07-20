@@ -17,6 +17,7 @@ export interface AccessTokenPayload {
   email: string;
   role: AuthUser['role'];
   resourceType: AuthUser['resourceType'];
+  desktopCheckInRequired: AuthUser['desktopCheckInRequired'];
 }
 
 /**
@@ -51,6 +52,7 @@ export class JwtAuthGuard implements CanActivate {
         email: payload.email,
         role: payload.role,
         resourceType: payload.resourceType,
+        desktopCheckInRequired: payload.desktopCheckInRequired,
       };
       this.tagSentry(req.user);
       return true;

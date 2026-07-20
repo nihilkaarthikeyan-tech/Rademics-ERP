@@ -41,6 +41,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://user:pass@localhost:5432/db?schema=public
+      # apps/desktop depends on electron; this runner never launches it, so skip the
+      # ~80-120MB binary download electron's postinstall would otherwise trigger.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

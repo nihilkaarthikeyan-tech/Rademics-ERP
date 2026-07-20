@@ -1,4 +1,5 @@
 import {
+  IsEnum,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -10,6 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { AttendanceSource } from '@prisma/client';
 
 /** Check-in (Spec §5.3). Optional client key makes retries idempotent (§25). */
 export class CheckInDto {
@@ -17,6 +19,11 @@ export class CheckInDto {
   @IsString()
   @MaxLength(100)
   idempotencyKey?: string;
+
+  // Omitted by the website (defaults to WEB); the desktop agent sends DESKTOP.
+  @IsOptional()
+  @IsEnum(AttendanceSource)
+  source?: AttendanceSource;
 }
 
 /** Activity heartbeat for idle tracking (Spec §5.3). */

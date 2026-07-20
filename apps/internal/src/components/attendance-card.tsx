@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Clock, LogIn, LogOut } from 'lucide-react';
+import { Clock, LogIn, LogOut, Monitor } from 'lucide-react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@rademics/ui';
 import { useAttendance } from '@/lib/attendance-context';
+import { useMe } from '@/lib/me-context';
 
 function fmtDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -21,6 +22,7 @@ function fmtDuration(totalSeconds: number): string {
 export function AttendanceCard() {
   const { status, state, busy, error, autoCheckedOut, checkIn, checkOut, dismissAutoCheckedOut } =
     useAttendance();
+  const me = useMe();
   const [now, setNow] = useState(() => Date.now());
 
   // Baseline worked seconds + the wall-clock at which we learned it, so the live
@@ -94,7 +96,12 @@ export function AttendanceCard() {
               </div>
 
               <div className="flex flex-col items-stretch gap-1">
-                {status?.checkedIn ? (
+                {me.desktopCheckInRequired ? (
+                  <div className="flex max-w-[220px] items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-500">
+                    <Monitor className="h-4 w-4 shrink-0 text-slate-400" />
+                    Use the Rademics Desktop Agent on your computer to check in.
+                  </div>
+                ) : status?.checkedIn ? (
                   <Button onClick={checkOut} disabled={busy} variant="outline">
                     <LogOut className="mr-2 h-4 w-4" />
                     Check out
