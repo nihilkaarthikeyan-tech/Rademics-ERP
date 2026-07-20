@@ -171,7 +171,6 @@ export class EmployeesService {
           reportingManagerId: dto.reportingManagerId,
           employmentStatus: dto.employmentStatus,
           joinDate: dto.joinDate ? new Date(dto.joinDate) : undefined,
-          desktopCheckInRequired: dto.desktopCheckInRequired,
           skills: dto.skillIds?.length
             ? { create: dto.skillIds.map((skillId) => ({ skillId })) }
             : undefined,

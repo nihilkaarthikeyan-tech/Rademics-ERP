@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Clock, LogIn, LogOut, Monitor } from 'lucide-react';
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@rademics/ui';
+import { Clock, Monitor } from 'lucide-react';
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@rademics/ui';
 import { useAttendance } from '@/lib/attendance-context';
-import { useMe } from '@/lib/me-context';
 
 function fmtDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -15,14 +14,13 @@ function fmtDuration(totalSeconds: number): string {
 }
 
 /**
- * Dashboard check-in/out card (Spec §17.1 widget 1). Sticky on mobile. The
- * heartbeat/idle tracking itself runs app-wide in AttendanceProvider (Spec §5.3)
- * so it keeps working no matter which page is open — this component is display only.
+ * Dashboard attendance card (Spec §17.1 widget 1) — READ-ONLY since the Desktop
+ * Agent rollout (2026-07-21 decision): the website shows whether you're checked
+ * in and today's worked/idle time, but check-in/check-out is controlled ONLY from
+ * the desktop app — one control surface, no confusion about where to check in.
  */
 export function AttendanceCard() {
-  const { status, state, busy, error, autoCheckedOut, checkIn, checkOut, dismissAutoCheckedOut } =
-    useAttendance();
-  const me = useMe();
+  const { status, state, autoCheckedOut, dismissAutoCheckedOut } = useAttendance();
   const [now, setNow] = useState(() => Date.now());
 
   // Baseline worked seconds + the wall-clock at which we learned it, so the live
@@ -95,24 +93,10 @@ export function AttendanceCard() {
                 ) : null}
               </div>
 
-              <div className="flex flex-col items-stretch gap-1">
-                {me.desktopCheckInRequired ? (
-                  <div className="flex max-w-[220px] items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-500">
-                    <Monitor className="h-4 w-4 shrink-0 text-slate-400" />
-                    Use the Rademics Desktop Agent on your computer to check in.
-                  </div>
-                ) : status?.checkedIn ? (
-                  <Button onClick={checkOut} disabled={busy} variant="outline">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Check out
-                  </Button>
-                ) : (
-                  <Button onClick={checkIn} disabled={busy}>
-                    <LogIn className="mr-2 h-4 w-4" />
-                    Check in
-                  </Button>
-                )}
-                {error ? <p className="text-xs text-slate-900">{error}</p> : null}
+              {/* Read-only by design: check-in/out happens ONLY in the desktop app. */}
+              <div className="flex max-w-[230px] items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-500">
+                <Monitor className="h-4 w-4 shrink-0 text-slate-400" />
+                Check-in and check-out are done from the Rademics Desktop Agent on your computer.
               </div>
             </div>
           </div>
