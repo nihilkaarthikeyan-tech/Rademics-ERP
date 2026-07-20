@@ -5,7 +5,7 @@ appId: com.rademics.erp.desktop-agent
 productName: Rademics ERP Desktop Agent
 directories:
   output: release
-  buildResources: build
+  buildResources: assets
 files:
   - out/**/*
   - package.json
@@ -14,6 +14,7 @@ asar: true
 win:
   target: nsis
   artifactName: 'ERP-Agent-Setup.${ext}'
+  icon: assets/icon.png
 
 nsis:
   # Per-user install: no admin rights required, matches a per-employee rollout.

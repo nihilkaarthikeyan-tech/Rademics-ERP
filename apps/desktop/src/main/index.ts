@@ -56,6 +56,7 @@ if (!gotLock) {
       minimizable: true,
       maximizable: false,
       title: 'Rademics ERP Desktop Agent',
+      icon: join(__dirname, '../../assets/icon.png'),
       webPreferences: {
         session: desktopSession,
         preload: join(__dirname, '../preload/index.js'),
