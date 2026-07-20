@@ -326,7 +326,13 @@ export class AuthService {
   }
 
   private async issueTokens(
-    user: { id: string; email: string; role: Role; resourceType: ResourceType },
+    user: {
+      id: string;
+      email: string;
+      role: Role;
+      resourceType: ResourceType;
+      desktopCheckInRequired: boolean;
+    },
     meta: RequestMeta,
   ): Promise<IssuedTokens> {
     const familyId = randomUUID();
@@ -361,9 +367,16 @@ export class AuthService {
     email: string;
     role: Role;
     resourceType: ResourceType;
+    desktopCheckInRequired: boolean;
   }): Promise<string> {
     return this.jwt.signAsync(
-      { sub: user.id, email: user.email, role: user.role, resourceType: user.resourceType },
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        resourceType: user.resourceType,
+        desktopCheckInRequired: user.desktopCheckInRequired,
+      },
       {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         expiresIn: this.config.get<string>('JWT_ACCESS_TTL', '15m'),
@@ -383,8 +396,15 @@ function toAuthUser(u: {
   email: string;
   role: Role;
   resourceType: ResourceType;
+  desktopCheckInRequired: boolean;
 }): AuthUser {
-  return { id: u.id, email: u.email, role: u.role, resourceType: u.resourceType };
+  return {
+    id: u.id,
+    email: u.email,
+    role: u.role,
+    resourceType: u.resourceType,
+    desktopCheckInRequired: u.desktopCheckInRequired,
+  };
 }
 
 function parseDurationMs(input: string): number {

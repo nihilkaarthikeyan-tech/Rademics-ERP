@@ -32,6 +32,7 @@ const employee: AuthUser = {
   email: 'e@rademics.local',
   role: 'EMPLOYEE',
   resourceType: 'INTERNAL',
+  desktopCheckInRequired: false,
 };
 
 describe('CapabilityGuard (Spec §3, §10 — enforced at the API)', () => {

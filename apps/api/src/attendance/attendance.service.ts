@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { AttendanceSource, Prisma } from '@prisma/client';
 import { DEFAULT_BUSINESS_RULES } from '@rademics/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -27,6 +27,7 @@ const SESSION_PUBLIC = {
   idleSeconds: true,
   autoClosed: true,
   lastHeartbeatAt: true,
+  source: true,
 } satisfies Prisma.AttendanceSessionSelect;
 
 @Injectable()
@@ -60,7 +61,12 @@ export class AttendanceService {
   }
 
   // ── Check-in (Spec §5.3, idempotent per §25) ──
-  async checkIn(user: AuthUser, idempotencyKey: string | undefined, meta: Meta) {
+  async checkIn(
+    user: AuthUser,
+    idempotencyKey: string | undefined,
+    meta: Meta,
+    source: AttendanceSource = AttendanceSource.WEB,
+  ) {
     if (idempotencyKey) {
       const existing = await this.prisma.attendanceSession.findUnique({
         where: { idempotencyKey },
@@ -81,6 +87,7 @@ export class AttendanceService {
         idempotencyKey: idempotencyKey ?? null,
         checkInIp: meta.ip ?? null,
         checkInUserAgent: meta.userAgent ?? null,
+        source,
       },
       select: SESSION_PUBLIC,
     });

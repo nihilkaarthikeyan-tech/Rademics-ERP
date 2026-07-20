@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsIn,
@@ -135,6 +136,12 @@ export class UpdateEmployeeDto {
   @IsArray()
   @IsUUID('all', { each: true })
   skillIds?: string[];
+
+  // Desktop Agent rollout: HR/Admin flips this once an employee is onboarded onto
+  // the desktop app, hiding the website's check-in button for them.
+  @IsOptional()
+  @IsBoolean()
+  desktopCheckInRequired?: boolean;
 }
 
 export class SetSalaryDto {

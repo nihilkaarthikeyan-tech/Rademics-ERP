@@ -42,4 +42,5 @@ export interface Me {
   email: string;
   role: string;
   resourceType: string;
+  desktopCheckInRequired: boolean;
 }

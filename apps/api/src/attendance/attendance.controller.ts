@@ -19,7 +19,7 @@ export class AttendanceController {
   @Post('check-in')
   @RequireCapability('attendance.check_in_out')
   checkIn(@Body() dto: CheckInDto, @CurrentUser() user: AuthUser, @Req() req: Request) {
-    return this.attendance.checkIn(user, dto.idempotencyKey, reqMeta(req));
+    return this.attendance.checkIn(user, dto.idempotencyKey, reqMeta(req), dto.source);
   }
 
   @Post('check-out')
