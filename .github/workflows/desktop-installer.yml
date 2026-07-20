@@ -1,0 +1,58 @@
+name: Desktop Installer
+
+# Manual-only: builds the Windows NSIS installer for the desktop agent on a clean
+# GitHub runner. Exists because local builds are unreliable — Smart App Control on
+# dev machines blocks electron-builder's unsigned NSIS tooling (spawn UNKNOWN).
+#
+# Required repo secret:
+#   RADEMICS_DESKTOP_KEY  — must equal DESKTOP_APP_KEY in the VPS .env.production;
+#                           baked into the app so the API skips the login CAPTCHA
+#                           for the desktop client. Without it, packaged logins fail.
+#
+# Output: the "ERP-Agent-Setup" workflow artifact (downloadable from the run page).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Guard — desktop key secret must exist
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.RADEMICS_DESKTOP_KEY }}" ]; then
+            echo "::error::Repo secret RADEMICS_DESKTOP_KEY is not set. Add it (Settings → Secrets and variables → Actions) with the same value as DESKTOP_APP_KEY on the VPS, then re-run."
+            exit 1
+          fi
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Bundle (main/preload/renderer)
+        env:
+          RADEMICS_DESKTOP_KEY: ${{ secrets.RADEMICS_DESKTOP_KEY }}
+        run: pnpm --filter @rademics/desktop bundle
+
+      - name: Build NSIS installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false' # unsigned for now; see code-signing note in the repo docs
+        working-directory: apps/desktop
+        run: pnpm exec electron-builder --win nsis
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ERP-Agent-Setup
+          path: apps/desktop/release/ERP-Agent-Setup.exe
+          if-no-files-found: error
