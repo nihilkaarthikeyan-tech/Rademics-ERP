@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { Button, Input, Label } from '@rademics/ui';
-import { Turnstile } from './Turnstile';
 
 export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,7 +12,8 @@ export function LoginScreen() {
     setError(null);
     setLoading(true);
     try {
-      const res = await window.rademicsDesktop.login({ email, password, captchaToken });
+      // No CAPTCHA in the native app — the server trusts the desktop key instead.
+      const res = await window.rademicsDesktop.login({ email, password, captchaToken: null });
       if (!res.ok) setError(res.error ?? 'Invalid email or password');
     } finally {
       setLoading(false);
@@ -59,8 +58,6 @@ export function LoginScreen() {
             required
           />
         </div>
-
-        <Turnstile onToken={setCaptchaToken} />
 
         {error ? (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">

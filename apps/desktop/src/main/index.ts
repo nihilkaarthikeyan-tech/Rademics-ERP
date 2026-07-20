@@ -14,11 +14,13 @@ import { startLocalServer } from './local-server';
 // with the env vars. The Turnstile site key is public (it's embedded in the web
 // login page too), so baking the prod default in is safe.
 const PROD_API_URL = 'https://api.52digit.com/api';
-const PROD_TURNSTILE_SITE_KEY = '0x4AAAAAAD28tPjtuZ5KvO2e';
 const API_BASE_URL =
   process.env.RADEMICS_API_URL ?? (app.isPackaged ? PROD_API_URL : 'http://localhost:4000/api');
-const TURNSTILE_SITE_KEY =
-  process.env.RADEMICS_TURNSTILE_SITE_KEY ?? (app.isPackaged ? PROD_TURNSTILE_SITE_KEY : null);
+// Shared key that lets the API skip the browser CAPTCHA for this native app.
+// Injected at build time (electron.vite.config.ts define) — empty in dev, where the
+// local API has no CAPTCHA secret set anyway. Not a real secret (extractable from the
+// binary); the login rate limit + account lockout are the actual bot protections.
+const DESKTOP_APP_KEY = (process.env.RADEMICS_DESKTOP_KEY as string) || null;
 
 // Hard requirement: this app must never launch itself. Explicit, not just the
 // default, so the intent survives even if something upstream changes it.
@@ -37,7 +39,7 @@ if (!gotLock) {
 
   app.whenReady().then(async () => {
     const desktopSession = session.fromPartition('persist:rademics-desktop');
-    const api = new ApiClient(API_BASE_URL, desktopSession);
+    const api = new ApiClient(API_BASE_URL, desktopSession, DESKTOP_APP_KEY);
     const auth = new AuthStore(api);
     const idleTracker = new IdleTracker(auth);
     const statusPoller = new StatusPoller(auth);
@@ -76,7 +78,7 @@ if (!gotLock) {
     const tray = createTray({ mainWindow: win, isQuitting });
     statusPoller.onUpdate((payload) => tray.setCheckedIn(payload.status?.checkedIn ?? false));
 
-    registerIpcHandlers({ auth, statusPoller, mainWindow: win, turnstileSiteKey: TURNSTILE_SITE_KEY });
+    registerIpcHandlers({ auth, statusPoller, mainWindow: win });
     registerShutdownHandler(auth, win);
 
     if (process.env.ELECTRON_RENDERER_URL) {

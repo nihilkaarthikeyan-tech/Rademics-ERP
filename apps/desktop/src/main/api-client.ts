@@ -40,6 +40,7 @@ export class ApiClient {
   constructor(
     private readonly baseUrl: string,
     private readonly session: Session,
+    private readonly desktopKey: string | null = null,
   ) {}
 
   setAccessToken(token: string | null): void {
@@ -47,10 +48,13 @@ export class ApiClient {
   }
 
   login(email: string, password: string, captchaToken: string | null): Promise<TokenResponse> {
+    // The desktop key lets the server skip the browser CAPTCHA for this native app.
+    const headers = this.desktopKey ? { 'x-rademics-desktop': this.desktopKey } : undefined;
     return this.request<TokenResponse>('/auth/login', {
       method: 'POST',
       body: { email, password, captchaToken },
       auth: false,
+      headers,
     });
   }
 
@@ -86,7 +90,7 @@ export class ApiClient {
 
   private request<T>(
     path: string,
-    opts: { method: string; body?: unknown; auth?: boolean },
+    opts: { method: string; body?: unknown; auth?: boolean; headers?: Record<string, string> },
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const req = net.request({
@@ -99,6 +103,7 @@ export class ApiClient {
       if (opts.auth !== false && this.accessToken) {
         req.setHeader('authorization', `Bearer ${this.accessToken}`);
       }
+      for (const [k, v] of Object.entries(opts.headers ?? {})) req.setHeader(k, v);
 
       req.on('response', (res) => {
         const chunks: Buffer[] = [];

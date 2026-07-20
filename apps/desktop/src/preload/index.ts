@@ -30,8 +30,6 @@ const bridge: RademicsDesktopBridge = {
     ipcRenderer.on(IpcChannel.StatusUpdated, listener);
     return () => ipcRenderer.removeListener(IpcChannel.StatusUpdated, listener);
   },
-
-  getTurnstileSiteKey: (): Promise<string | null> => ipcRenderer.invoke(IpcChannel.ConfigGetTurnstileSiteKey),
 };
 
 contextBridge.exposeInMainWorld('rademicsDesktop', bridge);

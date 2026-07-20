@@ -24,9 +24,24 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.turnstile.verify(dto.captchaToken, req.ip);
+    // The desktop agent (a native app the employee explicitly installed) can't run
+    // a browser CAPTCHA, so it authenticates with a shared app key instead and skips
+    // Turnstile. Bot protection there falls back to the 20/min rate limit + 5-fail
+    // lockout (same as if no CAPTCHA existed). The website login is unaffected — a
+    // request without the valid key still goes through Turnstile as before.
+    if (!this.isTrustedDesktopClient(req)) {
+      await this.turnstile.verify(dto.captchaToken, req.ip);
+    }
     const tokens = await this.auth.login(dto.email, dto.password, meta(req));
     return this.respondWithTokens(res, tokens);
+  }
+
+  /** True only when the request carries the configured desktop-app key. */
+  private isTrustedDesktopClient(req: Request): boolean {
+    const expected = this.config.get<string>('DESKTOP_APP_KEY');
+    if (!expected) return false; // not configured -> everyone goes through Turnstile
+    const provided = req.headers['x-rademics-desktop'];
+    return typeof provided === 'string' && provided === expected;
   }
 
   @Public()

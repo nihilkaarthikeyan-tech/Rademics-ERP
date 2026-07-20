@@ -12,7 +12,6 @@ export const IpcChannel = {
   AttendanceCheckIn: 'attendance:checkIn',
   AttendanceCheckOut: 'attendance:checkOut',
   StatusUpdated: 'status:updated',
-  ConfigGetTurnstileSiteKey: 'config:getTurnstileSiteKey',
 } as const;
 
 export interface AuthUserPayload {
@@ -63,5 +62,4 @@ export interface RademicsDesktopBridge {
   checkIn(): Promise<{ ok: boolean; error?: string }>;
   checkOut(): Promise<{ ok: boolean; error?: string }>;
   onStatusUpdated(cb: (payload: StatusUpdatePayload) => void): () => void;
-  getTurnstileSiteKey(): Promise<string | null>;
 }

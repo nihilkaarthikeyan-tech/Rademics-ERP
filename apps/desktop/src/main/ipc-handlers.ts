@@ -14,9 +14,8 @@ export function registerIpcHandlers(opts: {
   auth: AuthStore;
   statusPoller: StatusPoller;
   mainWindow: BrowserWindow;
-  turnstileSiteKey: string | null;
 }): void {
-  const { auth, statusPoller, mainWindow, turnstileSiteKey } = opts;
+  const { auth, statusPoller, mainWindow } = opts;
 
   ipcMain.handle(IpcChannel.AuthLogin, async (_event, payload: LoginPayload): Promise<LoginResult> => {
     try {
@@ -52,8 +51,6 @@ export function registerIpcHandlers(opts: {
       return { ok: false, error: errorMessage(err) };
     }
   });
-
-  ipcMain.handle(IpcChannel.ConfigGetTurnstileSiteKey, () => turnstileSiteKey);
 
   auth.onChange((state) => {
     if (mainWindow.isDestroyed()) return;
