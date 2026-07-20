@@ -22,6 +22,15 @@ export class StatusPoller {
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * Call right after a MANUAL check-out so the next poll doesn't mistake the
+   * expected checked-in -> checked-out transition for a server-driven idle
+   * auto-checkout (mirrors attendance-context.tsx's manualCheckoutInFlight guard).
+   */
+  noteManualCheckout(): void {
+    this.prevCheckedIn = false;
+  }
+
   start(): void {
     if (this.timer) return;
     void this.tick();

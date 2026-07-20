@@ -45,6 +45,7 @@ export function registerIpcHandlers(opts: {
   ipcMain.handle(IpcChannel.AttendanceCheckOut, async () => {
     try {
       await auth.checkOut();
+      statusPoller.noteManualCheckout(); // suppress the false "auto checked-out" banner
       await statusPoller.tick();
       return { ok: true };
     } catch (err) {
