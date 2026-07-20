@@ -77,13 +77,21 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
             <Clock className="h-4 w-4 text-slate-400" />
             Attendance
           </CardTitle>
-          {status?.checkedIn ? (
+          {status === null ? (
+            <Badge tone="slate">Loading…</Badge>
+          ) : status.checkedIn ? (
             <Badge tone="green">Checked in</Badge>
           ) : (
             <Badge tone="slate">Checked out</Badge>
           )}
         </CardHeader>
         <CardContent>
+          {status === null ? (
+            <div className="flex h-24 items-center justify-center text-sm text-slate-400">
+              Loading your attendance…
+            </div>
+          ) : (
+          <>
           {autoCheckedOut ? (
             <div className="mb-3 flex items-start justify-between gap-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
               <span>You were automatically checked out after a period of inactivity.</span>
@@ -127,6 +135,8 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
             )}
             {error ? <p className="text-xs text-red-600">{error}</p> : null}
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
 

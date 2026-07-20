@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, Menu, session } from 'electron';
+import { app, BrowserWindow, Menu, powerMonitor, session } from 'electron';
 import { ApiClient } from './api-client';
 import { AuthStore } from './auth-store';
 import { IdleTracker } from './idle-tracker';
@@ -102,6 +102,11 @@ if (!gotLock) {
     await auth.attemptSilentRefresh();
     idleTracker.start();
     statusPoller.start();
+
+    // When the machine wakes from sleep or the screen unlocks, the poll timers were
+    // suspended — refresh immediately so the UI doesn't linger on stale data.
+    powerMonitor.on('resume', () => void statusPoller.tick());
+    powerMonitor.on('unlock-screen', () => void statusPoller.tick());
   });
 
   app.on('window-all-closed', () => {
