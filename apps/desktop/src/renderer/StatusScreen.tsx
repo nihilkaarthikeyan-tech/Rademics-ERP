@@ -71,7 +71,7 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
         </Button>
       </div>
 
-      <Card>
+      <Card className="animate-rise">
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-slate-400" />
@@ -140,7 +140,7 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
         </CardContent>
       </Card>
 
-      <p className="text-center font-mono text-[10px] uppercase tracking-widest text-slate-400">
+      <p className="text-center font-mono text-[10px] uppercase tracking-widest text-slate-500">
         Tracks active/idle time only — no screen or app activity is recorded.
       </p>
     </div>

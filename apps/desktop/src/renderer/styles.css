@@ -3,3 +3,47 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Same self-hosted fonts as the staff portal (apps/internal): Plus Jakarta Sans
+   carries the UI, JetBrains Mono is for numbers/codes. The shared Tailwind preset
+   reads these variables (fontFamily.sans / .mono). */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('./fonts/PlusJakartaSans.woff2') format('woff2');
+  font-weight: 200 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/JetBrainsMono.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+:root {
+  --font-sans: 'Plus Jakarta Sans';
+  --font-mono: 'JetBrains Mono';
+}
+
+@layer base {
+  body {
+    @apply font-sans text-slate-900 antialiased;
+    /* Aurora Glass ground — identical to the staff portal (apps/internal
+       globals.css): violet / cyan / pink / purple washes over a light base that
+       the frosted cards blur through. Fixed so it stays put. */
+    background:
+      radial-gradient(760px 520px at 8% -6%, rgba(124, 108, 246, 0.5) 0%, transparent 60%),
+      radial-gradient(720px 560px at 98% 2%, rgba(34, 211, 238, 0.4) 0%, transparent 58%),
+      radial-gradient(680px 620px at 82% 108%, rgba(236, 72, 153, 0.38) 0%, transparent 60%),
+      radial-gradient(720px 600px at 12% 112%, rgba(168, 85, 247, 0.4) 0%, transparent 62%),
+      linear-gradient(160deg, #eef0ff 0%, #eaf2ff 50%, #f4ecff 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+/* Honour reduced-motion for the entrance animations (same as the portal). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none !important;
+  }
+}

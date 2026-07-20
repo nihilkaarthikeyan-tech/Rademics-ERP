@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Input, Label } from '@rademics/ui';
+import { Button, Card, Input, Label } from '@rademics/ui';
 
 export function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -21,9 +21,12 @@ export function LoginScreen() {
   }
 
   return (
-    <div className="flex h-full flex-col justify-center gap-6 px-6 py-8">
+    // Aurora ground from the body shows around a frosted card — same visual
+    // language as the staff portal; login keeps its brand navy CTA (Spec §9).
+    <div className="flex h-full flex-col justify-center gap-4 px-5 py-8">
+      <Card className="animate-rise flex flex-col gap-6 p-6">
       <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-navy text-sm font-bold text-white">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-navy text-sm font-bold text-white shadow-lg shadow-brand-blue/30">
           R
         </span>
         <span className="text-lg font-bold tracking-tight text-brand-navy">Rademics</span>
@@ -65,12 +68,14 @@ export function LoginScreen() {
           </p>
         ) : null}
 
-        <Button type="submit" disabled={loading} className="mt-2 h-11">
+        {/* Login keeps its brand navy CTA, matching the website's sign-in. */}
+        <Button type="submit" disabled={loading} className="mt-2 h-11 !bg-brand-navy hover:!bg-brand-navy/90">
           {loading ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
+      </Card>
 
-      <p className="text-center font-mono text-[11px] uppercase tracking-widest text-slate-400">
+      <p className="text-center font-mono text-[10px] uppercase tracking-widest text-slate-500">
         Check-in starts only after you sign in and click Check In.
       </p>
     </div>
