@@ -9,8 +9,16 @@ import { createTray } from './tray';
 import { registerIpcHandlers } from './ipc-handlers';
 import { startLocalServer } from './local-server';
 
-const API_BASE_URL = process.env.RADEMICS_API_URL ?? 'http://localhost:4000/api';
-const TURNSTILE_SITE_KEY = process.env.RADEMICS_TURNSTILE_SITE_KEY ?? null;
+// A packaged build (what employees install) talks to production by default; a dev
+// run (`pnpm dev`, unpackaged) talks to the local stack. Either can be overridden
+// with the env vars. The Turnstile site key is public (it's embedded in the web
+// login page too), so baking the prod default in is safe.
+const PROD_API_URL = 'https://api.52digit.com/api';
+const PROD_TURNSTILE_SITE_KEY = '0x4AAAAAAD28tPjtuZ5KvO2e';
+const API_BASE_URL =
+  process.env.RADEMICS_API_URL ?? (app.isPackaged ? PROD_API_URL : 'http://localhost:4000/api');
+const TURNSTILE_SITE_KEY =
+  process.env.RADEMICS_TURNSTILE_SITE_KEY ?? (app.isPackaged ? PROD_TURNSTILE_SITE_KEY : null);
 
 // Hard requirement: this app must never launch itself. Explicit, not just the
 // default, so the intent survives even if something upstream changes it.

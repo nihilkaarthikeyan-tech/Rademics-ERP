@@ -9,6 +9,7 @@ build/
 .next/
 out/
 release/
+release-*/
 *.tsbuildinfo
 
 # Turborepo
