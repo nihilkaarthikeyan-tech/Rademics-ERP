@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, Menu, session } from 'electron';
 import { ApiClient } from './api-client';
 import { AuthStore } from './auth-store';
 import { IdleTracker } from './idle-tracker';
@@ -25,6 +25,11 @@ const DESKTOP_APP_KEY = (process.env.RADEMICS_DESKTOP_KEY as string) || null;
 // Hard requirement: this app must never launch itself. Explicit, not just the
 // default, so the intent survives even if something upstream changes it.
 app.setLoginItemSettings({ openAtLogin: false });
+
+// Remove Electron's default menu bar (File/Edit/View/Window/Help). This is a
+// single-purpose employee app, not a document editor — the defaults just expose
+// Reload / Toggle DevTools / zoom that employees have no reason to touch.
+Menu.setApplicationMenu(null);
 
 // One tray-resident instance at a time — a second launch just focuses the first.
 const gotLock = app.requestSingleInstanceLock();
