@@ -73,10 +73,10 @@ export class ApiClient {
     });
   }
 
-  checkOut(): Promise<AttendanceSessionPayload> {
+  checkOut(reconcile = false): Promise<AttendanceSessionPayload> {
     return this.request<AttendanceSessionPayload>('/attendance/check-out', {
       method: 'POST',
-      body: {},
+      body: { reconcile },
     });
   }
 

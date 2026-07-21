@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsISO8601,
@@ -24,6 +25,14 @@ export class CheckInDto {
   @IsOptional()
   @IsEnum(AttendanceSource)
   source?: AttendanceSource;
+}
+
+/** Check-out. `reconcile` is set by the desktop agent when it completes a checkout
+ *  a prior OS shutdown couldn't send — the server then closes at the last heartbeat. */
+export class CheckOutDto {
+  @IsOptional()
+  @IsBoolean()
+  reconcile?: boolean;
 }
 
 /** Activity heartbeat for idle tracking (Spec §5.3). */

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { AttendanceService } from './attendance.service';
 import { AttendanceComputeService } from './attendance-compute.service';
-import { AttendanceHistoryQuery, CheckInDto } from './dto';
+import { AttendanceHistoryQuery, CheckInDto, CheckOutDto } from './dto';
 import { RequireCapability, RequireScopedCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { reqMeta } from '../common/req-meta';
@@ -24,8 +24,8 @@ export class AttendanceController {
 
   @Post('check-out')
   @RequireCapability('attendance.check_in_out')
-  checkOut(@CurrentUser() user: AuthUser, @Req() req: Request) {
-    return this.attendance.checkOut(user, reqMeta(req));
+  checkOut(@Body() dto: CheckOutDto, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.attendance.checkOut(user, reqMeta(req), dto.reconcile ?? false);
   }
 
   @Post('heartbeat')

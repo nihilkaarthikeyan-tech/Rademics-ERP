@@ -78,8 +78,8 @@ export class AuthStore {
     return this.withAuth(() => this.api.checkIn(randomUUID()));
   }
 
-  checkOut(): Promise<AttendanceSessionPayload> {
-    return this.withAuth(() => this.api.checkOut());
+  checkOut(reconcile = false): Promise<AttendanceSessionPayload> {
+    return this.withAuth(() => this.api.checkOut(reconcile));
   }
 
   heartbeat(): Promise<{ idleSeconds: number; checkedIn: boolean }> {

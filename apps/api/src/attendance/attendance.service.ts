@@ -105,18 +105,24 @@ export class AttendanceService {
   }
 
   // ── Check-out (Spec §5.3) ──
-  async checkOut(user: AuthUser, meta: Meta) {
+  // `reconcile` = the desktop agent completing a checkout that a prior OS shutdown
+  // couldn't send in time. We close the session at its last heartbeat (the last
+  // moment the machine was known alive) instead of now, so the powered-off gap
+  // isn't wrongly counted as idle/worked.
+  async checkOut(user: AuthUser, meta: Meta, reconcile = false) {
     const open = await this.findOpenSession(user.id);
     if (!open) throw new BadRequestException('You are not checked in');
 
     const now = new Date();
     const rules = await this.getRules();
-    const idleAdd = this.idleGap(open.lastHeartbeatAt ?? open.checkInAt, now, rules.idleMinutes);
+    const lastAlive = open.lastHeartbeatAt ?? open.checkInAt;
+    const checkOutAt = reconcile ? lastAlive : now;
+    const idleAdd = reconcile ? 0 : this.idleGap(lastAlive, now, rules.idleMinutes);
 
     const session = await this.prisma.attendanceSession.update({
       where: { id: open.id },
       data: {
-        checkOutAt: now,
+        checkOutAt,
         idleSeconds: { increment: idleAdd },
         checkOutIp: meta.ip ?? null,
         checkOutUserAgent: meta.userAgent ?? null,

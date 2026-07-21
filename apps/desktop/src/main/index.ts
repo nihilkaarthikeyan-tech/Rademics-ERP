@@ -4,7 +4,8 @@ import { ApiClient } from './api-client';
 import { AuthStore } from './auth-store';
 import { IdleTracker } from './idle-tracker';
 import { StatusPoller } from './status-poller';
-import { registerShutdownHandler } from './shutdown-handler';
+import { existsSync, unlinkSync } from 'node:fs';
+import { registerShutdownHandler, shutdownMarkerPath } from './shutdown-handler';
 import { createTray } from './tray';
 import { registerIpcHandlers } from './ipc-handlers';
 import { startLocalServer } from './local-server';
@@ -85,7 +86,7 @@ if (!gotLock) {
     statusPoller.onUpdate((payload) => tray.setCheckedIn(payload.status?.checkedIn ?? false));
 
     registerIpcHandlers({ auth, statusPoller, mainWindow: win });
-    registerShutdownHandler(auth, win);
+    registerShutdownHandler(win);
 
     if (process.env.ELECTRON_RENDERER_URL) {
       // electron-vite dev server — already serves over http://localhost.
@@ -98,9 +99,29 @@ if (!gotLock) {
       await win.loadURL(url);
     }
 
-    // Resume a session from the persisted refresh-token cookie, if any, then
-    // start the always-on polling loops (both no-op internally while logged out).
+    // Resume a session from the persisted refresh-token cookie, if any.
     await auth.attemptSilentRefresh();
+
+    // If the machine was shut down while checked in, a marker was left behind that
+    // the shutdown couldn't turn into a checkout. Complete it now — the server
+    // closes the session at its last heartbeat, so the powered-off time isn't
+    // counted. Runs before the pollers so the first status already reads correctly.
+    if (existsSync(shutdownMarkerPath())) {
+      if (auth.authenticated) {
+        try {
+          await auth.checkOut(true);
+        } catch {
+          // already closed / session expired — the nightly sweep covers it
+        }
+      }
+      try {
+        unlinkSync(shutdownMarkerPath());
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Start the always-on polling loops (both no-op internally while logged out).
     idleTracker.start();
     statusPoller.start();
 
