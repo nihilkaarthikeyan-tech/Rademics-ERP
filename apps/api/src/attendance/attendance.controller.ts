@@ -6,6 +6,7 @@ import { AttendanceHistoryQuery, CheckInDto, CheckOutDto } from './dto';
 import { RequireCapability, RequireScopedCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { reqMeta } from '../common/req-meta';
+import { DesktopVersionService } from '../desktop/desktop-version.service';
 import type { AuthUser } from '../auth/auth-user';
 
 @Controller('attendance')
@@ -13,12 +14,16 @@ export class AttendanceController {
   constructor(
     private readonly attendance: AttendanceService,
     private readonly compute: AttendanceComputeService,
+    private readonly desktopVersion: DesktopVersionService,
   ) {}
 
   // ── Self check-in / out / heartbeat (Spec §5.3) ──
+  // Check-in (starting a new work day) enforces the desktop minimum version;
+  // check-out/heartbeat deliberately don't — never trap an open session.
   @Post('check-in')
   @RequireCapability('attendance.check_in_out')
-  checkIn(@Body() dto: CheckInDto, @CurrentUser() user: AuthUser, @Req() req: Request) {
+  async checkIn(@Body() dto: CheckInDto, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    await this.desktopVersion.assertSupported(req);
     return this.attendance.checkIn(user, dto.idempotencyKey, reqMeta(req), dto.source);
   }
 

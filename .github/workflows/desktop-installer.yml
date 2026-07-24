@@ -81,8 +81,11 @@ jobs:
         shell: bash
         run: |
           VERSION=$(node -p "require('./apps/desktop/package.json').version")
-          echo "{\"version\":\"$VERSION\"}" > apps/desktop/release/version.json
-          echo "Publishing version $VERSION"
+          # publishedAt starts the 24h grace window for the server's minimum-version
+          # rule (desktop-version.service.ts) — outdated apps are blocked after it.
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "{\"version\":\"$VERSION\",\"publishedAt\":\"$NOW\"}" > apps/desktop/release/version.json
+          echo "Publishing version $VERSION (grace window starts $NOW)"
 
       - name: Publish to the live update feed
         if: ${{ inputs.publish }}

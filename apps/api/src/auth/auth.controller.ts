@@ -4,6 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService, type IssuedTokens } from './auth.service';
 import { TurnstileService } from './turnstile.service';
+import { DesktopVersionService } from '../desktop/desktop-version.service';
 import { ForgotPasswordDto, InviteUserDto, LoginDto, SetPasswordDto } from './dto';
 import { CurrentUser, Public } from './decorators';
 import { RequireCapability } from '../rbac/capability.decorator';
@@ -17,6 +18,7 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly config: ConfigService,
     private readonly turnstile: TurnstileService,
+    private readonly desktopVersion: DesktopVersionService,
   ) {}
 
   @Public()
@@ -32,6 +34,10 @@ export class AuthController {
     if (!this.isTrustedDesktopClient(req)) {
       await this.turnstile.verify(dto.captchaToken, req.ip);
     }
+    // Outdated desktop builds are refused once a newer version has been published
+    // for 24h+ ("use the old app for more than 1 day → must update"). Website
+    // logins are untouched (no desktop key).
+    await this.desktopVersion.assertSupported(req);
     const tokens = await this.auth.login(dto.email, dto.password, meta(req));
     return this.respondWithTokens(res, tokens);
   }

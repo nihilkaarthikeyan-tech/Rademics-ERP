@@ -1,4 +1,4 @@
-import { net } from 'electron';
+import { app, net } from 'electron';
 import type { Session } from 'electron';
 import type { AuthUserPayload, TodayStatus } from '../shared/ipc';
 
@@ -53,13 +53,11 @@ export class ApiClient {
   }
 
   login(email: string, password: string, captchaToken: string | null): Promise<TokenResponse> {
-    // The desktop key lets the server skip the browser CAPTCHA for this native app.
-    const headers = this.desktopKey ? { 'x-rademics-desktop': this.desktopKey } : undefined;
+    // The desktop key (sent on every request now) lets the server skip the browser CAPTCHA.
     return this.request<TokenResponse>('/auth/login', {
       method: 'POST',
       body: { email, password, captchaToken },
       auth: false,
-      headers,
     });
   }
 
@@ -107,6 +105,12 @@ export class ApiClient {
       req.setHeader('content-type', 'application/json');
       if (opts.auth !== false && this.accessToken) {
         req.setHeader('authorization', `Bearer ${this.accessToken}`);
+      }
+      if (this.desktopKey) {
+        // Identify this build to the server's minimum-version rule — outdated
+        // apps get a clear "please update" refusal at login/check-in.
+        req.setHeader('x-rademics-desktop', this.desktopKey);
+        req.setHeader('x-rademics-desktop-version', app.getVersion());
       }
       for (const [k, v] of Object.entries(opts.headers ?? {})) req.setHeader(k, v);
 
