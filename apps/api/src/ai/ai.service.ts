@@ -77,6 +77,16 @@ export class AiService {
     return { text, aiGenerated, disclaimer: 'AI-generated — verify important details.' };
   }
 
+  /** On-topic (ERP_TERMS) but no dedicated retrieval exists yet — see chat()'s note. */
+  private looksUnsupported(q: string): boolean {
+    const NO_HANDLER_YET = [
+      'leave', 'attendance', 'present', 'absent', 'invoice', 'payment', 'expense',
+      'budget', 'p&l', 'employee', 'freelanc', 'milestone', 'deliverable',
+    ];
+    const hasTaskContext = q.includes('task') || q.includes('project') || q.includes('module');
+    return !hasTaskContext && NO_HANDLER_YET.some((t) => q.includes(t));
+  }
+
   // ── Feature 1: Daily summary, generated once per team per day (Spec §7) ──
   async dailySummary(teamId: string, user: AuthUser, meta: Meta) {
     // Scope: caller must be able to see this team (SA/HR, or the team's lead/manager).
@@ -293,6 +303,14 @@ export class AiService {
       answer = rows.length
         ? `By current load: ${rows.map((r) => `${r.name} (${r.open} open, ~${r.load}h)`).join('; ')}. Lowest load first.`
         : 'No team members are in your scope.';
+    } else if (this.looksUnsupported(q)) {
+      // ERP_TERMS accepts leave/attendance/finance/employee words as "on-topic" so the
+      // assistant doesn't wrongly refuse them, but there's no real retrieval for those
+      // yet — falling into the task-count answer below used to silently answer the
+      // wrong question (confirmed bug, 2026-07-24: "what's my leave balance" returned
+      // an unrelated task count). Be honest instead of confidently wrong.
+      answer =
+        'I don\'t have a direct answer for that yet — right now I can tell you about overdue tasks, who has capacity this week, or your open task count. Try one of those.';
     } else {
       const openCount = await this.prisma.task.count({ where: { ...projectFilter, status: { in: OPEN_STATUSES } } });
       const projects = await this.prisma.project.findMany({ where: this.projectWhere(scoped), select: { name: true }, take: 10 });
