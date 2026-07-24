@@ -56,8 +56,15 @@ export class AuthStore {
       const res = await this.api.refresh();
       this.setSession(res.user, res.accessToken);
       return true;
-    } catch {
-      this.setSession(null, null);
+    } catch (err) {
+      // Only a definitive server rejection (invalid/expired refresh token) ends the
+      // session. Transient failures — network still down seconds after wake-from-sleep,
+      // a server restart, a 5xx — must NOT sign the user out; the 20s poller simply
+      // retries. (ApiError is only thrown for real HTTP responses; network failures
+      // reject with a plain Error.)
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        this.setSession(null, null);
+      }
       return false;
     }
   }
