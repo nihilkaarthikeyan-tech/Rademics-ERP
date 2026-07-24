@@ -8,6 +8,7 @@ import { PresenceService } from './presence.service';
 import {
   businessDateKey,
   computeDayMarks,
+  overlapWithShiftWindow,
   zonedParts,
   type AttendanceRules,
   type SessionInput,
@@ -48,6 +49,7 @@ export class AttendanceService {
     return {
       workingDays: (r.workingDays as number[]) ?? [1, 2, 3, 4, 5, 6],
       lateThreshold: (r.lateThreshold as string) ?? '09:15',
+      workStart: (r.workStart as string) ?? '09:00',
       workEnd: (r.workEnd as string) ?? '18:00',
       halfDayUnderHours: (r.halfDayUnderHours as number) ?? 4,
       overtimeOverHours: (r.overtimeOverHours as number) ?? 9,
@@ -118,7 +120,7 @@ export class AttendanceService {
     const rules = await this.getRules();
     const lastAlive = open.lastHeartbeatAt ?? open.checkInAt;
     const checkOutAt = reconcile ? lastAlive : now;
-    const idleAdd = reconcile ? 0 : this.idleGap(lastAlive, now, rules.idleMinutes);
+    const idleAdd = reconcile ? 0 : this.idleGap(lastAlive, now, rules);
 
     const session = await this.prisma.attendanceSession.update({
       where: { id: open.id },
@@ -151,7 +153,7 @@ export class AttendanceService {
 
     const now = new Date();
     const rules = await this.getRules();
-    const idleAdd = this.idleGap(open.lastHeartbeatAt ?? open.checkInAt, now, rules.idleMinutes);
+    const idleAdd = this.idleGap(open.lastHeartbeatAt ?? open.checkInAt, now, rules);
 
     const session = await this.prisma.attendanceSession.update({
       where: { id: open.id },
@@ -187,7 +189,7 @@ export class AttendanceService {
       checkOutAt: s.checkOutAt ?? now,
       idleSeconds: s.checkOutAt
         ? s.idleSeconds
-        : s.idleSeconds + this.idleGap(s.lastHeartbeatAt ?? s.checkInAt, now, rules.idleMinutes),
+        : s.idleSeconds + this.idleGap(s.lastHeartbeatAt ?? s.checkInAt, now, rules),
     }));
     const weekday = zonedParts(now, rules.timezone).weekday;
     const marks = computeDayMarks(forMarks, rules, weekday);
@@ -242,10 +244,16 @@ export class AttendanceService {
     });
   }
 
-  /** Whole silent gap counts as idle once it exceeds the configured threshold (§5.3). */
-  private idleGap(since: Date, now: Date, idleMinutes: number): number {
+  /**
+   * A silent gap counts as idle once it exceeds the configured threshold (§5.3) —
+   * but only the portion INSIDE the official shift window (workStart–workEnd).
+   * Early-morning or after-6PM silence is the employee's own time, not idle
+   * (2026-07-24 decision; keeps late-stay overtime from doubling as idle).
+   */
+  private idleGap(since: Date, now: Date, rules: AttendanceRules): number {
     const gapSec = Math.floor((now.getTime() - since.getTime()) / 1000);
-    return gapSec > idleMinutes * 60 ? gapSec : 0;
+    if (gapSec <= rules.idleMinutes * 60) return 0;
+    return overlapWithShiftWindow(since, now, rules);
   }
 
   /** SCOPED team = direct reports ∪ members of teams the caller leads (Spec §3). */

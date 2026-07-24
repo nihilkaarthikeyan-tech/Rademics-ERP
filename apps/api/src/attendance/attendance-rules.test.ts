@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeDayMarks,
   businessDateKey,
+  overlapWithShiftWindow,
   timeToSeconds,
   type AttendanceRules,
   type SessionInput,
@@ -10,6 +11,7 @@ import {
 const RULES: AttendanceRules = {
   workingDays: [1, 2, 3, 4, 5, 6], // Mon–Sat
   lateThreshold: '09:15',
+  workStart: '09:00',
   workEnd: '18:00',
   halfDayUnderHours: 4,
   overtimeOverHours: 9,
@@ -100,6 +102,25 @@ describe('weekly off + idle (§5.3)', () => {
   it('surfaces accrued idle seconds', () => {
     const marks = computeDayMarks([session(3, 30, 11, 30, 600)], RULES, 1);
     expect(marks.idleSeconds).toBe(600);
+  });
+});
+
+describe('overlapWithShiftWindow — idle only counts inside 09:00–18:00 (§4)', () => {
+  // IST = UTC+5:30 → 09:00 IST = 03:30 UTC, 18:00 IST = 12:30 UTC.
+  it('gap fully inside the shift counts in full', () => {
+    expect(overlapWithShiftWindow(utc(5, 0), utc(6, 0), RULES)).toBe(3600); // 10:30–11:30 IST
+  });
+
+  it('gap straddling 18:00 only counts the part before 18:00', () => {
+    expect(overlapWithShiftWindow(utc(12, 0), utc(14, 0), RULES)).toBe(1800); // 17:30–19:30 IST → 30min
+  });
+
+  it('gap fully after 18:00 counts nothing (late stay is own time)', () => {
+    expect(overlapWithShiftWindow(utc(13, 0), utc(16, 0), RULES)).toBe(0); // 18:30–21:30 IST
+  });
+
+  it('gap straddling 09:00 only counts the part after 09:00', () => {
+    expect(overlapWithShiftWindow(utc(2, 30), utc(4, 30), RULES)).toBe(3600); // 08:00–10:00 IST → 1h
   });
 });
 

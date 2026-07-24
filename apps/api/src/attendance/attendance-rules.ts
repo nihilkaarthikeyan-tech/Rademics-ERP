@@ -11,6 +11,7 @@ export type AttendanceDayStatus = 'PRESENT' | 'HALF_DAY' | 'ABSENT' | 'WEEKLY_OF
 export interface AttendanceRules {
   workingDays: number[]; // JS weekday numbers, 0=Sun … 6=Sat (default Mon–Sat = [1..6])
   lateThreshold: string; // 'HH:MM' in company tz
+  workStart: string; // 'HH:MM' in company tz — shift start; idle is only counted from here
   workEnd: string; // 'HH:MM' in company tz — the shift-end boundary for overtime (§4)
   halfDayUnderHours: number;
   overtimeOverHours: number;
@@ -120,6 +121,28 @@ export function localTimeInstantUtc(instant: Date, timeZone: string, hhmm: strin
   const offsetMs = localAsUtc - instant.getTime();
   const targetLocalAsUtc = Date.UTC(p.year, p.month - 1, p.day, 0, 0, 0) + timeToSeconds(hhmm) * 1000;
   return new Date(targetLocalAsUtc - offsetMs);
+}
+
+/**
+ * Seconds of [from, to] that fall INSIDE the official shift window (workStart–workEnd,
+ * per local calendar day). Used to clip idle gaps: silence before 9:00 or after 18:00
+ * is the employee's own time (early bird / voluntary late stay) and must not count
+ * as idle — idle is only meaningful inside the shift (2026-07-24 decision).
+ */
+export function overlapWithShiftWindow(from: Date, to: Date, rules: AttendanceRules): number {
+  if (to <= from) return 0;
+  let total = 0;
+  let cursor = new Date(from);
+  // A gap practically spans 1–2 local days; cap the walk defensively.
+  for (let i = 0; i < 4 && cursor < to; i++) {
+    const windowStart = localTimeInstantUtc(cursor, rules.timezone, rules.workStart);
+    const windowEnd = localTimeInstantUtc(cursor, rules.timezone, rules.workEnd);
+    const overlapMs =
+      Math.min(to.getTime(), windowEnd.getTime()) - Math.max(from.getTime(), windowStart.getTime());
+    if (overlapMs > 0) total += Math.floor(overlapMs / 1000);
+    cursor = new Date(endOfLocalDayUtc(cursor, rules.timezone).getTime() + 1000); // next local day
+  }
+  return total;
 }
 
 /**
