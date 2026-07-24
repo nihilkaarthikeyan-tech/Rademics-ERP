@@ -15,10 +15,22 @@ const TYPES = [
  * Leave request form (Spec §5.7, §24). Half-day is a single day only; excess beyond
  * balance auto-converts to Unpaid on approval. On success the parent refreshes.
  */
+// Local YYYY-MM-DD, not UTC — a date <input>'s `min` compares against what the
+// employee's own calendar shows as "today", not a UTC-shifted value that could
+// be off by a day depending on their timezone.
+function todayLocalISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function LeaveRequestForm({ onSubmitted }: { onSubmitted: () => void }) {
   const [type, setType] = useState('CASUAL');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const today = todayLocalISO();
   const [half, setHalf] = useState('FULL');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -70,7 +82,14 @@ export function LeaveRequestForm({ onSubmitted }: { onSubmitted: () => void }) {
         </div>
         <div>
           <Label htmlFor="lv-from">From</Label>
-          <Input id="lv-from" type="date" required value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          <Input
+            id="lv-from"
+            type="date"
+            required
+            min={today}
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
         </div>
         <div>
           <Label htmlFor="lv-to">To</Label>
@@ -80,7 +99,7 @@ export function LeaveRequestForm({ onSubmitted }: { onSubmitted: () => void }) {
             required={!isHalf}
             disabled={isHalf}
             value={isHalf ? fromDate : toDate}
-            min={fromDate || undefined}
+            min={fromDate || today}
             onChange={(e) => setToDate(e.target.value)}
           />
         </div>

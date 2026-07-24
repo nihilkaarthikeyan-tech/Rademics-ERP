@@ -125,6 +125,9 @@ export class LeaveService {
       throw new BadRequestException('Invalid dates');
     }
     if (to < from) throw new BadRequestException('End date must be on or after start date');
+    if (dateKey(from) < dateKey(new Date())) {
+      throw new BadRequestException('Cannot request leave for a date that has already passed');
+    }
     if (half !== 'FULL' && dateKey(from) !== dateKey(to)) {
       throw new BadRequestException('A half-day request must be a single day');
     }
