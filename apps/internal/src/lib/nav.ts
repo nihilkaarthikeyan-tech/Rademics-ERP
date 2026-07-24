@@ -12,6 +12,7 @@ import {
   Settings,
   ScrollText,
   Building2,
+  Monitor,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,6 +35,7 @@ export const NAV: NavItem[] = [
   { label: 'My Work', href: '/my-work', roles: ['HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: ListTodo, group: 'Workspace' },
   { label: 'Attendance', href: '/attendance', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Clock, group: 'Workspace' },
   { label: 'Leave', href: '/leave', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: CalendarDays, group: 'Workspace' },
+  { label: 'Desktop Agent', href: '/desktop-agent', roles: ALL, icon: Monitor, group: 'Workspace' },
   { label: 'Projects', href: '/projects', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: FolderKanban, group: 'Manage' },
   { label: 'People', href: '/people', roles: ['SUPER_ADMIN', 'HR'], icon: Users, group: 'Manage' },
   { label: 'Clients', href: '/clients', roles: ['SUPER_ADMIN'], icon: Building2, group: 'Manage' },
