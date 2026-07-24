@@ -11,6 +11,15 @@ files:
   - package.json
 asar: true
 
+# Self-hosted update feed (electron-updater "generic" provider) — files land at
+# https://api.52digit.com/desktop-updates/ (nginx static path on the existing VPS,
+# no new domain/cert needed). Nobody gets an update unless this location is
+# deliberately republished — see .github/workflows/desktop-installer.yml.
+publish:
+  provider: generic
+  url: https://api.52digit.com/desktop-updates/
+  channel: latest
+
 win:
   target: nsis
   artifactName: 'ERP-Agent-Setup.${ext}'

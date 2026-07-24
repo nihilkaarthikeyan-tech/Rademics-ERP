@@ -6,6 +6,7 @@ import {
   type LoginResult,
   type RademicsDesktopBridge,
   type StatusUpdatePayload,
+  type UpdateStatus,
 } from '../shared/ipc';
 
 const bridge: RademicsDesktopBridge = {
@@ -29,6 +30,16 @@ const bridge: RademicsDesktopBridge = {
     const listener = (_event: Electron.IpcRendererEvent, payload: StatusUpdatePayload) => cb(payload);
     ipcRenderer.on(IpcChannel.StatusUpdated, listener);
     return () => ipcRenderer.removeListener(IpcChannel.StatusUpdated, listener);
+  },
+
+  onUpdateStatusChanged: (cb: (status: UpdateStatus) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => cb(status);
+    ipcRenderer.on(IpcChannel.UpdateStatusChanged, listener);
+    return () => ipcRenderer.removeListener(IpcChannel.UpdateStatusChanged, listener);
+  },
+
+  restartToInstallUpdate: (): void => {
+    void ipcRenderer.invoke(IpcChannel.UpdateRestartToInstall);
   },
 };
 

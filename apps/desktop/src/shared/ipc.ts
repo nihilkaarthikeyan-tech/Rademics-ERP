@@ -12,6 +12,8 @@ export const IpcChannel = {
   AttendanceCheckIn: 'attendance:checkIn',
   AttendanceCheckOut: 'attendance:checkOut',
   StatusUpdated: 'status:updated',
+  UpdateStatusChanged: 'update:statusChanged',
+  UpdateRestartToInstall: 'update:restartToInstall',
 } as const;
 
 export interface AuthUserPayload {
@@ -54,6 +56,16 @@ export interface StatusUpdatePayload {
   autoCheckedOut: boolean;
 }
 
+/**
+ * Mirrors electron-updater's event lifecycle. 'downloaded' means a new version is
+ * ready and just waiting for a restart to apply — nothing installs while the app
+ * is running or without the employee choosing to restart.
+ */
+export interface UpdateStatus {
+  state: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
+  version?: string;
+}
+
 /** The API surface the preload script exposes on `window.rademicsDesktop`. */
 export interface RademicsDesktopBridge {
   login(payload: LoginPayload): Promise<LoginResult>;
@@ -63,4 +75,6 @@ export interface RademicsDesktopBridge {
   checkIn(): Promise<{ ok: boolean; error?: string }>;
   checkOut(): Promise<{ ok: boolean; error?: string }>;
   onStatusUpdated(cb: (payload: StatusUpdatePayload) => void): () => void;
+  onUpdateStatusChanged(cb: (status: UpdateStatus) => void): () => void;
+  restartToInstallUpdate(): void;
 }

@@ -9,6 +9,8 @@ import { registerShutdownHandler, shutdownMarkerPath } from './shutdown-handler'
 import { createTray } from './tray';
 import { registerIpcHandlers } from './ipc-handlers';
 import { startLocalServer } from './local-server';
+import { setupAutoUpdater } from './updater';
+import { IpcChannel } from '../shared/ipc';
 
 // A packaged build (what employees install) talks to production by default; a dev
 // run (`pnpm dev`, unpackaged) talks to the local stack. Either can be overridden
@@ -129,6 +131,12 @@ if (!gotLock) {
     // suspended — refresh immediately so the UI doesn't linger on stale data.
     powerMonitor.on('resume', () => void statusPoller.tick());
     powerMonitor.on('unlock-screen', () => void statusPoller.tick());
+
+    // Silent background check against our own self-hosted update feed (never a
+    // third party) — see electron-builder.yml `publish`. No-op in dev builds.
+    setupAutoUpdater((status) => {
+      if (!win.isDestroyed()) win.webContents.send(IpcChannel.UpdateStatusChanged, status);
+    });
   });
 
   app.on('window-all-closed', () => {

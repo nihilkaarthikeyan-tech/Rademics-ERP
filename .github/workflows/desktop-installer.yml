@@ -4,15 +4,28 @@ name: Desktop Installer
 # GitHub runner. Exists because local builds are unreliable — Smart App Control on
 # dev machines blocks electron-builder's unsigned NSIS tooling (spawn UNKNOWN).
 #
-# Required repo secret:
+# Required repo secrets:
 #   RADEMICS_DESKTOP_KEY  — must equal DESKTOP_APP_KEY in the VPS .env.production;
 #                           baked into the app so the API skips the login CAPTCHA
 #                           for the desktop client. Without it, packaged logins fail.
+#   DEPLOY_SSH_KEY / DEPLOY_HOST / DEPLOY_USER — same deploy key as deploy.yml,
+#                           only used when `publish: true` is chosen below.
 #
-# Output: the "ERP-Agent-Setup" workflow artifact (downloadable from the run page).
+# Output: the "ERP-Agent-Setup" workflow artifact is always produced (downloadable
+# from the run page). With `publish: true`, the installer + update-feed files
+# (latest.yml, .blockmap) are ALSO uploaded to https://api.52digit.com/desktop-updates/
+# — that's the ONLY thing that makes already-installed apps notice a new version
+# (electron-updater checks that exact URL and nowhere else). Leave publish: false
+# to just produce a downloadable build without pushing it to anyone.
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to the live update feed (existing installs will pick this up)'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -45,14 +58,39 @@ jobs:
           RADEMICS_DESKTOP_KEY: ${{ secrets.RADEMICS_DESKTOP_KEY }}
         run: pnpm --filter @rademics/desktop bundle
 
-      - name: Build NSIS installer
+      - name: Build NSIS installer + update-feed metadata
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false' # unsigned for now; see code-signing note in the repo docs
         working-directory: apps/desktop
-        run: pnpm exec electron-builder --win nsis
+        # --publish never: still writes latest.yml + .blockmap locally (electron-updater
+        # needs them), but never attempts a network publish itself — this workflow's own
+        # rsync step below is what actually ships them, only when explicitly asked to.
+        run: pnpm exec electron-builder --win nsis --publish never
 
       - uses: actions/upload-artifact@v4
         with:
           name: ERP-Agent-Setup
-          path: apps/desktop/release/ERP-Agent-Setup.exe
+          path: |
+            apps/desktop/release/ERP-Agent-Setup.exe
+            apps/desktop/release/latest.yml
+            apps/desktop/release/*.blockmap
           if-no-files-found: error
+
+      - name: Publish to the live update feed
+        if: ${{ inputs.publish }}
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "::error::publish=true requires the DEPLOY_SSH_KEY/DEPLOY_HOST/DEPLOY_USER secrets (same ones deploy.yml uses)."
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az -e "ssh -i ~/.ssh/deploy_key" \
+            apps/desktop/release/ERP-Agent-Setup.exe \
+            apps/desktop/release/latest.yml \
+            apps/desktop/release/*.blockmap \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/rademics-erp/desktop-updates/"
+          echo "✔ Published — installed apps will pick this up on their next check (within 4h, or on next launch)."

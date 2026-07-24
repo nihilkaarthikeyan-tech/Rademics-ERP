@@ -2,6 +2,7 @@ import { ipcMain, type BrowserWindow } from 'electron';
 import type { AuthStore } from './auth-store';
 import type { StatusPoller } from './status-poller';
 import { ApiError } from './api-client';
+import { restartToInstallUpdate } from './updater';
 import { IpcChannel, type LoginPayload, type LoginResult } from '../shared/ipc';
 
 function errorMessage(err: unknown): string {
@@ -62,4 +63,6 @@ export function registerIpcHandlers(opts: {
     if (mainWindow.isDestroyed()) return;
     mainWindow.webContents.send(IpcChannel.StatusUpdated, payload);
   });
+
+  ipcMain.handle(IpcChannel.UpdateRestartToInstall, () => restartToInstallUpdate());
 }

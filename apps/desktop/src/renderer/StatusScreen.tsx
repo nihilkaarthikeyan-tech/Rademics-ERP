@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { LogIn, LogOut, Clock } from 'lucide-react';
+import { LogIn, LogOut, Clock, Download } from 'lucide-react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@rademics/ui';
-import type { AuthUserPayload, TodayStatus } from '../shared/ipc';
+import type { AuthUserPayload, TodayStatus, UpdateStatus } from '../shared/ipc';
 
 function fmtDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -16,6 +16,7 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoCheckedOut, setAutoCheckedOut] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const baseline = useRef<{ worked: number; at: number } | null>(null);
@@ -27,6 +28,8 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => window.rademicsDesktop.onUpdateStatusChanged(setUpdateStatus), []);
 
   useEffect(() => {
     if (status) baseline.current = { worked: status.workedSeconds, at: Date.now() };
@@ -70,6 +73,21 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
           Sign out
         </Button>
       </div>
+
+      {updateStatus?.state === 'downloaded' ? (
+        <div className="flex items-center justify-between gap-3 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          <span className="flex items-center gap-2">
+            <Download className="h-4 w-4 shrink-0" />
+            An update is ready.
+          </span>
+          <button
+            onClick={() => window.rademicsDesktop.restartToInstallUpdate()}
+            className="shrink-0 rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+          >
+            Restart to apply
+          </button>
+        </div>
+      ) : null}
 
       <Card className="animate-rise">
         <CardHeader className="flex-row items-center justify-between">
