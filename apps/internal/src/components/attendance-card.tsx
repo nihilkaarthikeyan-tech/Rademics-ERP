@@ -1,15 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Clock, Download, Monitor } from 'lucide-react';
+import { Clock, Monitor } from 'lucide-react';
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@rademics/ui';
 import { useAttendance } from '@/lib/attendance-context';
-import { apiFetch } from '@/lib/api';
-
-interface DesktopVersionInfo {
-  version: string | null;
-  downloadUrl: string | null;
-}
 
 function fmtDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -24,20 +18,11 @@ function fmtDuration(totalSeconds: number): string {
  * Agent rollout (2026-07-21 decision): the website shows whether you're checked
  * in and today's worked/idle time, but check-in/check-out is controlled ONLY from
  * the desktop app — one control surface, no confusion about where to check in.
+ * The app-download/update prompt lives in its own DesktopAppCard, not here.
  */
 export function AttendanceCard() {
   const { status, state, autoCheckedOut, dismissAutoCheckedOut } = useAttendance();
   const [now, setNow] = useState(() => Date.now());
-  const [desktopApp, setDesktopApp] = useState<DesktopVersionInfo | null>(null);
-
-  // Always the CURRENT published build — not a "you're outdated" nag (the website
-  // has no idea what, if anything, is installed locally), just a standing way to
-  // grab it, discoverable right where we tell people to use it.
-  useEffect(() => {
-    apiFetch<DesktopVersionInfo>('/desktop/version')
-      .then(setDesktopApp)
-      .catch(() => setDesktopApp(null));
-  }, []);
 
   // Baseline worked seconds + the wall-clock at which we learned it, so the live
   // timer can extrapolate without re-fetching every second.
@@ -118,20 +103,9 @@ export function AttendanceCard() {
               </div>
 
               {/* Read-only by design: check-in/out happens ONLY in the desktop app. */}
-              <div className="flex max-w-[230px] flex-col gap-2 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-500">
-                <div className="flex items-center gap-2">
-                  <Monitor className="h-4 w-4 shrink-0 text-slate-400" />
-                  Check-in and check-out are done from the Rademics Desktop Agent on your computer.
-                </div>
-                {desktopApp?.downloadUrl ? (
-                  <a
-                    href={desktopApp.downloadUrl}
-                    className="inline-flex items-center gap-1.5 self-start rounded-md bg-white px-2.5 py-1.5 font-medium text-slate-700 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Download {desktopApp.version ? `v${desktopApp.version}` : ''}
-                  </a>
-                ) : null}
+              <div className="flex max-w-[230px] items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-xs text-slate-500">
+                <Monitor className="h-4 w-4 shrink-0 text-slate-400" />
+                Check-in and check-out are done from the Rademics Desktop Agent on your computer.
               </div>
             </div>
           </div>

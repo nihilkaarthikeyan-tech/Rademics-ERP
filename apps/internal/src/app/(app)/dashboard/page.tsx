@@ -2,6 +2,7 @@
 
 import { useMe } from '@/lib/me-context';
 import { AttendanceCard } from '@/components/attendance-card';
+import { DesktopAppCard } from '@/components/desktop-app-card';
 import { DashboardOverview } from '@/components/dashboard-overview';
 
 // Roles that clock in/out (Spec §3: Super Admin & Client never check in).
@@ -47,7 +48,12 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {CAN_CHECK_IN.includes(me.role) ? <AttendanceCard /> : null}
+      {CAN_CHECK_IN.includes(me.role) ? (
+        <>
+          <AttendanceCard />
+          <DesktopAppCard />
+        </>
+      ) : null}
 
       {/* Studio overview — self-gating: renders only for roles with reports access. */}
       <DashboardOverview />
