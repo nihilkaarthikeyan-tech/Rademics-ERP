@@ -46,8 +46,9 @@ jobs:
       ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v4
+      # pnpm version comes from package.json's "packageManager" (action-setup@v4
+      # errors if both are specified).
       - uses: pnpm/action-setup@v4
-        with: { version: 9 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
