@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
@@ -30,7 +31,9 @@ const STATUS_TONE: Record<string, 'green' | 'amber' | 'slate'> = {
 };
 
 export default function PeoplePage() {
-  const [search, setSearch] = useState('');
+  const searchParams = useSearchParams();
+  // Pre-fills from a global-search result deep link (?search=name), e.g. /people?search=Priya.
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
   const [data, setData] = useState<ListResp | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 

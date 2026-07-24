@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Search } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { cn, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError, type Me } from '@/lib/api';
 import { clearToken, getToken } from '@/lib/session';
@@ -11,6 +11,7 @@ import { navForRole, NAV_GROUPS } from '@/lib/nav';
 import { MeContext } from '@/lib/me-context';
 import { AttendanceProvider } from '@/lib/attendance-context';
 import { NotificationsBell } from '@/components/notifications-bell';
+import { GlobalSearch } from '@/components/global-search';
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -162,10 +163,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* ── Main column ── */}
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="glass-chrome sticky top-0 z-20 flex h-16 items-center justify-between border-b border-white/50 px-6">
-            <div className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/60 px-3.5 py-2 text-sm text-slate-400">
-              <Search className="h-4 w-4" />
-              <span className="hidden sm:inline">Search…</span>
-            </div>
+            <GlobalSearch />
             <div className="flex items-center gap-3">
               <NotificationsBell />
               <div className="hidden text-right sm:block">
