@@ -19,6 +19,8 @@ const bridge: RademicsDesktopBridge = {
 
   getSavedLogin: (): Promise<SavedLogin> => ipcRenderer.invoke(IpcChannel.AuthGetSavedLogin),
 
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke(IpcChannel.AppGetVersion),
+
   onAuthStateChanged: (cb: (state: AuthState) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AuthState) => cb(state);
     ipcRenderer.on(IpcChannel.AuthStateChanged, listener);

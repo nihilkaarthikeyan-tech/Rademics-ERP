@@ -15,6 +15,7 @@ export const IpcChannel = {
   StatusUpdated: 'status:updated',
   UpdateStatusChanged: 'update:statusChanged',
   UpdateRestartToInstall: 'update:restartToInstall',
+  AppGetVersion: 'app:getVersion',
 } as const;
 
 export interface AuthUserPayload {
@@ -80,6 +81,7 @@ export interface RademicsDesktopBridge {
   logout(): Promise<void>;
   getAuthState(): Promise<AuthState>;
   getSavedLogin(): Promise<SavedLogin>;
+  getAppVersion(): Promise<string>;
   onAuthStateChanged(cb: (state: AuthState) => void): () => void;
   checkIn(): Promise<{ ok: boolean; error?: string }>;
   checkOut(): Promise<{ ok: boolean; error?: string }>;

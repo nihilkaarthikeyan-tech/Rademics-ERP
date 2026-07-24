@@ -1,4 +1,4 @@
-import { ipcMain, type BrowserWindow } from 'electron';
+import { app, ipcMain, type BrowserWindow } from 'electron';
 import type { AuthStore } from './auth-store';
 import type { StatusPoller } from './status-poller';
 import { ApiError } from './api-client';
@@ -31,6 +31,8 @@ export function registerIpcHandlers(opts: {
   });
 
   ipcMain.handle(IpcChannel.AuthGetSavedLogin, () => loadSavedLogin());
+
+  ipcMain.handle(IpcChannel.AppGetVersion, () => app.getVersion());
 
   ipcMain.handle(IpcChannel.AuthLogout, async () => {
     await auth.logout();

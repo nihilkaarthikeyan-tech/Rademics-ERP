@@ -32,5 +32,8 @@ export function setupAutoUpdater(onStatus: (status: UpdateStatus) => void): void
 
 /** Restart now to apply an already-downloaded update. No-op if none is ready. */
 export function restartToInstallUpdate(): void {
-  autoUpdater.quitAndInstall();
+  // isSilent=true → NSIS runs with /S: no installer wizard, the app just closes,
+  // updates, and relaunches (isForceRunAfter=true). The wizard is for first
+  // installs only — updates should be invisible.
+  autoUpdater.quitAndInstall(true, true);
 }

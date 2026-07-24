@@ -1,6 +1,6 @@
 {
   "name": "@rademics/desktop",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "Rademics ERP Desktop Agent — Windows companion app for check-in/out and activity tracking",
   "main": "./out/main/index.js",
