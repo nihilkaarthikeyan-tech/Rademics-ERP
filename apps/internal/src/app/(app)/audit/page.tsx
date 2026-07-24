@@ -10,7 +10,6 @@ interface AuditRow {
   action: string;
   entityType: string | null;
   entityId: string | null;
-  ip: string | null;
   createdAt: string;
 }
 interface AuditPage {
@@ -124,7 +123,6 @@ export default function AuditLogPage() {
                     <th className="px-4 py-3 font-medium">Who</th>
                     <th className="px-4 py-3 font-medium">Action</th>
                     <th className="px-4 py-3 font-medium">Entity</th>
-                    <th className="px-4 py-3 font-medium">IP</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -146,7 +144,6 @@ export default function AuditLogPage() {
                           '—'
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 text-slate-400">{row.ip ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

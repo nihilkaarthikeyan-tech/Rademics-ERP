@@ -77,8 +77,10 @@ export class AuditService {
           action: true,
           entityType: true,
           entityId: true,
-          ip: true,
           createdAt: true,
+          // IP is still recorded (`record()` above) for genuine security investigation
+          // via direct server access, but deliberately never returned through this
+          // API/UI — 2026-07-24 decision: nobody views IPs through the app, any role.
         },
       }),
       this.prisma.auditLog.count({ where }),
