@@ -25,6 +25,14 @@ const API_BASE_URL =
 // binary); the login rate limit + account lockout are the actual bot protections.
 const DESKTOP_APP_KEY = (process.env.RADEMICS_DESKTOP_KEY as string) || null;
 
+// Keep the ORIGINAL userData folder across the 0.2.5 product rename ("Rademics ERP
+// Desktop Agent" → "Rademics Work Monitoring App"): Electron derives the default
+// userData path from the product name, and letting it move would silently drop every
+// installed user's session cookie + saved login + shutdown marker on update.
+if (app.isPackaged) {
+  app.setPath('userData', join(app.getPath('appData'), 'Rademics ERP Desktop Agent'));
+}
+
 // Hard requirement: this app must never launch itself. Explicit, not just the
 // default, so the intent survives even if something upstream changes it.
 app.setLoginItemSettings({ openAtLogin: false });
@@ -58,7 +66,7 @@ if (!gotLock) {
       resizable: false,
       minimizable: true,
       maximizable: false,
-      title: 'Rademics ERP Desktop Agent',
+      title: 'Rademics Work Monitoring App',
       icon: join(__dirname, '../../assets/icon.png'),
       webPreferences: {
         session: desktopSession,

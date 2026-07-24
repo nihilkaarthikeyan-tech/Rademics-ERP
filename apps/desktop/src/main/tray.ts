@@ -15,10 +15,10 @@ export function createTray(opts: {
 }): AppTray {
   const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON, 'base64'));
   const tray = new Tray(icon);
-  tray.setToolTip('Rademics ERP Desktop Agent');
+  tray.setToolTip('Rademics Work Monitoring App');
 
   const render = (checkedIn: boolean) => {
-    tray.setToolTip(`Rademics ERP Desktop Agent — ${checkedIn ? 'checked in' : 'checked out'}`);
+    tray.setToolTip(`Rademics Work Monitoring App — ${checkedIn ? 'checked in' : 'checked out'}`);
     const menu = Menu.buildFromTemplate([
       { label: checkedIn ? 'Checked in' : 'Checked out', enabled: false },
       { type: 'separator' },

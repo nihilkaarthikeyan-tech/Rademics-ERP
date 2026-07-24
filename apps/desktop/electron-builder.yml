@@ -1,8 +1,10 @@
 # Packaging config for the desktop agent's Windows installer. Only touched by
 # the `dist:win` script — never by `turbo run build`/`test`, so a normal web
 # deploy never triggers electron-builder (see the implementation plan, step 1).
+# appId must NEVER change — it's the app's identity for in-place upgrades and
+# the auto-updater. Renaming the product is safe; renaming appId orphans installs.
 appId: com.rademics.erp.desktop-agent
-productName: Rademics ERP Desktop Agent
+productName: Rademics Work Monitoring App
 directories:
   output: release
   buildResources: assets

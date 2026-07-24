@@ -67,7 +67,7 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold text-slate-800">{user.email}</p>
-          <p className="text-xs text-slate-400">Rademics Desktop Agent</p>
+          <p className="text-xs text-slate-400">Rademics Work Monitoring App</p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => window.rademicsDesktop.logout()}>
           Sign out
