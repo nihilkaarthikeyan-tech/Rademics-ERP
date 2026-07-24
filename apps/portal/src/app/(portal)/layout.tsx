@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { LogOut } from 'lucide-react';
 import { cn, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError, type Me } from '@/lib/api';
-import { clearToken, getToken } from '@/lib/session';
+import { clearToken } from '@/lib/session';
 
 // Portal top-nav only, no sidebar (Spec §16.2).
 const NAV = [
@@ -23,10 +23,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
-    if (!getToken()) {
-      router.replace('/login');
-      return;
-    }
+    // No early no-token redirect: even with an empty localStorage, apiFetch's
+    // 401→refresh-cookie→retry path can restore the session (7-day cookie).
     apiFetch<Me>('/auth/me')
       .then((m) => {
         setMe(m);
