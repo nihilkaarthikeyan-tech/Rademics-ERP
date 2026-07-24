@@ -13,6 +13,7 @@ type AuthListener = (state: AuthState) => void;
 export class AuthStore {
   private user: AuthUserPayload | null = null;
   private listeners = new Set<AuthListener>();
+  private refreshInFlight: Promise<boolean> | null = null;
 
   constructor(private readonly api: ApiClient) {}
 
@@ -39,6 +40,9 @@ export class AuthStore {
   async login(email: string, password: string, captchaToken: string | null): Promise<void> {
     const res = await this.api.login(email, password, captchaToken);
     this.setSession(res.user, res.accessToken);
+    // Force the refresh cookie to disk NOW — Electron flushes lazily, and a hard
+    // kill (shutdown) before the flush would strand an already-rotated cookie.
+    await this.api.flushCookies();
   }
 
   async logout(): Promise<void> {
@@ -50,11 +54,27 @@ export class AuthStore {
     this.setSession(null, null);
   }
 
-  /** Launch-time: resume a session from the persisted refresh-token cookie, if any. */
-  async attemptSilentRefresh(): Promise<boolean> {
+  /**
+   * Resume/renew the session from the persisted refresh-token cookie. SINGLE-FLIGHT:
+   * concurrent 401s (poller + heartbeat + today waking together after sleep) must
+   * share ONE refresh call — parallel refreshes race, and the loser presents an
+   * already-rotated token, which the server treats as theft and revokes the whole
+   * session family (the "randomly signed out after sleep" bug).
+   */
+  attemptSilentRefresh(): Promise<boolean> {
+    this.refreshInFlight ??= this.doRefresh().finally(() => {
+      this.refreshInFlight = null;
+    });
+    return this.refreshInFlight;
+  }
+
+  private async doRefresh(): Promise<boolean> {
     try {
       const res = await this.api.refresh();
       this.setSession(res.user, res.accessToken);
+      // Persist the rotated cookie immediately — a hard kill before Electron's lazy
+      // flush would leave the old (now revoked) token on disk for the next launch.
+      await this.api.flushCookies();
       return true;
     } catch (err) {
       // Only a definitive server rejection (invalid/expired refresh token) ends the

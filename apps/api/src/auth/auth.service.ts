@@ -139,6 +139,27 @@ export class AuthService {
 
     // Reuse of an already-revoked token => compromise; revoke the whole family.
     if (existing.revokedAt) {
+      // Benign-reuse grace (30s): a client that lost a concurrent-refresh race, or
+      // was killed before persisting its rotated cookie, replays the just-revoked
+      // token. If its replacement has never been used, this is that client — recover
+      // by rotating from the replacement instead of nuking the family. A real thief
+      // replaying outside this window (or after the successor was used) still trips
+      // the family revocation below.
+      const GRACE_MS = 30_000;
+      const recentlyRevoked = Date.now() - existing.revokedAt.getTime() < GRACE_MS;
+      const replacement = recentlyRevoked && existing.replacedById
+        ? await this.prisma.refreshToken.findUnique({ where: { id: existing.replacedById } })
+        : null;
+      if (replacement && !replacement.revokedAt && replacement.expiresAt > new Date()) {
+        if (existing.user.status !== 'ACTIVE') throw new UnauthorizedException('Account is not active');
+        const next = await this.persistRefreshToken(existing.user.id, existing.familyId, meta);
+        await this.prisma.refreshToken.update({
+          where: { id: replacement.id },
+          data: { revokedAt: new Date(), replacedById: next.id },
+        });
+        const accessToken = await this.signAccessToken(existing.user);
+        return { accessToken, refreshToken: next.rawToken, user: toAuthUser(existing.user) };
+      }
       await this.prisma.refreshToken.updateMany({
         where: { familyId: existing.familyId, revokedAt: null },
         data: { revokedAt: new Date() },

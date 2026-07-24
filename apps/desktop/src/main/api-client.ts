@@ -47,6 +47,11 @@ export class ApiClient {
     this.accessToken = token;
   }
 
+  /** Write the cookie jar (refresh token) to disk now instead of Electron's lazy flush. */
+  flushCookies(): Promise<void> {
+    return this.session.cookies.flushStore();
+  }
+
   login(email: string, password: string, captchaToken: string | null): Promise<TokenResponse> {
     // The desktop key lets the server skip the browser CAPTCHA for this native app.
     const headers = this.desktopKey ? { 'x-rademics-desktop': this.desktopKey } : undefined;
