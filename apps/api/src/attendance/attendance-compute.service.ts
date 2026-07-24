@@ -38,11 +38,17 @@ export class AttendanceComputeService {
     for (const s of open) {
       const key = businessDateKey(s.checkInAt, rules.timezone);
       if (key === todayKey) continue; // today's open sessions stay open
+      // Close at the LAST REAL ACTIVITY, capped at that day's end (2026-07-24
+      // decision, revising the earlier stamp-at-23:59 rule): a forgotten checkout
+      // must not manufacture on-paper overtime running to midnight. The untouched
+      // tail is neither worked nor idle — it simply isn't part of the session.
+      // Mirrors the desktop agent's shutdown reconciliation (close at lastHeartbeatAt).
       const endOfDay = endOfLocalDayUtc(s.checkInAt, rules.timezone);
-      const idleAdd = this.idleGap(s.lastHeartbeatAt ?? s.checkInAt, endOfDay, rules.idleMinutes);
+      const lastActivity = s.lastHeartbeatAt ?? s.checkInAt;
+      const closeAt = lastActivity < endOfDay ? lastActivity : endOfDay;
       await this.prisma.attendanceSession.update({
         where: { id: s.id },
-        data: { checkOutAt: endOfDay, autoClosed: true, idleSeconds: { increment: idleAdd } },
+        data: { checkOutAt: closeAt, autoClosed: true },
       });
       closed += 1;
     }
@@ -150,8 +156,4 @@ export class AttendanceComputeService {
       .map((r) => ({ checkInAt: r.checkInAt, checkOutAt: r.checkOutAt, idleSeconds: r.idleSeconds }));
   }
 
-  private idleGap(since: Date, until: Date, idleMinutes: number): number {
-    const gapSec = Math.floor((until.getTime() - since.getTime()) / 1000);
-    return gapSec > idleMinutes * 60 ? gapSec : 0;
-  }
 }
