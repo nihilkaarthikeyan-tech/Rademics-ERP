@@ -4,6 +4,7 @@ import type { TaskStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SettingsService } from '../settings/settings.service';
+import { AttendanceService } from '../attendance/attendance.service';
 import { AiGatewayService, AiUnavailableError } from './ai-gateway.service';
 import type { AuthUser } from '../auth/auth-user';
 
@@ -25,6 +26,7 @@ export class AiService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly settings: SettingsService,
+    private readonly attendance: AttendanceService,
     private readonly gateway: AiGatewayService,
   ) {}
 
@@ -80,11 +82,21 @@ export class AiService {
   /** On-topic (ERP_TERMS) but no dedicated retrieval exists yet — see chat()'s note. */
   private looksUnsupported(q: string): boolean {
     const NO_HANDLER_YET = [
-      'leave', 'attendance', 'present', 'absent', 'invoice', 'payment', 'expense',
+      'leave', 'invoice', 'payment', 'expense',
       'budget', 'p&l', 'employee', 'freelanc', 'milestone', 'deliverable',
     ];
     const hasTaskContext = q.includes('task') || q.includes('project') || q.includes('module');
     return !hasTaskContext && NO_HANDLER_YET.some((t) => q.includes(t));
+  }
+
+  private isAttendanceQuestion(q: string): boolean {
+    // 'attend' (not the full word 'attendance') so common typos like "attendace"/
+    // "attendence" still match — confirmed real user input, not hypothetical.
+    return [
+      'attend', 'checked in', 'check in', 'checked out', 'check out', 'present',
+      'absent', 'am i late', 'late today', 'overtime', 'idle time', 'worked today',
+      'clock in', 'clock out',
+    ].some((t) => q.includes(t));
   }
 
   // ── Feature 1: Daily summary, generated once per team per day (Spec §7) ──
@@ -260,10 +272,11 @@ export class AiService {
     // see), refuse — no weather, trivia, or other off-topic answers.
     const ERP_TERMS = [
       'task', 'subtask', 'project', 'module', 'overdue', 'deadline', 'due', 'assign',
-      'workload', 'capacity', 'free', 'availab', 'busy', 'load', 'team', 'attendance',
+      'workload', 'capacity', 'free', 'availab', 'busy', 'load', 'team', 'attend',
       'present', 'absent', 'leave', 'invoice', 'payment', 'expense', 'budget', 'p&l',
       'client', 'report', 'employee', 'freelanc', 'milestone', 'review', 'submit',
       'progress', 'status', 'pending', 'hour', 'estimate', 'deliverable', 'work',
+      'check', 'clock', 'overtime', 'idle',
     ];
     const onTopic = named.length > 0 || ERP_TERMS.some((t) => q.includes(t));
     if (!onTopic) {
@@ -303,6 +316,28 @@ export class AiService {
       answer = rows.length
         ? `By current load: ${rows.map((r) => `${r.name} (${r.open} open, ~${r.load}h)`).join('; ')}. Lowest load first.`
         : 'No team members are in your scope.';
+    } else if (this.isAttendanceQuestion(q)) {
+      // Personal, account-level: always the caller's own record (§7 no leakage — this
+      // never accepts a target user, so it can't be used to read someone else's attendance).
+      const rules = { ...DEFAULT_BUSINESS_RULES, ...(await this.settings.getBusinessRules()) } as Record<string, unknown>;
+      const timezone = (rules.timezone as string) ?? 'Asia/Kolkata';
+      const todayStatus = await this.attendance.today(user);
+      const fmtHours = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.round((seconds % 3600) / 60);
+        return h > 0 ? `${h}h ${m}m` : `${m}m`;
+      };
+      citations.push(`Attendance: ${user.email} — ${todayStatus.date}`);
+      const parts: string[] = [
+        todayStatus.checkedIn
+          ? `You're checked in since ${todayStatus.openSince!.toLocaleTimeString('en-IN', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}.`
+          : 'You are checked out right now.',
+        `Worked today: ${fmtHours(todayStatus.workedSeconds)}.`,
+      ];
+      if (todayStatus.overtimeSeconds > 0) parts.push(`Overtime: ${fmtHours(todayStatus.overtimeSeconds)}.`);
+      if (todayStatus.idleSeconds > 0) parts.push(`Idle: ${fmtHours(todayStatus.idleSeconds)}.`);
+      if (todayStatus.isLate) parts.push('Marked late today.');
+      answer = parts.join(' ');
     } else if (this.looksUnsupported(q)) {
       // ERP_TERMS accepts leave/attendance/finance/employee words as "on-topic" so the
       // assistant doesn't wrongly refuse them, but there's no real retrieval for those
