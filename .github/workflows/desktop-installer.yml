@@ -76,6 +76,14 @@ jobs:
             apps/desktop/release/*.blockmap
           if-no-files-found: error
 
+      - name: Write version.json (drives the website's "Download desktop app" link)
+        if: ${{ inputs.publish }}
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          echo "{\"version\":\"$VERSION\"}" > apps/desktop/release/version.json
+          echo "Publishing version $VERSION"
+
       - name: Publish to the live update feed
         if: ${{ inputs.publish }}
         shell: bash
@@ -92,5 +100,6 @@ jobs:
             apps/desktop/release/ERP-Agent-Setup.exe \
             apps/desktop/release/latest.yml \
             apps/desktop/release/*.blockmap \
+            apps/desktop/release/version.json \
             "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/rademics-erp/desktop-updates/"
-          echo "✔ Published — installed apps will pick this up on their next check (within 4h, or on next launch)."
+          echo "✔ Published — installed apps auto-update within 4h (or on next launch); the website's download link updates immediately."

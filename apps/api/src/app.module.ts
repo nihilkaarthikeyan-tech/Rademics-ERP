@@ -23,6 +23,7 @@ import { FinanceModule } from './finance/finance.module';
 import { AiModule } from './ai/ai.module';
 import { ReportsModule } from './reports/reports.module';
 import { RetentionModule } from './retention/retention.module';
+import { DesktopModule } from './desktop/desktop.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { SentryExceptionFilter } from './observability/sentry.filter';
 import { HealthController } from './health/health.controller';
@@ -57,6 +58,7 @@ import { CapabilityGuard } from './rbac/capability.guard';
     AiModule,
     ReportsModule,
     RetentionModule,
+    DesktopModule,
     ObservabilityModule,
   ],
   controllers: [HealthController],
