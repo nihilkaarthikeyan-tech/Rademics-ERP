@@ -96,7 +96,8 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
-          rsync -az -e "ssh -i ~/.ssh/deploy_key" \
+          # scp, not rsync — windows-latest runners ship OpenSSH but no rsync.
+          scp -i ~/.ssh/deploy_key \
             apps/desktop/release/ERP-Agent-Setup.exe \
             apps/desktop/release/latest.yml \
             apps/desktop/release/*.blockmap \
