@@ -31,7 +31,7 @@ export class DesktopController {
       if (!res.ok) return { version: null, downloadUrl: null };
       const data = (await res.json()) as { version?: string };
       if (!data.version) return { version: null, downloadUrl: null };
-      return { version: data.version, downloadUrl: `${feedUrl}/ERP-Agent-Setup.exe` };
+      return { version: data.version, downloadUrl: `${feedUrl}/Rademics-Work-Monitoring-Setup.exe` };
     } catch (err) {
       this.logger.warn(`Could not reach the desktop update feed: ${(err as Error).message}`);
       return { version: null, downloadUrl: null };

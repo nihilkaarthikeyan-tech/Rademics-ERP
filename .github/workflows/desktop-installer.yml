@@ -11,7 +11,7 @@ name: Desktop Installer
 #   DEPLOY_SSH_KEY / DEPLOY_HOST / DEPLOY_USER — same deploy key as deploy.yml,
 #                           only used when `publish: true` is chosen below.
 #
-# Output: the "ERP-Agent-Setup" workflow artifact is always produced (downloadable
+# Output: the "Rademics-Work-Monitoring-Setup" workflow artifact is always produced (downloadable
 # from the run page). With `publish: true`, the installer + update-feed files
 # (latest.yml, .blockmap) are ALSO uploaded to https://api.52digit.com/desktop-updates/
 # — that's the ONLY thing that makes already-installed apps notice a new version
@@ -69,9 +69,9 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ERP-Agent-Setup
+          name: Rademics-Work-Monitoring-Setup
           path: |
-            apps/desktop/release/ERP-Agent-Setup.exe
+            apps/desktop/release/Rademics-Work-Monitoring-Setup.exe
             apps/desktop/release/latest.yml
             apps/desktop/release/*.blockmap
           if-no-files-found: error
@@ -98,7 +98,7 @@ jobs:
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
           # scp, not rsync — windows-latest runners ship OpenSSH but no rsync.
           scp -i ~/.ssh/deploy_key \
-            apps/desktop/release/ERP-Agent-Setup.exe \
+            apps/desktop/release/Rademics-Work-Monitoring-Setup.exe \
             apps/desktop/release/latest.yml \
             apps/desktop/release/*.blockmap \
             apps/desktop/release/version.json \

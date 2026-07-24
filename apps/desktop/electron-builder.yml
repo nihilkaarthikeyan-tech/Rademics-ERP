@@ -24,7 +24,7 @@ publish:
 
 win:
   target: nsis
-  artifactName: 'ERP-Agent-Setup.${ext}'
+  artifactName: 'Rademics-Work-Monitoring-Setup.${ext}'
   icon: assets/icon.png
 
 nsis:
