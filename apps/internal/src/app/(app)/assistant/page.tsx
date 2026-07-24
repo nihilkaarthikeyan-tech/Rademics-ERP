@@ -28,7 +28,11 @@ export default function AssistantPage() {
       const res = await apiFetch<ChatResponse>('/ai/chat', { method: 'POST', body: JSON.stringify({ question }) });
       setTurns((t) => [...t, { role: 'assistant', text: res.text, aiGenerated: res.aiGenerated, citations: res.citations }]);
     } catch (err) {
-      const msg = err instanceof ApiError && err.status === 429 ? 'Daily AI limit reached. Try again tomorrow.' : err instanceof ApiError ? err.message : 'Something went wrong';
+      // Raw server/validation messages read like errors in a chat — keep it human.
+      const msg =
+        err instanceof ApiError && err.status === 429
+          ? 'Daily AI limit reached. Try again tomorrow.'
+          : "Sorry, I couldn't process that — try rephrasing your question.";
       setError(msg);
     } finally {
       setBusy(false);

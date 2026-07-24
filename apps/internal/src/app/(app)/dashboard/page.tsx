@@ -48,12 +48,10 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {CAN_CHECK_IN.includes(me.role) ? (
-        <>
-          <AttendanceCard />
-          <DesktopAppCard />
-        </>
-      ) : null}
+      {CAN_CHECK_IN.includes(me.role) ? <AttendanceCard /> : null}
+
+      {/* Everyone sees the app download — Super Admin included (they distribute it). */}
+      {me.role !== 'CLIENT' ? <DesktopAppCard /> : null}
 
       {/* Studio overview — self-gating: renders only for roles with reports access. */}
       <DashboardOverview />

@@ -256,8 +256,19 @@ export class AiService {
   // ── Feature 4: Scoped chat assistant — read-only, cited, refuses out-of-scope (Spec §7) ──
   async chat(question: string, user: AuthUser, meta: Meta) {
     await this.enforceRateLimit(user);
+    const q = question.toLowerCase().trim();
+
+    // Greetings/small-talk get a friendly orientation, not a refusal (or worse,
+    // a validation error) — first impressions decide whether people use this at all.
+    const GREETINGS = ['hi', 'hello', 'hey', 'hai', 'yo', 'hlo', 'good morning', 'good afternoon', 'good evening', 'thanks', 'thank you', 'ok', 'okay'];
+    if (GREETINGS.some((g) => q === g || q === `${g}!` || q === `${g}?` || q.startsWith(`${g} `))) {
+      return this.label(
+        'Hi! I can help with your work here — try "what\'s my attendance today?", "how many open tasks do I have?", "what\'s overdue?", or "who is free this week?".',
+        false,
+      );
+    }
+
     const scoped = await this.scopedProjectIds(user);
-    const q = question.toLowerCase();
 
     // Refuse if the question names a project the user cannot see (§7 no leakage).
     const allProjects = await this.prisma.project.findMany({ select: { id: true, name: true } });

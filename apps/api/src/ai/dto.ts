@@ -19,8 +19,10 @@ export class AssignmentSuggestionDto {
 }
 
 export class ChatDto {
+  // Min 1, not 3: "hi" must reach the service's greeting handler, not bounce
+  // off validation with a raw "must be longer than 3 characters" in the chat.
   @IsString()
-  @MinLength(3)
+  @MinLength(1)
   @MaxLength(500)
   question!: string;
 }
