@@ -8,6 +8,7 @@ export const IpcChannel = {
   AuthLogin: 'auth:login',
   AuthLogout: 'auth:logout',
   AuthGetState: 'auth:getState',
+  AuthGetSavedLogin: 'auth:getSavedLogin',
   AuthStateChanged: 'auth:stateChanged',
   AttendanceCheckIn: 'attendance:checkIn',
   AttendanceCheckOut: 'attendance:checkOut',
@@ -33,6 +34,13 @@ export interface LoginPayload {
   email: string;
   password: string;
   captchaToken: string | null;
+  /** Save the credentials (password OS-encrypted) so the next sign-in is prefilled. */
+  remember?: boolean;
+}
+
+export interface SavedLogin {
+  email: string;
+  password: string | null;
 }
 
 export interface LoginResult {
@@ -71,6 +79,7 @@ export interface RademicsDesktopBridge {
   login(payload: LoginPayload): Promise<LoginResult>;
   logout(): Promise<void>;
   getAuthState(): Promise<AuthState>;
+  getSavedLogin(): Promise<SavedLogin>;
   onAuthStateChanged(cb: (state: AuthState) => void): () => void;
   checkIn(): Promise<{ ok: boolean; error?: string }>;
   checkOut(): Promise<{ ok: boolean; error?: string }>;

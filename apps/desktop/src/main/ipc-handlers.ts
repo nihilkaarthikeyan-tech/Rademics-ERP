@@ -3,6 +3,7 @@ import type { AuthStore } from './auth-store';
 import type { StatusPoller } from './status-poller';
 import { ApiError } from './api-client';
 import { restartToInstallUpdate } from './updater';
+import { loadSavedLogin, saveLogin } from './saved-login';
 import { IpcChannel, type LoginPayload, type LoginResult } from '../shared/ipc';
 
 function errorMessage(err: unknown): string {
@@ -21,11 +22,15 @@ export function registerIpcHandlers(opts: {
   ipcMain.handle(IpcChannel.AuthLogin, async (_event, payload: LoginPayload): Promise<LoginResult> => {
     try {
       await auth.login(payload.email, payload.password, payload.captchaToken);
+      // Remember only after a SUCCESSFUL login (never store a wrong password).
+      await saveLogin(payload.email, payload.password, payload.remember ?? true).catch(() => undefined);
       return { ok: true };
     } catch (err) {
       return { ok: false, error: errorMessage(err) };
     }
   });
+
+  ipcMain.handle(IpcChannel.AuthGetSavedLogin, () => loadSavedLogin());
 
   ipcMain.handle(IpcChannel.AuthLogout, async () => {
     await auth.logout();

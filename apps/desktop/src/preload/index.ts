@@ -5,6 +5,7 @@ import {
   type LoginPayload,
   type LoginResult,
   type RademicsDesktopBridge,
+  type SavedLogin,
   type StatusUpdatePayload,
   type UpdateStatus,
 } from '../shared/ipc';
@@ -15,6 +16,8 @@ const bridge: RademicsDesktopBridge = {
   logout: (): Promise<void> => ipcRenderer.invoke(IpcChannel.AuthLogout),
 
   getAuthState: (): Promise<AuthState> => ipcRenderer.invoke(IpcChannel.AuthGetState),
+
+  getSavedLogin: (): Promise<SavedLogin> => ipcRenderer.invoke(IpcChannel.AuthGetSavedLogin),
 
   onAuthStateChanged: (cb: (state: AuthState) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: AuthState) => cb(state);

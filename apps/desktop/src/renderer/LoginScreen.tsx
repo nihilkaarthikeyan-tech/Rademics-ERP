@@ -1,11 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Card, Input, Label } from '@rademics/ui';
 
 export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Prefill the last successful sign-in (password comes back decrypted from the
+  // OS-encrypted store only on this user's own Windows account).
+  useEffect(() => {
+    void window.rademicsDesktop.getSavedLogin().then((saved) => {
+      if (saved.email) setEmail(saved.email);
+      if (saved.password) setPassword(saved.password);
+    });
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -13,7 +23,7 @@ export function LoginScreen() {
     setLoading(true);
     try {
       // No CAPTCHA in the native app — the server trusts the desktop key instead.
-      const res = await window.rademicsDesktop.login({ email, password, captchaToken: null });
+      const res = await window.rademicsDesktop.login({ email, password, captchaToken: null, remember });
       if (!res.ok) setError(res.error ?? 'Invalid email or password');
     } finally {
       setLoading(false);
@@ -61,6 +71,16 @@ export function LoginScreen() {
             required
           />
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 accent-brand-navy"
+          />
+          Remember me on this computer
+        </label>
 
         {error ? (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600" role="alert">
