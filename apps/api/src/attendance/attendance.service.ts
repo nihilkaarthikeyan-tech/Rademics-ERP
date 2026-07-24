@@ -48,6 +48,7 @@ export class AttendanceService {
     return {
       workingDays: (r.workingDays as number[]) ?? [1, 2, 3, 4, 5, 6],
       lateThreshold: (r.lateThreshold as string) ?? '09:15',
+      workEnd: (r.workEnd as string) ?? '18:00',
       halfDayUnderHours: (r.halfDayUnderHours as number) ?? 4,
       overtimeOverHours: (r.overtimeOverHours as number) ?? 9,
       idleMinutes: (r.idleMinutes as number) ?? 2,
@@ -197,6 +198,7 @@ export class AttendanceService {
       checkedIn: Boolean(openSession),
       openSince: openSession?.checkInAt ?? null,
       workedSeconds: marks.workedSeconds,
+      overtimeSeconds: marks.overtimeSeconds,
       idleSeconds: marks.idleSeconds,
       isLate: marks.isLate,
       status: openSession ? 'IN_PROGRESS' : marks.status,

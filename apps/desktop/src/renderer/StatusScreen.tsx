@@ -118,6 +118,14 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
                   {fmtDuration(status?.idleSeconds ?? 0)}
                 </div>
               </div>
+              {status?.overtimeSeconds ? (
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-400">Overtime</div>
+                  <div className="text-2xl font-semibold tabular-nums text-amber-600">
+                    {fmtDuration(status.overtimeSeconds)}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 

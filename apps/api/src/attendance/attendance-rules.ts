@@ -11,6 +11,7 @@ export type AttendanceDayStatus = 'PRESENT' | 'HALF_DAY' | 'ABSENT' | 'WEEKLY_OF
 export interface AttendanceRules {
   workingDays: number[]; // JS weekday numbers, 0=Sun … 6=Sat (default Mon–Sat = [1..6])
   lateThreshold: string; // 'HH:MM' in company tz
+  workEnd: string; // 'HH:MM' in company tz — the shift-end boundary for overtime (§4)
   halfDayUnderHours: number;
   overtimeOverHours: number;
   idleMinutes: number;
@@ -109,9 +110,41 @@ export function weekdayOfLocalDate(dateKey: string, timeZone: string): number {
   return zonedParts(new Date(`${dateKey}T12:00:00Z`), timeZone).weekday;
 }
 
-function sessionSeconds(s: SessionInput): number {
-  if (!s.checkOutAt) return 0; // still open — not counted until closed/auto-closed
-  return Math.max(0, Math.round((s.checkOutAt.getTime() - s.checkInAt.getTime()) / 1000));
+/**
+ * The UTC instant of `hhmm` local time on the same calendar day (in `timeZone`)
+ * that `instant` falls on. Used to find the shift-end boundary for a session.
+ */
+export function localTimeInstantUtc(instant: Date, timeZone: string, hhmm: string): Date {
+  const p = zonedParts(instant, timeZone);
+  const localAsUtc = Date.UTC(p.year, p.month - 1, p.day, 0, 0, 0) + p.secondsOfDay * 1000;
+  const offsetMs = localAsUtc - instant.getTime();
+  const targetLocalAsUtc = Date.UTC(p.year, p.month - 1, p.day, 0, 0, 0) + timeToSeconds(hhmm) * 1000;
+  return new Date(targetLocalAsUtc - offsetMs);
+}
+
+/**
+ * Splits one session into regular vs. overtime seconds at the configured shift-end
+ * boundary (Spec §4, 2026-07-21 decision): only time worked PAST `rules.workEnd`
+ * counts as overtime — arriving early doesn't earn or lose anything, it's just
+ * normal work. The boundary is anchored to the check-in's calendar day, so a
+ * session still open right now (checkOutAt substituted with "now" by the caller)
+ * naturally reports live overtime once it crosses that boundary.
+ */
+function splitSessionSeconds(s: SessionInput, rules: AttendanceRules): { regular: number; overtime: number } {
+  if (!s.checkOutAt) return { regular: 0, overtime: 0 }; // still open — not counted until closed/auto-closed
+  const start = s.checkInAt;
+  const end = s.checkOutAt;
+  if (end <= start) return { regular: 0, overtime: 0 };
+
+  const workEndInstant = localTimeInstantUtc(start, rules.timezone, rules.workEnd);
+
+  const regularEnd = end < workEndInstant ? end : workEndInstant;
+  const regular = Math.max(0, Math.round((regularEnd.getTime() - start.getTime()) / 1000));
+
+  const overtimeStart = start > workEndInstant ? start : workEndInstant;
+  const overtime = Math.max(0, Math.round((end.getTime() - overtimeStart.getTime()) / 1000));
+
+  return { regular, overtime };
 }
 
 /**
@@ -125,16 +158,15 @@ export function computeDayMarks(
 ): DayMarks {
   const isWorkingDay = rules.workingDays.includes(weekday);
 
-  const workedSeconds = sessions.reduce((sum, s) => sum + sessionSeconds(s), 0);
+  const splits = sessions.map((s) => splitSessionSeconds(s, rules));
+  const workedSeconds = splits.reduce((sum, x) => sum + x.regular, 0);
+  const overtimeSeconds = splits.reduce((sum, x) => sum + x.overtime, 0);
   const idleSeconds = sessions.reduce((sum, s) => sum + Math.max(0, s.idleSeconds), 0);
 
   const firstCheckInAt = sessions.reduce<Date | null>((earliest, s) => {
     if (!earliest || s.checkInAt < earliest) return s.checkInAt;
     return earliest;
   }, null);
-
-  const overtimeThreshold = rules.overtimeOverHours * 3600;
-  const overtimeSeconds = Math.max(0, workedSeconds - overtimeThreshold);
 
   let isLate = false;
   if (isWorkingDay && firstCheckInAt) {

@@ -10,6 +10,7 @@ import {
 const RULES: AttendanceRules = {
   workingDays: [1, 2, 3, 4, 5, 6], // Mon–Sat
   lateThreshold: '09:15',
+  workEnd: '18:00',
   halfDayUnderHours: 4,
   overtimeOverHours: 9,
   idleMinutes: 5,
@@ -62,9 +63,30 @@ describe('late / half-day / overtime (§4)', () => {
     expect(marks.status).toBe('HALF_DAY');
   });
 
-  it('accrues overtime beyond the threshold', () => {
-    const marks = computeDayMarks([session(3, 30, 14, 30)], RULES, 1); // 11h worked
-    expect(marks.overtimeSeconds).toBe(2 * 3600); // 11h − 9h
+  it('accrues overtime only for time worked past the shift-end boundary (workEnd)', () => {
+    // check-in 09:00 IST, check-out 20:00 IST (8pm) → regular 09:00–18:00 (9h), overtime 18:00–20:00 (2h)
+    const marks = computeDayMarks([session(3, 30, 14, 30)], RULES, 1);
+    expect(marks.workedSeconds).toBe(9 * 3600);
+    expect(marks.overtimeSeconds).toBe(2 * 3600);
+  });
+
+  it('does not count early arrival as overtime — it is just normal work', () => {
+    // check-in 07:00 IST (2h early), check-out 18:00 IST → all 11h is regular, no overtime
+    const marks = computeDayMarks([session(1, 30, 12, 30)], RULES, 1);
+    expect(marks.workedSeconds).toBe(11 * 3600);
+    expect(marks.overtimeSeconds).toBe(0);
+  });
+
+  it('an open session live-accrues overtime once it crosses workEnd', () => {
+    // checked in 09:00 IST, still open at "now" = 19:00 IST (1h past 18:00 workEnd)
+    const nowPastWorkEnd = utc(13, 30); // 19:00 IST
+    const marks = computeDayMarks(
+      [{ checkInAt: utc(3, 30), checkOutAt: nowPastWorkEnd, idleSeconds: 0 }],
+      RULES,
+      1,
+    );
+    expect(marks.workedSeconds).toBe(9 * 3600);
+    expect(marks.overtimeSeconds).toBe(1 * 3600);
   });
 });
 

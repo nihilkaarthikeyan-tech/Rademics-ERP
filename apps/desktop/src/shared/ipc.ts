@@ -43,6 +43,7 @@ export interface TodayStatus {
   checkedIn: boolean;
   openSince: string | null;
   workedSeconds: number;
+  overtimeSeconds: number;
   idleSeconds: number;
   isLate: boolean;
   status: string;

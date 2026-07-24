@@ -23,7 +23,7 @@ export default function AdminSettingsPage() {
         ['Work hours', `${rules.workStart} – ${rules.workEnd} (${rules.timezone})`],
         ['Late threshold', String(rules.lateThreshold)],
         ['Half-day under', `${rules.halfDayUnderHours} h`],
-        ['Overtime over', `${rules.overtimeOverHours} h`],
+        ['Overtime', `Time worked past ${rules.workEnd} (shift end)`],
         ['Session timeout (Admin/Finance)', `${rules.sessionTimeoutAdminFinanceMinutes} min`],
         ['Invoice numbering', String(rules.invoiceNumberFormat)],
         ['Default GST', `${rules.defaultGstPercent}%`],
