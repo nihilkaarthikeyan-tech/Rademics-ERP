@@ -34,10 +34,16 @@ function timeLabel(iso: string): string {
   return `${d.toLocaleDateString(undefined, opts)}, ${time}`;
 }
 
+interface ActivePerson {
+  id: string;
+  name: string;
+}
+
 export default function ChatPage() {
   const me = useMe();
   const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [active, setActive] = useState<ActivePerson[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +53,18 @@ export default function ChatPage() {
   const markRead = useCallback(() => {
     apiFetch('/chat/read', { method: 'POST', body: '{}' }).catch(() => undefined);
   }, []);
+
+  // Who's active = who is checked in for work right now (same definition the
+  // dashboard uses). Refreshed live on every check-in/out event.
+  const loadActive = useCallback(() => {
+    apiFetch<ActivePerson[]>('/chat/active')
+      .then(setActive)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void loadActive();
+  }, [loadActive]);
 
   useEffect(() => {
     apiFetch<{ items: ChatMessage[]; hasMore: boolean }>('/chat/messages')
@@ -68,10 +86,11 @@ export default function ChatPage() {
       });
       markRead(); // the room is open on screen — nothing here is "unread"
     });
+    socket.on('presence:update', () => loadActive());
     return () => {
       socket.close();
     };
-  }, [markRead]);
+  }, [markRead, loadActive]);
 
   // Keep the newest message in view unless the reader scrolled up on purpose.
   useEffect(() => {
@@ -132,9 +151,36 @@ export default function ChatPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-7.5rem)] max-w-3xl flex-col">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Chat</h1>
-        <p className="mt-1 text-sm text-slate-500">The company room — everyone on staff is here.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">Chat</h1>
+          <p className="mt-1 text-sm text-slate-500">The company room — everyone on staff is here.</p>
+        </div>
+        {/* Active = checked in for work right now, live-updated on check-in/out. */}
+        <div className="flex items-center gap-2">
+          {active.length === 0 ? (
+            <span className="text-xs text-slate-400">Nobody is checked in right now</span>
+          ) : (
+            <>
+              <div className="flex -space-x-1.5">
+                {active.slice(0, 6).map((p) => (
+                  <span
+                    key={p.id}
+                    title={p.id === me.id ? `${p.name} (you)` : p.name}
+                    className="relative inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-[11px] font-semibold text-accent ring-2 ring-white"
+                  >
+                    {initials(p.name)}
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-success ring-2 ring-white" />
+                  </span>
+                ))}
+              </div>
+              <span className="text-xs text-slate-500">
+                {active.length > 6 ? `+${active.length - 6} more · ` : ''}
+                {active.length} active
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col rounded-xl border border-white/70 bg-white/60 shadow-glass backdrop-blur-xl">

@@ -40,4 +40,9 @@ export class ChatController {
   unreadCount(@CurrentUser() user: AuthUser) {
     return this.chat.unreadCount(user);
   }
+
+  @Get('active')
+  activeNow(@CurrentUser() user: AuthUser) {
+    return this.chat.activeNow(user);
+  }
 }

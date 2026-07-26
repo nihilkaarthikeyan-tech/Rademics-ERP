@@ -68,6 +68,26 @@ export class ChatService {
     return { lastReadAt };
   }
 
+  /**
+   * Who is active right now — "active" means checked in for work (an open
+   * attendance session), the same definition the rest of the system uses.
+   * Open to all staff (unlike /attendance/online, which is HR-scoped and
+   * carries emails/teams): the room shows names only.
+   */
+  async activeNow(user: AuthUser) {
+    this.assertStaff(user);
+    const sessions = await this.prisma.attendanceSession.findMany({
+      where: { checkOutAt: null },
+      select: { user: { select: { id: true, name: true } } },
+      orderBy: { checkInAt: 'asc' },
+    });
+    // One entry per person even if data ever holds two open sessions.
+    const seen = new Set<string>();
+    return sessions
+      .filter((s) => !seen.has(s.user.id) && seen.add(s.user.id))
+      .map((s) => ({ id: s.user.id, name: s.user.name }));
+  }
+
   async unreadCount(user: AuthUser): Promise<{ count: number }> {
     this.assertStaff(user);
     const state = await this.prisma.chatReadState.findUnique({
