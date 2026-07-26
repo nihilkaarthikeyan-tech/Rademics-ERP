@@ -45,8 +45,11 @@ export class TasksController {
     return this.tasks.listMine(user);
   }
 
+  // No declared capability: authority over a task is per-PROJECT since the PM
+  // role was removed (2026-07-25) — the caller may hold tasks.create by role
+  // (HR/SA) or by being appointed to this project. A fixed capability key cannot
+  // express that, so the service checks it (assertProjectAuthority).
   @Post()
-  @RequireCapability('tasks.create')
   create(@Body() dto: CreateTaskDto, @CurrentUser() actor: AuthUser, @Req() req: Request) {
     return this.tasks.create(dto, actor, reqMeta(req));
   }
@@ -58,8 +61,8 @@ export class TasksController {
     return this.tasks.get(id, user);
   }
 
+  // No declared capability — see the note on create(): checked per project.
   @Patch(':id')
-  @RequireCapability('tasks.create')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTaskDto,
@@ -69,8 +72,9 @@ export class TasksController {
     return this.tasks.update(id, dto, actor, reqMeta(req));
   }
 
+  // No declared capability — see the note on create(): the §6 state machine's
+  // PROJECT_MANAGER actor is resolved against this task's project in the service.
   @Post(':id/assign')
-  @RequireCapability('tasks.assign')
   assign(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AssignTaskDto,
@@ -111,10 +115,14 @@ export class TasksController {
   }
 
   // ── Checklist ──
+  // No declared capability — see the note on create(): checked per project.
   @Post(':id/checklist')
-  @RequireCapability('tasks.create')
-  addChecklistItem(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChecklistItemDto) {
-    return this.tasks.addChecklistItem(id, dto);
+  addChecklistItem(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChecklistItemDto,
+    @CurrentUser() actor: AuthUser,
+  ) {
+    return this.tasks.addChecklistItem(id, dto, actor);
   }
 
   @Post(':id/checklist/:itemId/toggle')

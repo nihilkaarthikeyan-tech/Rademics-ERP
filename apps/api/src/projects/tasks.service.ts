@@ -62,6 +62,38 @@ export class TasksService {
     private readonly notifications: NotificationsService,
   ) {}
 
+  /**
+   * Project authority (2026-07-25 decision, replaces the PM role).
+   *
+   * A capability passes either because the caller's ROLE holds it outright
+   * (HR / Super Admin), or because the caller is the person APPOINTED to this
+   * project — and then only for this project. Anyone can be appointed
+   * regardless of role, so this is deliberately not expressible in the
+   * role matrix; the guard cannot answer it and the service must.
+   *
+   * Callers are responsible for passing the project the action targets.
+   */
+  private async assertProjectAuthority(
+    user: AuthUser,
+    projectId: string,
+    capability: 'tasks.create' | 'tasks.assign' | 'tasks.review',
+  ): Promise<void> {
+    const grant = await this.capabilities.resolveGrant(user.role, user.resourceType, capability);
+    if (grant === Grant.ALLOW) return;
+
+    const appointed = await this.prisma.project.count({ where: { id: projectId, pmId: user.id } });
+    if (appointed) return;
+
+    throw new ForbiddenException(
+      'Only the project manager, HR or a Super Admin can do this on this project',
+    );
+  }
+
+  /** True when the caller is the appointed manager of the given project. */
+  private async isProjectManager(userId: string, projectId: string): Promise<boolean> {
+    return (await this.prisma.project.count({ where: { id: projectId, pmId: userId } })) > 0;
+  }
+
   // ── Create (Spec §5.4, §24) ──
   async create(dto: CreateTaskDto, actor: AuthUser, meta: Meta) {
     const project = await this.prisma.project.findUnique({
@@ -69,6 +101,7 @@ export class TasksService {
       select: { id: true },
     });
     if (!project) throw new NotFoundException('Project not found');
+    await this.assertProjectAuthority(actor, dto.projectId, 'tasks.create');
 
     if (dto.estimatedHours !== undefined && !isQuarterHour(dto.estimatedHours)) {
       throw new BadRequestException('Estimated hours must be in quarter-hour steps (§24)');
@@ -119,6 +152,14 @@ export class TasksService {
       after: { title: task.title, projectId: task.projectId },
       ...meta,
     });
+
+    // One-step create-and-assign (2026-07-25): the DTO has always carried an
+    // optional assigneeId but create() dropped it, forcing a second trip through
+    // the assign screen. Delegating keeps every §24 rule (can-hold, freelancer,
+    // watcher, history, notification) in exactly one place.
+    if (dto.assigneeId) {
+      return this.assign(task.id, dto.assigneeId, actor, meta);
+    }
     return task;
   }
 
@@ -181,9 +222,10 @@ export class TasksService {
   async update(id: string, dto: UpdateTaskDto, actor: AuthUser, meta: Meta) {
     const existing = await this.prisma.task.findUnique({
       where: { id },
-      select: { id: true, clientFacing: true, deadline: true },
+      select: { id: true, clientFacing: true, deadline: true, projectId: true },
     });
     if (!existing) throw new NotFoundException('Task not found');
+    await this.assertProjectAuthority(actor, existing.projectId, 'tasks.create');
 
     if (dto.estimatedHours !== undefined && !isQuarterHour(dto.estimatedHours)) {
       throw new BadRequestException('Estimated hours must be in quarter-hour steps (§24)');
@@ -290,9 +332,18 @@ export class TasksService {
       'tasks.update_own_status',
     );
     if (canHold === Grant.DENY) throw new BadRequestException('That user cannot be assigned tasks');
-    // Freelancer assignable only by PM (§24).
-    if (assignee.resourceType === 'FREELANCE' && actor.role !== 'PM' && actor.role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('Only a PM may assign a freelancer');
+    // Freelancers may only be brought onto a project by whoever runs it (§24) —
+    // the appointed project manager, HR, or a Super Admin.
+    if (assignee.resourceType === 'FREELANCE') {
+      const mayUseFreelancers =
+        actor.role === 'SUPER_ADMIN' ||
+        actor.role === 'HR' ||
+        (await this.isProjectManager(actor.id, task.projectId));
+      if (!mayUseFreelancers) {
+        throw new ForbiddenException(
+          'Only the project manager, HR or a Super Admin may assign a freelancer',
+        );
+      }
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -459,7 +510,14 @@ export class TasksService {
   }
 
   // ── Checklist (Spec §5.4) ──
-  async addChecklistItem(taskId: string, dto: ChecklistItemDto) {
+  async addChecklistItem(taskId: string, dto: ChecklistItemDto, actor: AuthUser) {
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { projectId: true },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    await this.assertProjectAuthority(actor, task.projectId, 'tasks.create');
+
     const count = await this.prisma.checklistItem.count({ where: { taskId } });
     return this.prisma.checklistItem.create({
       data: { taskId, text: dto.text.trim(), position: count },
@@ -525,14 +583,20 @@ export class TasksService {
   private assertActor(
     actors: readonly TransitionActor[],
     user: AuthUser,
-    task: { assigneeId: string | null },
+    task: { assigneeId: string | null; project: { pmId: string | null } },
   ): void {
     const ok = actors.some((a) => {
       switch (a) {
         case 'ASSIGNEE':
           return task.assigneeId === user.id;
-        case 'PM':
-          return user.role === 'PM' || user.role === 'SUPER_ADMIN';
+        // Not a role: the person appointed to THIS task's project, plus the two
+        // roles that run projects company-wide (2026-07-25, PM role removed).
+        case 'PROJECT_MANAGER':
+          return (
+            (task.project.pmId !== null && task.project.pmId === user.id) ||
+            user.role === 'SUPER_ADMIN' ||
+            user.role === 'HR'
+          );
         case 'TEAM_LEAD':
           return user.role === 'TEAM_LEAD' || user.role === 'SUPER_ADMIN';
         case 'FINANCE':

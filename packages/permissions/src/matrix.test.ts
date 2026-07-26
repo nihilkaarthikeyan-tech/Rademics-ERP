@@ -24,25 +24,49 @@ describe('Role & Permission Matrix (Spec §3)', () => {
   const cases: Array<[string, Role, Grant]> = [
     ['people.salary.view_edit', Role.FINANCE, Grant.SCOPED],
     ['people.salary.view_edit', Role.HR, Grant.ALLOW],
-    ['people.salary.view_edit', Role.PM, Grant.DENY],
+    ['people.salary.view_edit', Role.TEAM_LEAD, Grant.DENY],
     ['attendance.check_in_out', Role.SUPER_ADMIN, Grant.DENY],
     ['attendance.check_in_out', Role.FINANCE, Grant.ALLOW],
-    ['attendance.team.view', Role.PM, Grant.SCOPED],
+    ['attendance.team.view', Role.TEAM_LEAD, Grant.SCOPED],
     ['tasks.comment', Role.CLIENT, Grant.SCOPED],
     ['tasks.update_own_status', Role.CLIENT, Grant.DENY],
     ['files.upload', Role.CLIENT, Grant.SCOPED],
-    ['files.upload', Role.HR, Grant.DENY],
     ['projects.view_own_team', Role.TEAM_LEAD, Grant.SCOPED],
     ['portal.deliverable.approve', Role.CLIENT, Grant.SCOPED],
-    ['finance.expenses.log', Role.PM, Grant.SCOPED],
     ['reports.dashboard.view', Role.TEAM_LEAD, Grant.SCOPED],
     ['audit.log.view', Role.SUPER_ADMIN, Grant.ALLOW],
     ['audit.log.view', Role.HR, Grant.DENY],
     ['admin.settings.manage', Role.SUPER_ADMIN, Grant.ALLOW],
+
+    // PM role removed (2026-07-25): HR now runs projects company-wide.
+    ['projects.create_edit', Role.HR, Grant.ALLOW],
+    ['tasks.create', Role.HR, Grant.ALLOW],
+    ['tasks.assign', Role.HR, Grant.ALLOW],
+    ['tasks.review', Role.HR, Grant.ALLOW],
+    ['files.upload', Role.HR, Grant.ALLOW],
+    // ...but people-powers stay on reporting lines, and money stays with Finance.
+    ['finance.expenses.log', Role.HR, Grant.DENY],
+    ['leave.approve_team', Role.TEAM_LEAD, Grant.SCOPED],
+    // Nobody but Super Admin may hand out roles.
+    ['people.roles.assign', Role.HR, Grant.DENY],
   ];
 
   it.each(cases)('%s / %s = %s', (key, role, expected) => {
     expect(PERMISSION_MATRIX[key as keyof typeof PERMISSION_MATRIX][role]).toBe(expected);
+  });
+
+  it('has exactly six roles — PM is an appointment, not a role (2026-07-25)', () => {
+    expect(ROLE_ORDER).toHaveLength(6);
+    expect(ROLE_ORDER).not.toContain('PM');
+    expect(Object.keys(Role)).not.toContain('PM');
+  });
+
+  it('every seed row has one grant per role', () => {
+    // Guards the 7→6 column drop: a stale 7-char row would silently shift every
+    // grant after the removed PM column onto the wrong role.
+    for (const key of CAPABILITY_KEYS) {
+      expect(Object.keys(PERMISSION_MATRIX[key]), key).toHaveLength(6);
+    }
   });
 
   it('Super Admin can never check in/out (self) — §3', () => {

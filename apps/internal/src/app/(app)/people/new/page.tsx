@@ -11,7 +11,7 @@ interface Option {
   name: string;
 }
 
-const ROLES = ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'CLIENT', 'FINANCE'];
+const ROLES = ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'CLIENT', 'FINANCE'];
 
 export default function NewEmployeePage() {
   const router = useRouter();

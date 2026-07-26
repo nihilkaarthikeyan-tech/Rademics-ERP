@@ -32,16 +32,16 @@ const ALL: 'all' = 'all';
 
 export const NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', roles: ALL, icon: LayoutDashboard, group: 'Workspace' },
-  { label: 'My Work', href: '/my-work', roles: ['HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: ListTodo, group: 'Workspace' },
-  { label: 'Attendance', href: '/attendance', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Clock, group: 'Workspace' },
-  { label: 'Leave', href: '/leave', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: CalendarDays, group: 'Workspace' },
+  { label: 'My Work', href: '/my-work', roles: ['HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: ListTodo, group: 'Workspace' },
+  { label: 'Attendance', href: '/attendance', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Clock, group: 'Workspace' },
+  { label: 'Leave', href: '/leave', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: CalendarDays, group: 'Workspace' },
   { label: 'Desktop Agent', href: '/desktop-agent', roles: ALL, icon: Monitor, group: 'Workspace' },
-  { label: 'Projects', href: '/projects', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: FolderKanban, group: 'Manage' },
+  { label: 'Projects', href: '/projects', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: FolderKanban, group: 'Manage' },
   { label: 'People', href: '/people', roles: ['SUPER_ADMIN', 'HR'], icon: Users, group: 'Manage' },
   { label: 'Clients', href: '/clients', roles: ['SUPER_ADMIN'], icon: Building2, group: 'Manage' },
   { label: 'Finance', href: '/finance', roles: ['SUPER_ADMIN', 'FINANCE'], icon: Wallet, group: 'Manage' },
-  { label: 'Reports', href: '/reports', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: BarChart3, group: 'Insights' },
-  { label: 'AI Assistant', href: '/assistant', roles: ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Sparkles, group: 'Insights' },
+  { label: 'Reports', href: '/reports', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: BarChart3, group: 'Insights' },
+  { label: 'AI Assistant', href: '/assistant', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Sparkles, group: 'Insights' },
   { label: 'Admin', href: '/admin', roles: ['SUPER_ADMIN'], icon: Settings, group: 'Manage' },
   { label: 'Audit Log', href: '/audit', roles: ['SUPER_ADMIN'], icon: ScrollText, group: 'Manage' },
 ];

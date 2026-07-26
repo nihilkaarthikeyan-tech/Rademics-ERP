@@ -272,7 +272,7 @@ export function DashboardOverview() {
                 <tr className="border-t border-white/50 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-slate-400">
                   <th className="px-6 py-2.5 font-semibold">Project</th>
                   <th className="px-6 py-2.5 font-semibold">Client</th>
-                  <th className="px-6 py-2.5 font-semibold">PM</th>
+                  <th className="px-6 py-2.5 font-semibold">Manager</th>
                   <th className="px-6 py-2.5 font-semibold">Completion</th>
                   <th className="px-6 py-2.5 text-right font-semibold">Risk</th>
                 </tr>

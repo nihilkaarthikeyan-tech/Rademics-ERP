@@ -68,7 +68,7 @@ export class ReportsService {
     const rules = await this.rules();
     const weekly = (rules.weeklyCapacityHoursInternal as number) ?? 40;
     const users = await this.prisma.user.findMany({
-      where: { status: 'ACTIVE', role: { in: ['EMPLOYEE', 'TEAM_LEAD', 'PM'] }, ...(scope === 'ALL' ? {} : { id: { in: scope } }) },
+      where: { status: 'ACTIVE', role: { in: ['EMPLOYEE', 'TEAM_LEAD'] }, ...(scope === 'ALL' ? {} : { id: { in: scope } }) },
       select: {
         id: true, name: true, resourceType: true, team: { select: { name: true } },
         assignedTasks: { where: { status: { in: OPEN_STATUSES } }, select: { estimatedHours: true } },
@@ -194,7 +194,7 @@ export class ReportsService {
     const projects = await this.prisma.project.findMany({
       where: scope === 'ALL' ? {} : { id: { in: scope } },
       select: {
-        id: true, name: true, type: true, pm: { select: { name: true } }, clientOrg: { select: { name: true } },
+        id: true, name: true, endDate: true, pm: { select: { name: true } }, clientOrg: { select: { name: true } },
         tasks: { where: { parentTaskId: null }, select: { status: true, deadline: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -214,13 +214,16 @@ export class ReportsService {
       const byStatus = p.tasks.reduce<Record<string, number>>((m, t) => ({ ...m, [t.status]: (m[t.status] ?? 0) + 1 }), {});
 
       rows.push({
-        project: p.name, client: p.clientOrg?.name ?? '—', pm: p.pm?.name ?? '—', type: p.type,
+        // The PROJECT/STREAM flag is gone (2026-07-25): an end date means finite
+        // work, its absence means ongoing — which is what this column now says.
+        project: p.name, client: p.clientOrg?.name ?? '—', pm: p.pm?.name ?? '—',
+        ends: p.endDate ? p.endDate.toISOString().slice(0, 10) : 'Ongoing',
         tasksByStatus: Object.entries(byStatus).map(([s, n]) => `${s}:${n}`).join(' ') || '—',
         overdue, pctComplete: pct, throughputPerWeek: perWeek, risk,
       });
     }
     const columns: ReportColumn[] = [
-      { key: 'project', label: 'Project' }, { key: 'client', label: 'Client' }, { key: 'pm', label: 'PM' }, { key: 'type', label: 'Type' },
+      { key: 'project', label: 'Project' }, { key: 'client', label: 'Client' }, { key: 'pm', label: 'Project manager' }, { key: 'ends', label: 'Ends' },
       { key: 'tasksByStatus', label: 'Tasks by status' }, { key: 'overdue', label: 'Overdue' }, { key: 'pctComplete', label: '% complete' },
       { key: 'throughputPerWeek', label: 'Throughput/wk' }, { key: 'risk', label: 'Risk' },
     ];

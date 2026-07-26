@@ -6,8 +6,8 @@ import { LeaveApprovals } from '@/components/leave/leave-approvals';
 import { TeamCalendar } from '@/components/leave/team-calendar';
 
 // Who approves (leave.approve_team ALLOW/SCOPED) and who can request (leave.request).
-const APPROVER_ROLES = ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD'];
-const REQUEST_ROLES = ['HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'];
+const APPROVER_ROLES = ['SUPER_ADMIN', 'HR', 'TEAM_LEAD'];
+const REQUEST_ROLES = ['HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'];
 
 export default function LeavePage() {
   const me = useMe();

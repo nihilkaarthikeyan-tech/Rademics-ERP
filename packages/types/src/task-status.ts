@@ -30,7 +30,7 @@ export const TaskAction = {
   REASSIGN: 'REASSIGN',
   START_WORK: 'START_WORK',
   SUBMIT: 'SUBMIT',
-  APPROVE_REVIEW: 'APPROVE_REVIEW', // PM/TL approve of Submitted for Review
+  APPROVE_REVIEW: 'APPROVE_REVIEW', // project manager / TL approve of Submitted for Review
   SEND_BACK: 'SEND_BACK',
   CLIENT_APPROVE: 'CLIENT_APPROVE',
   CLIENT_REQUEST_REVISION: 'CLIENT_REQUEST_REVISION',
@@ -42,9 +42,16 @@ export const TaskAction = {
 
 export type TaskAction = (typeof TaskAction)[keyof typeof TaskAction];
 
-/** Who may perform an action (role names align with @rademics/permissions Role). */
+/**
+ * Who may perform an action.
+ *
+ * `PROJECT_MANAGER` is NOT a role (PM was removed on 2026-07-25) — it means
+ * "the person appointed to this task's project, or HR / Super Admin". Every
+ * other actor here is a role name aligning with @rademics/permissions Role,
+ * except ASSIGNEE (the task's own assignee) and CLIENT_APPROVER.
+ */
 export type TransitionActor =
-  | 'PM'
+  | 'PROJECT_MANAGER'
   | 'TEAM_LEAD'
   | 'ASSIGNEE'
   | 'CLIENT_APPROVER'
@@ -68,22 +75,22 @@ export interface TaskTransition {
 
 /** Legal transitions, transcribed verbatim from the §6 table. */
 export const TASK_TRANSITIONS: readonly TaskTransition[] = [
-  { from: TaskStatus.DRAFT, action: TaskAction.ASSIGN, to: TaskStatus.ASSIGNED, actors: ['PM', 'TEAM_LEAD'] },
+  { from: TaskStatus.DRAFT, action: TaskAction.ASSIGN, to: TaskStatus.ASSIGNED, actors: ['PROJECT_MANAGER', 'TEAM_LEAD'] },
   { from: TaskStatus.ASSIGNED, action: TaskAction.ACKNOWLEDGE, to: TaskStatus.ACKNOWLEDGED, actors: ['ASSIGNEE'] },
-  { from: TaskStatus.ASSIGNED, action: TaskAction.REASSIGN, to: TaskStatus.ASSIGNED, actors: ['PM', 'TEAM_LEAD'] },
+  { from: TaskStatus.ASSIGNED, action: TaskAction.REASSIGN, to: TaskStatus.ASSIGNED, actors: ['PROJECT_MANAGER', 'TEAM_LEAD'] },
   { from: TaskStatus.ACKNOWLEDGED, action: TaskAction.START_WORK, to: TaskStatus.IN_PROGRESS, actors: ['ASSIGNEE'] },
   { from: TaskStatus.IN_PROGRESS, action: TaskAction.SUBMIT, to: TaskStatus.SUBMITTED_FOR_REVIEW, actors: ['ASSIGNEE'] },
   {
     from: TaskStatus.SUBMITTED_FOR_REVIEW,
     action: TaskAction.APPROVE_REVIEW,
     conditional: { ifClientFacing: TaskStatus.CLIENT_REVIEW, otherwise: TaskStatus.COMPLETED },
-    actors: ['PM', 'TEAM_LEAD'],
+    actors: ['PROJECT_MANAGER', 'TEAM_LEAD'],
   },
   {
     from: TaskStatus.SUBMITTED_FOR_REVIEW,
     action: TaskAction.SEND_BACK,
     to: TaskStatus.IN_PROGRESS,
-    actors: ['PM', 'TEAM_LEAD'],
+    actors: ['PROJECT_MANAGER', 'TEAM_LEAD'],
     requiresComment: true,
   },
   { from: TaskStatus.CLIENT_REVIEW, action: TaskAction.CLIENT_APPROVE, to: TaskStatus.COMPLETED, actors: ['CLIENT_APPROVER'] },
@@ -95,10 +102,86 @@ export const TASK_TRANSITIONS: readonly TaskTransition[] = [
     requiresComment: true,
   },
   { from: TaskStatus.COMPLETED, action: TaskAction.MARK_INVOICED, to: TaskStatus.INVOICED, actors: ['FINANCE'] },
-  { from: TaskStatus.INVOICED, action: TaskAction.CLOSE, to: TaskStatus.CLOSED, actors: ['PM'] },
-  { from: TaskStatus.COMPLETED, action: TaskAction.CLOSE_WITHOUT_INVOICING, to: TaskStatus.CLOSED, actors: ['PM'] },
-  { from: TaskStatus.DRAFT, action: TaskAction.CANCEL, to: TaskStatus.CANCELLED, actors: ['PM'], requiresComment: true, fromAny: true },
+  { from: TaskStatus.INVOICED, action: TaskAction.CLOSE, to: TaskStatus.CLOSED, actors: ['PROJECT_MANAGER'] },
+  { from: TaskStatus.COMPLETED, action: TaskAction.CLOSE_WITHOUT_INVOICING, to: TaskStatus.CLOSED, actors: ['PROJECT_MANAGER'] },
+  { from: TaskStatus.DRAFT, action: TaskAction.CANCEL, to: TaskStatus.CANCELLED, actors: ['PROJECT_MANAGER'], requiresComment: true, fromAny: true },
 ] as const;
+
+/**
+ * Who the viewer is relative to one task — everything canPerform needs.
+ * `pmId` is the task's project's appointed manager (Project.pmId).
+ */
+export interface TaskViewerCtx {
+  meId: string;
+  meRole: string;
+  assigneeId: string | null;
+  pmId: string | null;
+}
+
+/**
+ * UI mirror of the API's assertActor (apps/api/src/projects/tasks.service.ts).
+ * MUST stay in lockstep with it: the staff app uses this to decide which action
+ * buttons exist at all, so a drift either hides a legal action or renders a
+ * button the server will 403. The parity test in task-status.test.ts walks
+ * every transition — extend it whenever an actor rule changes.
+ *
+ * CLIENT_APPROVER resolves to false here on purpose: client actions belong to
+ * the portal and never render in the staff app.
+ */
+export function canPerform(actors: readonly TransitionActor[], ctx: TaskViewerCtx): boolean {
+  return actors.some((actor) => {
+    switch (actor) {
+      case 'ASSIGNEE':
+        return ctx.assigneeId !== null && ctx.assigneeId === ctx.meId;
+      case 'PROJECT_MANAGER':
+        return (
+          (ctx.pmId !== null && ctx.pmId === ctx.meId) ||
+          ctx.meRole === 'SUPER_ADMIN' ||
+          ctx.meRole === 'HR'
+        );
+      case 'TEAM_LEAD':
+        return ctx.meRole === 'TEAM_LEAD' || ctx.meRole === 'SUPER_ADMIN';
+      case 'FINANCE':
+        return ctx.meRole === 'FINANCE' || ctx.meRole === 'SUPER_ADMIN';
+      case 'CLIENT_APPROVER':
+        return false;
+      default:
+        return false;
+    }
+  });
+}
+
+/**
+ * The transition buttons this viewer may legally press from `status`.
+ * Assign/reassign and cancel are separate affordances (the assign picker and
+ * canCancelTask) and are excluded here.
+ */
+export function visibleTaskActions(
+  status: TaskStatus,
+  ctx: TaskViewerCtx,
+): { action: TaskAction; requiresComment: boolean }[] {
+  return TASK_TRANSITIONS.filter(
+    (t) =>
+      t.from === status &&
+      !t.fromAny &&
+      t.action !== TaskAction.ASSIGN &&
+      t.action !== TaskAction.REASSIGN &&
+      canPerform(t.actors, ctx),
+  ).map((t) => ({ action: t.action, requiresComment: Boolean(t.requiresComment) }));
+}
+
+/**
+ * Cancel is the §6 "Any except Closed" row, restricted to the project's manager
+ * (appointed pm, HR or Super Admin — never Team Lead). Also hidden on CANCELLED:
+ * re-cancelling is legal server-side but meaningless to offer.
+ */
+export function canCancelTask(status: TaskStatus, ctx: TaskViewerCtx): boolean {
+  return (
+    status !== TaskStatus.CLOSED &&
+    status !== TaskStatus.CANCELLED &&
+    canPerform(['PROJECT_MANAGER'], ctx)
+  );
+}
 
 /**
  * Resolve the next status for a (from, action) pair, honouring the client-facing

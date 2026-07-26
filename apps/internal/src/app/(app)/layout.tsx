@@ -16,7 +16,6 @@ import { GlobalSearch } from '@/components/global-search';
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
   HR: 'HR',
-  PM: 'Project Manager',
   TEAM_LEAD: 'Team Lead',
   EMPLOYEE: 'Employee',
   CLIENT: 'Client',

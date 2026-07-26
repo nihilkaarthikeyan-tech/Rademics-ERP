@@ -569,7 +569,15 @@ export class LeaveService {
     throw new ForbiddenException('Not permitted to approve leave');
   }
 
-  /** Initial approver per the §5.7 chain: TL → (TL absent / is TL) PM → (is PM) HR. */
+  /**
+   * Initial approver per the §5.7 chain, now TL → HR (2026-07-25).
+   *
+   * The middle PM rung went with the PM role. It cannot become "the project
+   * manager" instead: leave is owed to a person by their reporting line, and
+   * someone may run several projects or none — so the chain would be ambiguous
+   * or empty exactly when it matters. HR is the top and now the only rung above
+   * a team lead.
+   */
   private async resolveInitialApprover(
     userId: string,
   ): Promise<{ level: LeaveApprovalLevel; approverId: string | null }> {
@@ -579,20 +587,16 @@ export class LeaveService {
     });
     const leadsTeam = (await this.prisma.team.count({ where: { teamLeadId: userId } })) > 0;
 
-    if (user?.role === 'PM') {
-      return { level: 'HR', approverId: await this.resolveApproverForLevel(userId, 'HR') };
-    }
     const tlId = user?.team?.teamLeadId ?? null;
     if (tlId && tlId !== userId && !leadsTeam) {
       return { level: 'TEAM_LEAD', approverId: tlId };
     }
-    // TL absent or requester is a TL → PM level.
-    return { level: 'PM', approverId: await this.resolveApproverForLevel(userId, 'PM') };
+    // No team lead, or the requester IS the team lead → straight to HR.
+    return { level: 'HR', approverId: await this.resolveApproverForLevel(userId, 'HR') };
   }
 
   private nextLevel(level: LeaveApprovalLevel): LeaveApprovalLevel {
-    if (level === 'TEAM_LEAD') return 'PM';
-    return 'HR'; // PM → HR; HR stays HR (top of chain)
+    return 'HR'; // TEAM_LEAD → HR; HR stays HR (top of chain)
   }
 
   private async resolveApproverForLevel(
@@ -606,24 +610,6 @@ export class LeaveService {
       });
       const tl = u?.team?.teamLeadId ?? null;
       return tl && tl !== userId ? tl : null;
-    }
-    if (level === 'PM') {
-      // Climb the org chart: the requester's manager, else their team lead's manager.
-      const u = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          reportingManager: { select: { id: true, role: true } },
-          team: { select: { teamLead: { select: { reportingManager: { select: { id: true, role: true } } } } } },
-        },
-      });
-      for (const cand of [u?.reportingManager, u?.team?.teamLead?.reportingManager]) {
-        if (cand?.role === 'PM' && cand.id !== userId) return cand.id;
-      }
-      const pm = await this.prisma.user.findFirst({
-        where: { role: 'PM', status: 'ACTIVE', id: { not: userId } },
-        select: { id: true },
-      });
-      return pm?.id ?? null;
     }
     // HR: any active HR user; null means the request waits in the HR queue.
     const hr = await this.prisma.user.findFirst({

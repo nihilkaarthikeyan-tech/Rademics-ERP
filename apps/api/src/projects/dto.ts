@@ -15,7 +15,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ProjectType, ProjectStatus, TaskPriority } from '@prisma/client';
+import { ProjectStatus, TaskPriority } from '@prisma/client';
 import { TaskAction } from '@rademics/types';
 
 export class CreateProjectDto {
@@ -23,10 +23,6 @@ export class CreateProjectDto {
   @MinLength(3)
   @MaxLength(200)
   name!: string;
-
-  @IsOptional()
-  @IsEnum(ProjectType)
-  type: ProjectType = ProjectType.PROJECT;
 
   @IsOptional()
   @IsString()
@@ -54,10 +50,6 @@ export class CreateProjectDto {
   @Min(0)
   budgetAmount?: number;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(40)
-  cadence?: string;
 }
 
 export class UpdateProjectDto {
@@ -97,10 +89,6 @@ export class UpdateProjectDto {
   @Min(0)
   budgetAmount?: number;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(40)
-  cadence?: string;
 }
 
 export class CreateModuleDto {

@@ -5,7 +5,7 @@ import { AttendanceCard } from '@/components/attendance-card';
 import { DashboardOverview } from '@/components/dashboard-overview';
 
 // Roles that clock in/out (Spec §3: Super Admin & Client never check in).
-const CAN_CHECK_IN = ['HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'];
+const CAN_CHECK_IN = ['HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'];
 
 function greeting(): string {
   const h = new Date().getHours();

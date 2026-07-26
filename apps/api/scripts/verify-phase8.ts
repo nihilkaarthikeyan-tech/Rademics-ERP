@@ -51,7 +51,7 @@ async function main(): Promise<void> {
   const saToken = await login('admin@rademics.local', 'ChangeMe123!');
   await ensureUser(`fin.${stamp}@rademics.local`, 'FINANCE', 'Password123!');
   const finToken = await login(`fin.${stamp}@rademics.local`, 'Password123!');
-  const pmId = await ensureUser(`pm.${stamp}@rademics.local`, 'PM', 'Password123!');
+  const pmId = await ensureUser(`pm.${stamp}@rademics.local`, 'EMPLOYEE', 'Password123!');
 
   // Client org + user (portal read path).
   const org = await req('/client-orgs', { method: 'POST', token: saToken, body: { name: `FinCo ${stamp}` } });
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   check('P&L estimated labour reconciles (Δ = 5h × 400 = 2000)', Math.round((webAfter.estimatedLaborCost - webBefore.estimatedLaborCost) * 100) / 100 === 2000, `(Δ${webAfter.estimatedLaborCost - webBefore.estimatedLaborCost})`);
 
   // PM cannot log expense on someone else's project (SCOPED §3).
-  const otherProj = await prisma.project.create({ data: { name: `Other ${stamp}`, pmId: (await ensureUser(`pm2.${stamp}@rademics.local`, 'PM', 'Password123!')) } });
+  const otherProj = await prisma.project.create({ data: { name: `Other ${stamp}`, pmId: (await ensureUser(`pm2.${stamp}@rademics.local`, 'EMPLOYEE', 'Password123!')) } });
   const pmToken = await login(`pm.${stamp}@rademics.local`, 'Password123!');
   const pmExpense = await req('/finance/expenses', { method: 'POST', token: pmToken, body: { projectId: otherProj.id, category: 'Travel', amount: 100, spentAt: '2026-06-05' } });
   check('PM cannot expense a project they do not manage -> 403', pmExpense.status === 403, `(${pmExpense.status})`);

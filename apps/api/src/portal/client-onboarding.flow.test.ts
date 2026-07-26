@@ -326,7 +326,7 @@ describe('Permission matrix: who can manage clients vs. use the portal', () => {
     const cap = PERMISSION_MATRIX['portal.users.manage'];
     expect(cap.SUPER_ADMIN).toBe(Grant.ALLOW);
     expect(cap.HR).toBe(Grant.DENY);
-    expect(cap.PM).toBe(Grant.DENY);
+    expect(cap.TEAM_LEAD).toBe(Grant.DENY);
     expect(cap.EMPLOYEE).toBe(Grant.DENY);
     expect(cap.CLIENT).toBe(Grant.DENY);
     expect(cap.FINANCE).toBe(Grant.DENY);
@@ -342,6 +342,10 @@ describe('Permission matrix: who can manage clients vs. use the portal', () => {
   it('only a client can approve a deliverable, and only when scoped (Approver on that project)', () => {
     const approve = PERMISSION_MATRIX['portal.deliverable.approve'];
     expect(approve.CLIENT).toBe(Grant.SCOPED);
-    expect(approve.PM).toBe(Grant.DENY);
+    // No staff role may sign off on the client's behalf — including the two that
+    // now run projects since the PM role was removed (2026-07-25).
+    expect(approve.SUPER_ADMIN).toBe(Grant.DENY);
+    expect(approve.HR).toBe(Grant.DENY);
+    expect(approve.TEAM_LEAD).toBe(Grant.DENY);
   });
 });

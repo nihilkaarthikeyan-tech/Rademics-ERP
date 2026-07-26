@@ -59,7 +59,7 @@ async function main(): Promise<void> {
   const stamp = Date.now();
 
   const saToken = await login('admin@rademics.local', 'ChangeMe123!');
-  const pmId = await ensureUser(`pm.p${stamp}@rademics.local`, 'PM', 'Password123!');
+  const pmId = await ensureUser(`pm.p${stamp}@rademics.local`, 'EMPLOYEE', 'Password123!');
   const empId = await ensureUser(`emp.p${stamp}@rademics.local`, 'EMPLOYEE', 'Password123!');
   const pmToken = await login(`pm.p${stamp}@rademics.local`, 'Password123!');
   const empToken = await login(`emp.p${stamp}@rademics.local`, 'Password123!');

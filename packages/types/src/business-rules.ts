@@ -27,7 +27,7 @@ export const DEFAULT_BUSINESS_RULES = {
   lateThreshold: '09:15', // check-in after = Late [ASSUMED]
   halfDayUnderHours: 4, // worked < 4h = half day [ASSUMED]
   overtimeOverHours: 9, // worked > 9h = overtime [ASSUMED]
-  idleMinutes: 2, // no activity 2 min = idle -> auto checkout; per-role override allowed
+  idleMinutes: 10, // no activity 10 min = idle (session stays open, §5.3 revised)
   threeLatesDeduction: { lateCount: 3, halfDayDeduction: 1 }, // 3 lates/month = 1 half-day [ASSUMED]
 
   // Leave quotas (§4) [ASSUMED]
@@ -57,7 +57,6 @@ export const DEFAULT_BUSINESS_RULES = {
   hourlyCostRates: {
     SUPER_ADMIN: 0,
     HR: 300,
-    PM: 800,
     TEAM_LEAD: 600,
     EMPLOYEE: 400,
     FINANCE: 400,

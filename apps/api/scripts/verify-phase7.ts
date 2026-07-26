@@ -72,11 +72,12 @@ async function main(): Promise<void> {
   const stamp = Date.now();
   const saToken = await login('admin@rademics.local', 'ChangeMe123!');
 
-  // Org: department + team led by a TL; an employee reports to that TL; a PM + HR exist.
+  // Org: department + team led by a TL; an employee reports to that TL; HR exists.
   const tlId = await ensureUser(`tl.${stamp}@rademics.local`, 'TEAM_LEAD', 'Password123!');
-  const pmId = await ensureUser(`pm.${stamp}@rademics.local`, 'PM', 'Password123!');
-  await ensureUser(`hr.${stamp}@rademics.local`, 'HR', 'Password123!');
-  // TL reports to the PM so the chain climbs deterministically TL→PM on escalation.
+  const pmId = await ensureUser(`pm.${stamp}@rademics.local`, 'EMPLOYEE', 'Password123!');
+  // The chain is TL → HR since the PM rung was removed (2026-07-25). This HR user
+  // is who an unactioned request escalates to.
+  const hrId = await ensureUser(`hr.${stamp}@rademics.local`, 'HR', 'Password123!');
   await prisma.user.update({ where: { id: tlId }, data: { reportingManagerId: pmId } });
   const dept = await prisma.department.create({ data: { name: `Dept ${stamp}`, vertical: 'WEB' } });
   const team = await prisma.team.create({ data: { name: `Team ${stamp}`, departmentId: dept.id, teamLeadId: tlId } });
@@ -155,9 +156,11 @@ async function main(): Promise<void> {
   const sweep = await req('/leave/admin/run-escalation', { method: 'POST', token: saToken });
   check('escalation sweep runs', sweep.status < 300, `(${sweep.status})`);
   const escalated = await prisma.leaveRequest.findUnique({ where: { id: esc.json.id } });
-  check('unactioned 48h escalates one level (TEAM_LEAD→PM)', escalated?.currentLevel === 'PM' && escalated?.escalatedCount === 1, `(${escalated?.currentLevel}/${escalated?.escalatedCount})`);
-  check('escalated request re-routes to the PM', escalated?.currentApproverId === pmId, `(${escalated?.currentApproverId})`);
-  const bothNotified = await prisma.notification.count({ where: { type: 'LEAVE_ESCALATED', userId: { in: [emp2Id, pmId] } } });
+  // The PM rung was removed from the chain (2026-07-25): TEAM_LEAD now escalates
+  // straight to HR, which is the top.
+  check('unactioned 48h escalates one level (TEAM_LEAD→HR)', escalated?.currentLevel === 'HR' && escalated?.escalatedCount === 1, `(${escalated?.currentLevel}/${escalated?.escalatedCount})`);
+  check('escalated request re-routes to HR', escalated?.currentApproverId === hrId, `(${escalated?.currentApproverId})`);
+  const bothNotified = await prisma.notification.count({ where: { type: 'LEAVE_ESCALATED', userId: { in: [emp2Id, hrId] } } });
   check('both parties notified on escalation (§5.7)', bothNotified >= 2, `(${bothNotified})`);
 
   // ── 6. Overlap warning within the team (§5.7) ──

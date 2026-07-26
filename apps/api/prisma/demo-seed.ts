@@ -59,7 +59,9 @@ async function main(): Promise<void> {
   const saId = await user('admin.demo@rademics.local', 'Aditi (Super Admin)', 'SUPER_ADMIN');
   const hrId = await user('hr.demo@rademics.local', 'Harish (HR)', 'HR', { employmentStatus: 'ACTIVE', joinDate: new Date('2024-01-15') });
   const finId = await user('finance.demo@rademics.local', 'Farah (Finance)', 'FINANCE', { employmentStatus: 'ACTIVE', joinDate: new Date('2024-02-01') });
-  const pmId = await user('pm.demo@rademics.local', 'Priya (PM)', 'PM', { departmentId: engDept.id, employmentStatus: 'ACTIVE', joinDate: new Date('2024-03-01') });
+  // PM is no longer a role (2026-07-25) — Priya is an ordinary employee who is
+  // APPOINTED to run projects via Project.pmId below.
+  const pmId = await user('pm.demo@rademics.local', 'Priya (Project Manager)', 'EMPLOYEE', { departmentId: engDept.id, employmentStatus: 'ACTIVE', joinDate: new Date('2024-03-01') });
 
   // Team Leads (one per team)
   const tlEditId = await user('tl.editorial@rademics.local', 'Tara (TL Editorial)', 'TEAM_LEAD', { departmentId: pubDept.id, employmentStatus: 'ACTIVE', joinDate: new Date('2024-03-10') });

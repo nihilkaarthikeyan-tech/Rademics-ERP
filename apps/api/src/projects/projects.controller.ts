@@ -18,11 +18,23 @@ export class ProjectsController {
     return this.projects.list(user);
   }
 
-  // Static route declared before ':id' so it is not shadowed by the param route.
+  // Static routes declared before ':id' so they are not shadowed by the param route.
+  //
+  // Auth-only, deliberately: an appointed project manager may be an ordinary
+  // Employee who does NOT hold tasks.assign by role, and would be blocked by the
+  // guard before they could even populate the "Assign to" list. The payload is
+  // just active staff names — the same directory they can already see — and the
+  // assignment itself is authorised per project in TasksService.
   @Get('assignable-users')
-  @RequireCapability('tasks.assign')
   assignableUsers() {
     return this.projects.listAssignableUsers();
+  }
+
+  /** Candidates for a project's manager field — HR/Super Admin appoint from here. */
+  @Get('appointable-managers')
+  @RequireCapability('projects.create_edit')
+  appointableManagers() {
+    return this.projects.listAppointableManagers();
   }
 
   // No declared capability: same §3 scope resolution as list() (service-enforced).
@@ -37,8 +49,9 @@ export class ProjectsController {
     return this.projects.create(dto, actor, reqMeta(req));
   }
 
+  // No declared capability: editing is allowed by role (HR/SA) OR by being the
+  // appointed manager of THIS project — the service decides (2026-07-25).
   @Patch(':id')
-  @RequireCapability('projects.create_edit')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProjectDto,

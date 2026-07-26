@@ -9,7 +9,6 @@ import { useMe } from '@/lib/me-context';
 interface ProjectRow {
   id: string;
   name: string;
-  type: 'PROJECT' | 'STREAM';
   status: string;
   pm: { id: string; name: string } | null;
   client: { id: string; name: string } | null;
@@ -23,7 +22,7 @@ const STATUS_TONE: Record<string, 'green' | 'amber' | 'slate' | 'red'> = {
   CLOSED: 'slate',
 };
 
-const CAN_CREATE = ['SUPER_ADMIN', 'PM'];
+const CAN_CREATE = ['SUPER_ADMIN', 'HR'];
 
 export default function ProjectsPage() {
   const me = useMe();
@@ -50,7 +49,7 @@ export default function ProjectsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-800">Projects</h1>
-          <p className="mt-1 text-sm text-slate-500">Projects & work streams</p>
+          <p className="mt-1 text-sm text-slate-500">Client work and internal projects</p>
         </div>
         {CAN_CREATE.includes(me.role) ? (
           <Button onClick={() => setCreating(true)}>New project</Button>
@@ -84,10 +83,7 @@ export default function ProjectsPage() {
                       <Badge tone={STATUS_TONE[p.status] ?? 'slate'}>{p.status}</Badge>
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-                      <Badge tone={p.type === 'STREAM' ? 'blue' : 'slate'}>
-                        {p.type === 'STREAM' ? 'Work stream' : 'Project'}
-                      </Badge>
-                      {p.pm ? <span>PM: {p.pm.name}</span> : null}
+                      {p.pm ? <span>Manager: {p.pm.name}</span> : <span>No manager yet</span>}
                     </div>
                     <div className="mt-3 text-xs text-slate-500">
                       {p._count.tasks} {p._count.tasks === 1 ? 'task' : 'tasks'} · {p._count.modules} modules
@@ -104,12 +100,27 @@ export default function ProjectsPage() {
   );
 }
 
+interface ManagerOption {
+  id: string;
+  name: string;
+  role: string;
+}
+
 function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState('');
-  const [type, setType] = useState<'PROJECT' | 'STREAM'>('PROJECT');
   const [description, setDescription] = useState('');
+  const [pmId, setPmId] = useState('');
+  const [managers, setManagers] = useState<ManagerOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Anyone on staff can be appointed — the appointment IS the authority, so this
+  // list is deliberately wide rather than filtered to a job title.
+  useEffect(() => {
+    apiFetch<ManagerOption[]>('/projects/appointable-managers')
+      .then(setManagers)
+      .catch(() => setManagers([]));
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,7 +129,11 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
     try {
       await apiFetch('/projects', {
         method: 'POST',
-        body: JSON.stringify({ name, type, description: description || undefined }),
+        body: JSON.stringify({
+          name,
+          description: description || undefined,
+          pmId: pmId || undefined,
+        }),
       });
       onCreated();
       onClose();
@@ -140,18 +155,6 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
               <Input id="p-name" required minLength={3} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="p-type">Type</Label>
-              <select
-                id="p-type"
-                value={type}
-                onChange={(e) => setType(e.target.value as 'PROJECT' | 'STREAM')}
-                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <option value="PROJECT">Project (fixed scope)</option>
-                <option value="STREAM">Work stream (continuous)</option>
-              </select>
-            </div>
-            <div>
               <Label htmlFor="p-desc">Description</Label>
               <textarea
                 id="p-desc"
@@ -160,6 +163,28 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
                 onChange={(e) => setDescription(e.target.value)}
                 className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               />
+            </div>
+            <div>
+              <Label htmlFor="p-pm">
+                Project manager <span className="font-normal text-slate-400">(optional)</span>
+              </Label>
+              <select
+                id="p-pm"
+                value={pmId}
+                onChange={(e) => setPmId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <option value="">Nobody — you and HR will run it</option>
+                {managers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Whoever you pick can create and assign tasks, review work and close this project —
+                and nothing outside it. You can change this later.
+              </p>
             </div>
             {error ? <p className="text-xs text-slate-900">{error}</p> : null}
             <div className="flex justify-end gap-2">

@@ -13,11 +13,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Seven roles (Spec §2/§3). Freelancer is NOT a role — it is EMPLOYEE + resourceType FREELANCE.
+/// Six roles (Spec §2/§3). Freelancer is NOT a role — it is EMPLOYEE + resourceType FREELANCE.
+/// PM is NOT a role either (2026-07-25): running a project is an appointment
+/// (Project.pmId), granted per project by HR / Super Admin.
 enum Role {
   SUPER_ADMIN
   HR
-  PM
   TEAM_LEAD
   EMPLOYEE
   CLIENT
@@ -83,12 +84,6 @@ enum RegularizationStatus {
   PENDING
   APPROVED
   REJECTED
-}
-
-/// Container type (Spec §5.4): a fixed-scope Project or a continuous Work Stream.
-enum ProjectType {
-  PROJECT
-  STREAM
 }
 
 enum ProjectStatus {
@@ -171,10 +166,11 @@ enum LeaveHalf {
   SECOND_HALF
 }
 
-/// The routed approval chain level (Spec §5.7): TL → PM → HR.
+/// The routed approval chain level (Spec §5.7): TL → HR.
+/// The PM rung was removed with the PM role (2026-07-25) — leave follows the
+/// reporting line, and project appointments cannot stand in for that.
 enum LeaveApprovalLevel {
   TEAM_LEAD
-  PM
   HR
 }
 
@@ -552,7 +548,6 @@ model RegularizationRequest {
 model Project {
   id          String        @id @default(uuid()) @db.Uuid
   name        String
-  type        ProjectType   @default(PROJECT)
   status      ProjectStatus @default(ACTIVE)
   description String?
 
@@ -568,9 +563,8 @@ model Project {
   clientAccess ClientProjectAccess[]
 
   startDate    DateTime?
-  endDate      DateTime? // null for STREAM (no end date, §5.4)
+  endDate      DateTime? // absent = ongoing work (2026-07-25: replaced the PROJECT/STREAM flag)
   budgetAmount Decimal?  @db.Decimal(14, 2)
-  cadence      String? // STREAM cadence, e.g. 'WEEKLY' (§5.4)
   vertical     BusinessVertical? // business vertical for P&L grouping (Spec §5.8)
 
   invoices Invoice[]

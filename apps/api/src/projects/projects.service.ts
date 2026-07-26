@@ -18,18 +18,18 @@ interface Meta {
   userAgent?: string | null;
 }
 
-// Budget is visible to PM / Finance / Admin only (Spec §5.4, §3).
-const BUDGET_ROLES = new Set(['SUPER_ADMIN', 'PM', 'FINANCE']);
+// Budget is visible to the roles that run projects or money company-wide
+// (Spec §5.4, §3). The appointed manager of a project also sees ITS budget —
+// handled per-project in stripBudget, not here.
+const BUDGET_ROLES = new Set(['SUPER_ADMIN', 'HR', 'FINANCE']);
 
 const PROJECT_SELECT = {
   id: true,
   name: true,
-  type: true,
   status: true,
   description: true,
   startDate: true,
   endDate: true,
-  cadence: true,
   budgetAmount: true,
   pm: { select: { id: true, name: true, email: true } },
   client: { select: { id: true, name: true, email: true } },
@@ -44,8 +44,13 @@ export class ProjectsService {
     private readonly capabilities: CapabilityService,
   ) {}
 
-  private stripBudget<T extends { budgetAmount: unknown }>(project: T, user: AuthUser): T | Omit<T, 'budgetAmount'> {
+  private stripBudget<T extends { budgetAmount: unknown; pm?: { id: string } | null }>(
+    project: T,
+    user: AuthUser,
+  ): T | Omit<T, 'budgetAmount'> {
     if (BUDGET_ROLES.has(user.role)) return project;
+    // The person appointed to run this project sees its budget (2026-07-25).
+    if (project.pm?.id === user.id) return project;
     const { budgetAmount: _omit, ...rest } = project;
     return rest;
   }
@@ -99,9 +104,9 @@ export class ProjectsService {
   }
 
   async create(dto: CreateProjectDto, actor: AuthUser, meta: Meta) {
-    if (dto.type === 'STREAM' && dto.endDate) {
-      throw new BadRequestException('A work stream has no end date (§5.4)');
-    }
+    // There is no project "type" any more (2026-07-25): a project with an end
+    // date is finite, one without is ongoing. That was the only thing the old
+    // PROJECT/STREAM flag decided, and asking for it up front bought nothing.
     if (dto.startDate && dto.endDate && new Date(dto.endDate) < new Date(dto.startDate)) {
       throw new BadRequestException('End date cannot precede start date');
     }
@@ -110,14 +115,12 @@ export class ProjectsService {
     const project = await this.prisma.project.create({
       data: {
         name: dto.name.trim(),
-        type: dto.type,
         description: dto.description ?? null,
         pmId: dto.pmId ?? null,
         clientId: dto.clientId ?? null,
         startDate: dto.startDate ? new Date(dto.startDate) : null,
-        endDate: dto.type === 'STREAM' ? null : dto.endDate ? new Date(dto.endDate) : null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
         budgetAmount: dto.budgetAmount ?? null,
-        cadence: dto.cadence ?? null,
       },
       select: PROJECT_SELECT,
     });
@@ -128,15 +131,38 @@ export class ProjectsService {
       action: 'PROJECT_CREATED',
       entityType: 'Project',
       entityId: project.id,
-      after: { name: project.name, type: project.type },
+      after: { name: project.name },
       ...meta,
     });
     return this.stripBudget(project, actor);
   }
 
   async update(id: string, dto: UpdateProjectDto, actor: AuthUser, meta: Meta) {
-    const existing = await this.prisma.project.findUnique({ where: { id }, select: { id: true } });
+    const existing = await this.prisma.project.findUnique({
+      where: { id },
+      select: { id: true, pmId: true },
+    });
     if (!existing) throw new NotFoundException('Project not found');
+
+    // Editing a project: allowed by role (HR/SA hold projects.create_edit) or by
+    // being the appointed manager of THIS project (2026-07-25, PM role removed).
+    const grant = await this.capabilities.resolveGrant(
+      actor.role,
+      actor.resourceType,
+      'projects.create_edit',
+    );
+    const mayEdit = grant === Grant.ALLOW || existing.pmId === actor.id;
+    if (!mayEdit) {
+      throw new ForbiddenException('Only the project manager, HR or a Super Admin can edit this project');
+    }
+
+    // ...but only HR/SA may hand the project to someone else. Otherwise an
+    // appointed manager could quietly re-appoint themselves elsewhere or lock
+    // the real owners out of their own project.
+    if (dto.pmId !== undefined && grant !== Grant.ALLOW) {
+      throw new ForbiddenException('Only HR or a Super Admin can change the project manager');
+    }
+
     await this.assertRefs(dto.pmId, dto.clientId);
 
     const project = await this.prisma.project.update({
@@ -150,7 +176,6 @@ export class ProjectsService {
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         budgetAmount: dto.budgetAmount,
-        cadence: dto.cadence,
       },
       select: PROJECT_SELECT,
     });
@@ -170,8 +195,26 @@ export class ProjectsService {
   /** Active internal users who can hold tasks (Spec §5.9 assignment screens, §24). */
   listAssignableUsers() {
     return this.prisma.user.findMany({
-      where: { status: 'ACTIVE', role: { in: ['PM', 'TEAM_LEAD', 'EMPLOYEE'] } },
+      where: { status: 'ACTIVE', role: { in: ['TEAM_LEAD', 'EMPLOYEE'] } },
       select: { id: true, name: true, email: true, role: true, resourceType: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Who HR/Super Admin may appoint to run a project (2026-07-25). Anyone on
+   * staff qualifies regardless of role — the appointment IS the authority, so
+   * this is deliberately wide. Clients are excluded: they are external, and
+   * appointing one would hand project controls to someone outside the company.
+   */
+  listAppointableManagers() {
+    return this.prisma.user.findMany({
+      where: {
+        status: 'ACTIVE',
+        resourceType: 'INTERNAL',
+        role: { in: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'] },
+      },
+      select: { id: true, name: true, email: true, role: true },
       orderBy: { name: 'asc' },
     });
   }
@@ -199,8 +242,16 @@ export class ProjectsService {
 
   private async assertRefs(pmId?: string, clientId?: string): Promise<void> {
     if (pmId) {
-      const pm = await this.prisma.user.count({ where: { id: pmId } });
-      if (!pm) throw new NotFoundException('PM not found');
+      // Must be an ACTIVE INTERNAL person. Previously this only checked that the
+      // row existed, so a client — or a deactivated leaver — could be recorded as
+      // a project's manager; since the appointment now carries real authority
+      // over the project, that would be a live privilege hole, not a mislabel.
+      const pm = await this.prisma.user.count({
+        where: { id: pmId, status: 'ACTIVE', resourceType: 'INTERNAL', role: { not: 'CLIENT' } },
+      });
+      if (!pm) {
+        throw new NotFoundException('Project manager must be an active internal user');
+      }
     }
     if (clientId) {
       const client = await this.prisma.user.count({ where: { id: clientId, role: 'CLIENT' } });

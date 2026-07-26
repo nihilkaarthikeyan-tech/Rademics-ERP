@@ -22,8 +22,8 @@ interface FileAsset {
   versions: Version[];
 }
 
-const CAN_UPLOAD = ['SUPER_ADMIN', 'PM', 'TEAM_LEAD', 'EMPLOYEE'];
-const CAN_FLIP = ['SUPER_ADMIN', 'PM'];
+const CAN_UPLOAD = ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE'];
+const CAN_FLIP = ['SUPER_ADMIN', 'HR'];
 
 function fmtSize(bytes: number | null): string {
   if (!bytes) return '';

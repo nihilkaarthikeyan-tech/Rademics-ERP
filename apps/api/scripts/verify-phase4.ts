@@ -53,7 +53,7 @@ async function main(): Promise<void> {
   check('Super Admin login', !!saToken);
 
   // Actors
-  const pmId = await ensureUser(`pm.${stamp}@rademics.local`, 'PM', 'Password123!');
+  const pmId = await ensureUser(`pm.${stamp}@rademics.local`, 'EMPLOYEE', 'Password123!');
   const empId = await ensureUser(`emp.${stamp}@rademics.local`, 'EMPLOYEE', 'Password123!');
   const clientId = await ensureUser(`client.${stamp}@rademics.local`, 'CLIENT', 'Password123!');
   const pmToken = await login(`pm.${stamp}@rademics.local`, 'Password123!');

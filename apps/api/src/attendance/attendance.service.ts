@@ -53,7 +53,7 @@ export class AttendanceService {
       workEnd: (r.workEnd as string) ?? '18:00',
       halfDayUnderHours: (r.halfDayUnderHours as number) ?? 4,
       overtimeOverHours: (r.overtimeOverHours as number) ?? 9,
-      idleMinutes: (r.idleMinutes as number) ?? 2,
+      idleMinutes: (r.idleMinutes as number) ?? 10,
       threeLatesDeduction:
         (r.threeLatesDeduction as AttendanceRules['threeLatesDeduction']) ?? {
           lateCount: 3,

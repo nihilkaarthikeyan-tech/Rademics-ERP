@@ -5,8 +5,8 @@ import { TeamAttendance } from '@/components/attendance/team-attendance';
 import { MyAttendance } from '@/components/attendance/my-attendance';
 
 // Managers see the team/all view + approvals; check-in roles also see their own.
-const MANAGER_ROLES = ['SUPER_ADMIN', 'HR', 'PM', 'TEAM_LEAD'];
-const SELF_ROLES = ['HR', 'PM', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'];
+const MANAGER_ROLES = ['SUPER_ADMIN', 'HR', 'TEAM_LEAD'];
+const SELF_ROLES = ['HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'];
 
 export default function AttendancePage() {
   const me = useMe();
