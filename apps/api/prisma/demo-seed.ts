@@ -132,12 +132,13 @@ async function main(): Promise<void> {
     cadence: 'WEEKLY', startDate: new Date('2026-05-01'), description: 'Continuous maintenance + support requests.',
   });
 
-  // Client project access (§5.5): approver + 2 viewers on Project A
-  for (const [uid, level] of [[clientApprover, 'APPROVER'], [clientViewer1, 'VIEWER'], [clientViewer2, 'VIEWER']] as const) {
+  // Client project access (§5.5): three client users granted access to Project A.
+  // No more Viewer/Approver level (2026-07-27) — a grant just IS the access.
+  for (const uid of [clientApprover, clientViewer1, clientViewer2]) {
     await prisma.clientProjectAccess.upsert({
       where: { projectId_clientUserId: { projectId: projA.id, clientUserId: uid } },
-      update: { level },
-      create: { projectId: projA.id, clientUserId: uid, level },
+      update: {},
+      create: { projectId: projA.id, clientUserId: uid },
     });
   }
 
@@ -150,9 +151,9 @@ async function main(): Promise<void> {
 
   const allStatuses: TaskStatus[] = [
     'DRAFT', 'ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW',
-    'CLIENT_REVIEW', 'COMPLETED', 'CLOSED', 'CANCELLED',
+    'COMPLETED', 'CLOSED', 'CANCELLED',
   ];
-  const assignees = [emp3, emp4, emp3, emp4, emp3, emp4, emp3, emp4, emp3];
+  const assignees = [emp3, emp4, emp3, emp4, emp3, emp4, emp3, emp4];
 
   const existingTaskCount = await prisma.task.count({ where: { projectId: projA.id, title: { startsWith: 'DEMO ·' } } });
   if (existingTaskCount === 0) {
@@ -167,8 +168,8 @@ async function main(): Promise<void> {
           assigneeId: status === 'DRAFT' ? null : assignees[i],
           priority: i % 3 === 0 ? 'HIGH' : i % 3 === 1 ? 'MEDIUM' : 'LOW',
           estimatedHours: 4 + i,
-          actualHours: ['COMPLETED', 'INVOICED', 'CLOSED'].includes(status) ? 4 + i : null,
-          clientFacing: ['CLIENT_REVIEW', 'COMPLETED', 'INVOICED', 'CLOSED'].includes(status),
+          actualHours: ['COMPLETED', 'CLOSED'].includes(status) ? 4 + i : null,
+          clientFacing: ['COMPLETED', 'CLOSED'].includes(status),
           status,
           createdById: pmId,
           deadline: new Date(Date.now() + (i + 1) * 3 * 24 * 60 * 60 * 1000),

@@ -63,7 +63,7 @@ export class ClientAdminService {
     return { id, email: dto.email, orgId };
   }
 
-  /** Grant a client user Viewer/Approver access to a project (§5.5). */
+  /** Grant a client user access to a project (§5.5) — view + request-status only. */
   async grantAccess(projectId: string, dto: GrantAccessDto, actor: AuthUser, meta: Meta) {
     const [project, clientUser] = await Promise.all([
       this.prisma.project.findUnique({ where: { id: projectId }, select: { id: true, clientOrgId: true } }),
@@ -76,8 +76,8 @@ export class ClientAdminService {
 
     const access = await this.prisma.clientProjectAccess.upsert({
       where: { projectId_clientUserId: { projectId, clientUserId: dto.clientUserId } },
-      update: { level: dto.level },
-      create: { projectId, clientUserId: dto.clientUserId, level: dto.level },
+      update: {},
+      create: { projectId, clientUserId: dto.clientUserId },
     });
     // Bind the project to the client's org on first grant.
     if (!project.clientOrgId) {
@@ -86,7 +86,7 @@ export class ClientAdminService {
     await this.audit.record({
       actorId: actor.id, actorEmail: actor.email,
       action: 'CLIENT_ACCESS_GRANTED', entityType: 'ClientProjectAccess', entityId: access.id,
-      after: { projectId, clientUserId: dto.clientUserId, level: dto.level }, ...meta,
+      after: { projectId, clientUserId: dto.clientUserId }, ...meta,
     });
     return access;
   }

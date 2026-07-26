@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, ClipboardCheck, FolderKanban, TrendingUp } from 'lucide-react';
-import { Badge, Card, CardContent, EmptyState, LoadingState } from '@rademics/ui';
+import { CheckCircle2, FolderKanban, TrendingUp } from 'lucide-react';
+import { Card, CardContent, EmptyState, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { AccessEnded } from '@/components/access-ended';
 
@@ -11,9 +11,7 @@ interface PortalProject {
   id: string;
   name: string;
   status: string;
-  level: 'VIEWER' | 'APPROVER';
   percentComplete: number;
-  awaitingApproval: number;
 }
 
 function ProgressBar({ percent }: { percent: number }) {
@@ -69,7 +67,6 @@ export default function PortalDashboard() {
     void load();
   }, [load]);
 
-  const awaitingTotal = projects?.reduce((n, p) => n + p.awaitingApproval, 0) ?? 0;
   const avgComplete = projects?.length
     ? Math.round(projects.reduce((n, p) => n + p.percentComplete, 0) / projects.length)
     : 0;
@@ -78,7 +75,7 @@ export default function PortalDashboard() {
   return (
     <div>
       <h1 className="text-xl font-semibold text-slate-900">My Projects</h1>
-      <p className="mt-1 text-sm text-slate-500">Progress and deliverables for your projects.</p>
+      <p className="mt-1 text-sm text-slate-500">Progress for your projects.</p>
 
       <div className="mt-6">
         {state === 'loading' ? (
@@ -91,31 +88,22 @@ export default function PortalDashboard() {
           <Card><CardContent className="pt-6"><EmptyState title="No projects shared yet" description="When your team shares progress, it appears here." /></CardContent></Card>
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Kpi icon={FolderKanban} label="Total projects" value={String(projects.length)} sub={`${activeCount} in progress`} />
               <Kpi icon={TrendingUp} label="Avg. completion" value={`${avgComplete}%`} sub="across all projects" />
-              <Kpi icon={ClipboardCheck} label="Awaiting your review" value={String(awaitingTotal)} sub={awaitingTotal ? 'needs a decision' : 'all caught up'} />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               {projects.map((p) => (
                 <Link key={p.id} href={`/projects/${p.id}`}>
                   <div className="h-full rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass transition-colors hover:border-white/90">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-white">
-                          {p.percentComplete >= 100 ? <CheckCircle2 className="h-4 w-4" /> : <FolderKanban className="h-4 w-4" />}
-                        </span>
-                        <h3 className="font-semibold text-slate-900">{p.name}</h3>
-                      </div>
-                      {p.awaitingApproval > 0 ? (
-                        <Badge tone="amber" className="shrink-0">{p.awaitingApproval} to approve</Badge>
-                      ) : null}
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-white">
+                        {p.percentComplete >= 100 ? <CheckCircle2 className="h-4 w-4" /> : <FolderKanban className="h-4 w-4" />}
+                      </span>
+                      <h3 className="font-semibold text-slate-900">{p.name}</h3>
                     </div>
-                    <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-                      <Badge tone={p.level === 'APPROVER' ? 'blue' : 'slate'}>{p.level}</Badge>
-                      <span>{p.status}</span>
-                    </div>
+                    <div className="mt-3 text-xs text-slate-400">{p.status}</div>
                     <ProgressBar percent={p.percentComplete} />
                     <div className="mt-1 text-right text-xs font-medium tabular-nums text-slate-500">{p.percentComplete}% complete</div>
                   </div>

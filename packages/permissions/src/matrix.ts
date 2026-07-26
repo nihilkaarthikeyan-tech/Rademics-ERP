@@ -82,11 +82,9 @@ const SEED: Record<CapabilityKey, string> = {
   'files.mark_client_visible': 'YYS---',
   'files.delete_version': 'YY----',
 
-  // — Client Portal —
+  // — Client Portal — (2026-07-27: no more approve/invoices — view + request-status only)
   'portal.progress.view': '----Y-',
   'portal.files.download': '----Y-',
-  'portal.deliverable.approve': '----S-',
-  'portal.invoices.view': '----Y-',
   'portal.users.manage': 'Y-----',
 
   // — Leave —

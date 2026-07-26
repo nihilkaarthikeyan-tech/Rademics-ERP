@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 
 const NAME_REGEX = /^[\p{L} .'-]+$/u;
 
@@ -21,28 +21,11 @@ export class CreateClientUserDto {
   name!: string;
 }
 
+/** No more Viewer/Approver level (2026-07-27) — a grant just IS the access. */
 export class GrantAccessDto {
   @IsUUID()
   projectId!: string;
 
   @IsUUID()
   clientUserId!: string;
-
-  @IsIn(['VIEWER', 'APPROVER'])
-  level!: 'VIEWER' | 'APPROVER';
-}
-
-// ── Client-facing (portal) ──
-export class RequestRevisionDto {
-  @IsString()
-  @MinLength(10, { message: 'Please explain what needs revising (at least 10 characters)' })
-  @MaxLength(2000)
-  comment!: string;
-}
-
-export class ApproveDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  comment?: string;
 }

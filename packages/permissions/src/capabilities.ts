@@ -81,19 +81,9 @@ export const CAPABILITIES = [
   { key: 'files.mark_client_visible', group: G.FILES, label: 'Mark file visible to client' },
   { key: 'files.delete_version', group: G.FILES, label: 'Delete file version' },
 
-  // — Client Portal —
+  // — Client Portal — (2026-07-27: view + request-status only, no approve/invoices)
   { key: 'portal.progress.view', group: G.CLIENT_PORTAL, label: 'View shared project progress' },
   { key: 'portal.files.download', group: G.CLIENT_PORTAL, label: 'Download client-visible files' },
-  {
-    key: 'portal.deliverable.approve',
-    group: G.CLIENT_PORTAL,
-    label: 'Approve / request revision on deliverable',
-  },
-  {
-    key: 'portal.invoices.view',
-    group: G.CLIENT_PORTAL,
-    label: 'View own invoices & payment status',
-  },
   { key: 'portal.users.manage', group: G.CLIENT_PORTAL, label: 'Manage client users & scopes' },
 
   // — Leave —

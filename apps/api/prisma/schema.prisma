@@ -108,7 +108,10 @@ enum TaskStatus {
   ACKNOWLEDGED
   IN_PROGRESS
   SUBMITTED_FOR_REVIEW
-  CLIENT_REVIEW
+  // CLIENT_REVIEW removed 2026-07-27: the client no longer has approve/
+  // request-revision power — they view progress and can ask for a status
+  // update, nothing more. Internal review (PROJECT_MANAGER/TEAM_LEAD) is now
+  // the only approval a task needs before COMPLETED, client-facing or not.
   COMPLETED
   CLOSED
   CANCELLED
@@ -206,13 +209,6 @@ enum PayrollMonthStatus {
 enum ClientOrgStatus {
   ACTIVE
   DEACTIVATED
-}
-
-/// Per-project client access level (Spec §5.5): Viewer sees progress; Approver
-/// can additionally approve / request revision.
-enum ClientAccessLevel {
-  VIEWER
-  APPROVER
 }
 
 /// A person who can authenticate: staff, freelancer (EMPLOYEE+FREELANCE), or client user.
@@ -1147,8 +1143,12 @@ model ClientOrg {
   @@map("client_orgs")
 }
 
-/// Which client user can see which project, and at what level (Spec §5.5).
-/// Scoping key for the portal: a client can only ever reach rows reachable here.
+/// Which client user can see which project (Spec §5.5). Scoping key for the
+/// portal: a client can only ever reach rows reachable here.
+///
+/// No more Viewer/Approver level (2026-07-27): the client can only ever view
+/// progress and request a status update — there is no approval power left to
+/// distinguish a level for. A row's existence IS the grant.
 model ClientProjectAccess {
   id        String  @id @default(uuid()) @db.Uuid
   projectId String  @db.Uuid
@@ -1156,8 +1156,6 @@ model ClientProjectAccess {
 
   clientUserId String @db.Uuid
   clientUser   User   @relation("ClientAccess", fields: [clientUserId], references: [id], onDelete: Cascade)
-
-  level ClientAccessLevel @default(VIEWER)
 
   createdAt DateTime @default(now())
 

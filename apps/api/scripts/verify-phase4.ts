@@ -73,12 +73,12 @@ async function main(): Promise<void> {
   const pmView = await req(`/projects/${projectId}`, { token: pmToken });
   check('appointed manager sees budgetAmount (§5.4 gating)', pmView.json?.budgetAmount != null);
 
-  // §5.5 scoping: a client can only approve deliverables on projects granted to
-  // them at APPROVER level — without this row the transition is a clean 403.
+  // §5.5 scoping: grants the client read access to this project (view +
+  // request-status only, 2026-07-27 — no more approve/Approver level).
   await prisma.clientProjectAccess.upsert({
     where: { projectId_clientUserId: { projectId, clientUserId: clientId } },
-    update: { level: 'APPROVER' },
-    create: { projectId, clientUserId: clientId, level: 'APPROVER' },
+    update: {},
+    create: { projectId, clientUserId: clientId },
   });
 
   const empProjView = await req(`/projects/${projectId}`, { token: empToken });
@@ -142,10 +142,12 @@ async function main(): Promise<void> {
   const cancelClosed = await req(`/tasks/${taskId}/transition`, { method: 'POST', token: pmToken, body: { action: 'CANCEL', comment: 'nope' } });
   check('CANCEL from CLOSED -> 400 (§6)', cancelClosed.status === 400, `(${cancelClosed.status})`);
 
-  // ── Client-facing branch: APPROVE_REVIEW → CLIENT_REVIEW → client approves → COMPLETED ──
+  // ── Client-facing task: APPROVE_REVIEW → COMPLETED directly (2026-07-27) ──
+  // The client has no approval power any more — a client-facing task's review
+  // is exactly the same internal PM/TL approval as any other task.
   const ctask = await req('/tasks', {
     method: 'POST', token: pmToken,
-    body: { projectId, title: 'Client deliverable', clientFacing: true, deadline: '2026-08-01T00:00:00Z' },
+    body: { projectId, title: 'Client-facing task', clientFacing: true, deadline: '2026-08-01T00:00:00Z' },
   });
   const ctaskId = ctask.json?.id;
   await req(`/tasks/${ctaskId}/assign`, { method: 'POST', token: pmToken, body: { assigneeId: empId } });
@@ -153,13 +155,11 @@ async function main(): Promise<void> {
   await req(`/tasks/${ctaskId}/transition`, { method: 'POST', token: empToken, body: { action: 'START_WORK' } });
   await req(`/tasks/${ctaskId}/transition`, { method: 'POST', token: empToken, body: { action: 'SUBMIT' } });
   const capprove = await req(`/tasks/${ctaskId}/transition`, { method: 'POST', token: pmToken, body: { action: 'APPROVE_REVIEW' } });
-  check('APPROVE_REVIEW on client-facing task (→CLIENT_REVIEW)', capprove.json?.status === 'CLIENT_REVIEW', `(${capprove.json?.status})`);
-  // Employee cannot act as client approver
-  const empAsClient = await req(`/tasks/${ctaskId}/transition`, { method: 'POST', token: empToken, body: { action: 'CLIENT_APPROVE' } });
-  check('employee CLIENT_APPROVE -> 403 (§6 actor)', empAsClient.status === 403, `(${empAsClient.status})`);
+  check('APPROVE_REVIEW on client-facing task (→COMPLETED, no client step)', capprove.json?.status === 'COMPLETED', `(${capprove.json?.status})`);
+  // A client has zero eligible actor slots on the shared transition endpoint now.
   const clientToken = await login(`client.${stamp}@rademics.local`, 'Password123!');
-  const clientApprove = await req(`/tasks/${ctaskId}/transition`, { method: 'POST', token: clientToken, body: { action: 'CLIENT_APPROVE' } });
-  check('CLIENT_APPROVE (→COMPLETED)', clientApprove.json?.status === 'COMPLETED', `(${clientApprove.json?.status})`);
+  const clientTransition = await req(`/tasks/${ctaskId}/transition`, { method: 'POST', token: clientToken, body: { action: 'CLOSE' } });
+  check('client has no actions on /tasks/:id/transition -> 403', clientTransition.status === 403, `(${clientTransition.status})`);
 
   // ── Subtasks: cannot close parent with open subtask (§24) ──
   const parent = await req('/tasks', { method: 'POST', token: pmToken, body: { projectId, title: 'Parent task' } });

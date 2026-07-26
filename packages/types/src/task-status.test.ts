@@ -1,4 +1,4 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   TaskStatus,
   TaskAction,
@@ -13,68 +13,40 @@ import {
 
 describe('Task state machine (Spec §6)', () => {
   it('follows the internal happy path to Completed', () => {
-    expect(nextTaskStatus(TaskStatus.DRAFT, TaskAction.ASSIGN, { clientFacing: false })).toBe(
-      TaskStatus.ASSIGNED,
-    );
-    expect(nextTaskStatus(TaskStatus.ASSIGNED, TaskAction.ACKNOWLEDGE, { clientFacing: false })).toBe(
-      TaskStatus.ACKNOWLEDGED,
-    );
-    expect(nextTaskStatus(TaskStatus.ACKNOWLEDGED, TaskAction.START_WORK, { clientFacing: false })).toBe(
-      TaskStatus.IN_PROGRESS,
-    );
-    expect(nextTaskStatus(TaskStatus.IN_PROGRESS, TaskAction.SUBMIT, { clientFacing: false })).toBe(
-      TaskStatus.SUBMITTED_FOR_REVIEW,
-    );
+    expect(nextTaskStatus(TaskStatus.DRAFT, TaskAction.ASSIGN)).toBe(TaskStatus.ASSIGNED);
+    expect(nextTaskStatus(TaskStatus.ASSIGNED, TaskAction.ACKNOWLEDGE)).toBe(TaskStatus.ACKNOWLEDGED);
+    expect(nextTaskStatus(TaskStatus.ACKNOWLEDGED, TaskAction.START_WORK)).toBe(TaskStatus.IN_PROGRESS);
+    expect(nextTaskStatus(TaskStatus.IN_PROGRESS, TaskAction.SUBMIT)).toBe(TaskStatus.SUBMITTED_FOR_REVIEW);
   });
 
-  it('Approve branches on client-facing (§6)', () => {
-    expect(
-      nextTaskStatus(TaskStatus.SUBMITTED_FOR_REVIEW, TaskAction.APPROVE_REVIEW, { clientFacing: true }),
-    ).toBe(TaskStatus.CLIENT_REVIEW);
-    expect(
-      nextTaskStatus(TaskStatus.SUBMITTED_FOR_REVIEW, TaskAction.APPROVE_REVIEW, { clientFacing: false }),
-    ).toBe(TaskStatus.COMPLETED);
-  });
-
-  it('client review can approve or request revision', () => {
-    expect(nextTaskStatus(TaskStatus.CLIENT_REVIEW, TaskAction.CLIENT_APPROVE, { clientFacing: true })).toBe(
-      TaskStatus.COMPLETED,
-    );
-    expect(
-      nextTaskStatus(TaskStatus.CLIENT_REVIEW, TaskAction.CLIENT_REQUEST_REVISION, { clientFacing: true }),
-    ).toBe(TaskStatus.IN_PROGRESS);
+  it('Approve always goes straight to Completed (2026-07-27: no client-approval step)', () => {
+    expect(nextTaskStatus(TaskStatus.SUBMITTED_FOR_REVIEW, TaskAction.APPROVE_REVIEW)).toBe(TaskStatus.COMPLETED);
   });
 
   it('Cancel is legal from any status except Closed (§6)', () => {
-    expect(nextTaskStatus(TaskStatus.IN_PROGRESS, TaskAction.CANCEL, { clientFacing: false })).toBe(
-      TaskStatus.CANCELLED,
-    );
-    expect(nextTaskStatus(TaskStatus.DRAFT, TaskAction.CANCEL, { clientFacing: false })).toBe(
-      TaskStatus.CANCELLED,
-    );
-    expect(nextTaskStatus(TaskStatus.CLOSED, TaskAction.CANCEL, { clientFacing: false })).toBeNull();
+    expect(nextTaskStatus(TaskStatus.IN_PROGRESS, TaskAction.CANCEL)).toBe(TaskStatus.CANCELLED);
+    expect(nextTaskStatus(TaskStatus.DRAFT, TaskAction.CANCEL)).toBe(TaskStatus.CANCELLED);
+    expect(nextTaskStatus(TaskStatus.CLOSED, TaskAction.CANCEL)).toBeNull();
   });
 
   it('rejects illegal transitions (must be rejected by the API — §6, §13)', () => {
     // Cannot go straight from Draft to In Progress.
-    expect(nextTaskStatus(TaskStatus.DRAFT, TaskAction.START_WORK, { clientFacing: false })).toBeNull();
+    expect(nextTaskStatus(TaskStatus.DRAFT, TaskAction.START_WORK)).toBeNull();
     // Cannot submit something that is only Assigned.
-    expect(nextTaskStatus(TaskStatus.ASSIGNED, TaskAction.SUBMIT, { clientFacing: false })).toBeNull();
+    expect(nextTaskStatus(TaskStatus.ASSIGNED, TaskAction.SUBMIT)).toBeNull();
     // Cannot close something still in progress.
-    expect(nextTaskStatus(TaskStatus.IN_PROGRESS, TaskAction.CLOSE, { clientFacing: false })).toBeNull();
+    expect(nextTaskStatus(TaskStatus.IN_PROGRESS, TaskAction.CLOSE)).toBeNull();
   });
 
   it('a completed task closes directly — no invoicing step (2026-07-26)', () => {
-    expect(nextTaskStatus(TaskStatus.COMPLETED, TaskAction.CLOSE, { clientFacing: false })).toBe(
-      TaskStatus.CLOSED,
-    );
+    expect(nextTaskStatus(TaskStatus.COMPLETED, TaskAction.CLOSE)).toBe(TaskStatus.CLOSED);
   });
 
   it('mandatory-comment actions are flagged (§6)', () => {
     const sendBack = TASK_TRANSITIONS.find((t) => t.action === TaskAction.SEND_BACK);
-    const revision = TASK_TRANSITIONS.find((t) => t.action === TaskAction.CLIENT_REQUEST_REVISION);
+    const cancel = TASK_TRANSITIONS.find((t) => t.action === TaskAction.CANCEL);
     expect(sendBack?.requiresComment).toBe(true);
-    expect(revision?.requiresComment).toBe(true);
+    expect(cancel?.requiresComment).toBe(true);
   });
 });
 
@@ -98,42 +70,44 @@ describe('Viewer eligibility (UI mirror of assertActor)', () => {
     {
       name: 'the assignee (plain employee)',
       ctx: onTask(ASSIGNEE_ID, 'EMPLOYEE'),
-      expects: { ASSIGNEE: true, PROJECT_MANAGER: false, TEAM_LEAD: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: true, PROJECT_MANAGER: false, TEAM_LEAD: false },
     },
     {
       name: 'the appointed manager (plain employee)',
       ctx: onTask(PM_ID, 'EMPLOYEE'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: false },
     },
     {
       name: 'an unrelated employee',
       ctx: onTask('user-bystander', 'EMPLOYEE'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false },
     },
     {
       name: 'HR',
       ctx: onTask('user-hr', 'HR'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: false },
     },
     {
       name: 'a team lead',
       ctx: onTask('user-tl', 'TEAM_LEAD'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: true, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: true },
     },
     {
       name: 'finance',
       ctx: onTask('user-fin', 'FINANCE'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false },
     },
     {
       name: 'super admin',
       ctx: onTask('user-sa', 'SUPER_ADMIN'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: true, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: true },
     },
     {
-      name: 'a client (staff app never grants client actions)',
+      // The client has no actor slot at all (2026-07-27: view + request-status
+      // only) — every actor must resolve false for them.
+      name: 'a client (no approval power left)',
       ctx: onTask('user-client', 'CLIENT'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false },
     },
   ];
 
@@ -151,6 +125,13 @@ describe('Viewer eligibility (UI mirror of assertActor)', () => {
         const expected = t.actors.some((actor) => a.expects[actor]);
         expect(canPerform(t.actors, a.ctx), `${a.name} on ${t.action} from ${t.from}`).toBe(expected);
       }
+    }
+  });
+
+  it('a client has zero visible actions on any status', () => {
+    const client = onTask('user-client', 'CLIENT');
+    for (const status of Object.values(TaskStatus)) {
+      expect(visibleTaskActions(status, client), status).toEqual([]);
     }
   });
 
@@ -178,12 +159,6 @@ describe('Viewer eligibility (UI mirror of assertActor)', () => {
   it('an unassigned task never matches ASSIGNEE (null !== null guard)', () => {
     const noAssignee: TaskViewerCtx = { meId: 'user-x', meRole: 'EMPLOYEE', assigneeId: null, pmId: null };
     expect(canPerform(['ASSIGNEE'], noAssignee)).toBe(false);
-  });
-
-  it('client-review offers nothing to any internal viewer', () => {
-    for (const a of ARCHETYPES) {
-      expect(visibleTaskActions(TaskStatus.CLIENT_REVIEW, a.ctx), a.name).toEqual([]);
-    }
   });
 
   it('cancel: manager-only, dead at Closed and Cancelled', () => {

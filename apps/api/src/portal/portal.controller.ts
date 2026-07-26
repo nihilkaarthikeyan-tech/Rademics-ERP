@@ -1,16 +1,16 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import { Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { PortalService } from './portal.service';
-import { ApproveDto, RequestRevisionDto } from './dto';
-import { RequireCapability, RequireScopedCapability } from '../rbac/capability.decorator';
+import { RequireCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
-import { reqMeta } from '../common/req-meta';
 import type { AuthUser } from '../auth/auth-user';
 
 /**
  * Client-facing portal API (Spec §5.5). Client-only capabilities; every response is
  * scoped in PortalService. Internal roles have these capabilities DENIED, so they
  * cannot reach the portal surface at all.
+ *
+ * 2026-07-27: view + request-status only — no approve/request-revision, no
+ * invoices. The client's write surface is exactly one action.
  */
 @Controller('portal')
 export class PortalController {
@@ -28,54 +28,20 @@ export class PortalController {
     return this.portal.getProject(id, user);
   }
 
-  @Get('deliverables')
-  @RequireCapability('portal.progress.view')
-  deliverables(@CurrentUser() user: AuthUser) {
-    return this.portal.listDeliverables(user);
-  }
-
-  @Get('invoices')
-  @RequireCapability('portal.invoices.view')
-  invoices(@CurrentUser() user: AuthUser) {
-    return this.portal.listInvoices(user);
-  }
-
-  @Post('deliverables/:id/approve')
-  @RequireScopedCapability('portal.deliverable.approve')
-  approve(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ApproveDto,
-    @CurrentUser() user: AuthUser,
-    @Req() req: Request,
-  ) {
-    return this.portal.approve(id, dto.comment, user, reqMeta(req));
-  }
-
-  @Post('deliverables/:id/request-revision')
-  @RequireScopedCapability('portal.deliverable.approve')
-  requestRevision(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: RequestRevisionDto,
-    @CurrentUser() user: AuthUser,
-    @Req() req: Request,
-  ) {
-    return this.portal.requestRevision(id, dto.comment, user, reqMeta(req));
-  }
-
   @Get('tasks/:id/files')
   @RequireCapability('portal.files.download')
   files(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.portal.listFiles(id, user);
   }
 
-  /** Progress feed (2026-07-27): client-visible comments staff posted on this task. */
+  /** Progress feed: client-visible comments staff posted on this task. */
   @Get('tasks/:id/updates')
   @RequireCapability('portal.progress.view')
   updates(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.portal.listUpdates(id, user);
   }
 
-  /** "Ask for a status update" — open to VIEWER and APPROVER alike (it's a question, not a decision). */
+  /** "Ask for a status update" — the client's only write action. */
   @Post('tasks/:id/request-status')
   @RequireCapability('portal.progress.view')
   requestStatus(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {

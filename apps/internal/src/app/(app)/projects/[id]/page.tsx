@@ -30,9 +30,9 @@ function unacceptedDays(t: TaskRow): number | null {
   return days >= 1 ? days : null;
 }
 
-/** Days since the client last saw any movement — null once it's out of staff's
- *  hands (CLIENT_REVIEW) or finished; mirrors the server's runClientUpdateSweep. */
-const CLIENT_SETTLED = ['CLIENT_REVIEW', 'COMPLETED', 'CLOSED', 'CANCELLED'];
+/** Days since the client last saw any movement — null once finished; mirrors
+ *  the server's runClientUpdateSweep. */
+const CLIENT_SETTLED = ['COMPLETED', 'CLOSED', 'CANCELLED'];
 function clientStaleDays(t: TaskRow): number | null {
   if (!t.clientFacing || CLIENT_SETTLED.includes(t.status)) return null;
   const since = new Date(t.lastClientUpdateAt ?? t.createdAt).getTime();
@@ -56,7 +56,6 @@ const COLUMNS: { key: string; label: string }[] = [
   { key: 'ACKNOWLEDGED', label: 'Acknowledged' },
   { key: 'IN_PROGRESS', label: 'In progress' },
   { key: 'SUBMITTED_FOR_REVIEW', label: 'In review' },
-  { key: 'CLIENT_REVIEW', label: 'Client review' },
   { key: 'COMPLETED', label: 'Completed' },
   { key: 'CLOSED', label: 'Closed' },
   { key: 'CANCELLED', label: 'Cancelled' },
@@ -293,7 +292,6 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
           taskId={openTaskId}
           members={members}
           pm={project.pm}
-          clientName={project.client?.name ?? null}
           onClose={closeTask}
           onChanged={loadTasks}
         />
@@ -612,7 +610,7 @@ function NewTaskModal({
               <span>
                 The client will see this
                 <span className="mt-0.5 block text-xs font-normal text-slate-500">
-                  Once approved it goes to the client for sign-off. Needs a deadline.
+                  Shows up in their progress feed once assigned. Needs a deadline.
                 </span>
               </span>
             </label>

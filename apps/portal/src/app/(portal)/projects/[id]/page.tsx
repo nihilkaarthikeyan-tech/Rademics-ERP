@@ -4,35 +4,32 @@ import { use, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
-  ClipboardCheck,
   Download,
   ListChecks,
   Milestone as MilestoneIcon,
   MoreVertical,
   MessageSquareText,
 } from 'lucide-react';
-import { Badge, Button, LoadingState } from '@rademics/ui';
+import { Badge, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 
 interface Milestone { id: string; name: string; percentComplete: number }
 interface Item { id: string; title: string; status: string; deadline: string | null }
-interface Deliverable { id: string; title: string; deadline: string | null; canApprove: boolean }
 interface PortalProjectDetail {
   id: string;
   name: string;
   status: string;
   description: string | null;
-  level: 'VIEWER' | 'APPROVER';
   percentComplete: number;
   milestones: Milestone[];
-  deliverables: Deliverable[];
   items: Item[];
 }
 
+// 2026-07-27: the client has no approval power — view + request-status only,
+// so every status just reads as plain progress.
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Not started', ASSIGNED: 'Planned', ACKNOWLEDGED: 'Planned', IN_PROGRESS: 'In progress',
-  SUBMITTED_FOR_REVIEW: 'In review', CLIENT_REVIEW: 'Awaiting your approval', COMPLETED: 'Completed',
-  CLOSED: 'Completed', CANCELLED: 'Cancelled',
+  SUBMITTED_FOR_REVIEW: 'In review', COMPLETED: 'Completed', CLOSED: 'Completed', CANCELLED: 'Cancelled',
 };
 
 function relTime(iso: string): string {
@@ -55,7 +52,6 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
   const { id } = use(params);
   const [project, setProject] = useState<PortalProjectDetail | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading');
-  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -69,26 +65,6 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function decide(taskId: string, action: 'approve' | 'request-revision') {
-    let comment: string | undefined;
-    if (action === 'request-revision') {
-      comment = window.prompt('What needs revising? (at least 10 characters)') ?? undefined;
-      if (!comment || comment.trim().length < 10) return;
-    }
-    setBusyId(taskId);
-    try {
-      await apiFetch(`/portal/deliverables/${taskId}/${action}`, {
-        method: 'POST',
-        body: JSON.stringify(comment ? { comment } : {}),
-      });
-      await load();
-    } catch (e) {
-      alert(e instanceof ApiError ? e.message : 'Action failed');
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   if (state === 'loading') return <LoadingState />;
   if (state === 'notfound') return <p className="text-sm text-slate-500">This project isn&apos;t available.</p>;
@@ -113,43 +89,6 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
         </div>
       </div>
 
-      {/* Awaiting approval */}
-      {project.deliverables.length > 0 ? (
-        <div className="mt-5 rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
-          <div className="mb-3 flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4 text-slate-500" />
-            <h3 className="text-sm font-semibold text-slate-800">Awaiting your approval</h3>
-          </div>
-          <div>
-            <ul className="flex flex-col gap-2">
-              {project.deliverables.map((d) => (
-                <li key={d.id} className="rounded-lg border border-slate-100 p-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-700">{d.title}</div>
-                      {d.deadline ? <div className="text-xs text-slate-400">Due {new Date(d.deadline).toLocaleDateString()}</div> : null}
-                      <DeliverableFiles taskId={d.id} />
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {d.canApprove ? (
-                        <div className="flex gap-2">
-                          <Button size="sm" disabled={busyId === d.id} onClick={() => decide(d.id, 'approve')}>Approve</Button>
-                          <Button size="sm" variant="outline" disabled={busyId === d.id} onClick={() => decide(d.id, 'request-revision')}>Request revision</Button>
-                        </div>
-                      ) : (
-                        <Badge tone="slate">View only</Badge>
-                      )}
-                      <TaskActionsMenu taskId={d.id} />
-                    </div>
-                  </div>
-                  <TaskUpdatesFeed taskId={d.id} />
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : null}
-
       {/* Milestones */}
       {project.milestones.length > 0 ? (
         <div className="mt-5 rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
@@ -173,7 +112,7 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
         </div>
       ) : null}
 
-      {/* Progress items */}
+      {/* Progress — every client-facing task, read-only status + shared files/updates + ask-for-status */}
       <div className="mt-5 rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
         <div className="mb-3 flex items-center gap-2">
           <ListChecks className="h-4 w-4 text-slate-500" />
@@ -185,15 +124,21 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
           <ul className="flex flex-col divide-y divide-slate-100">
             {project.items.map((t) => (
               <li key={t.id} className="py-2.5">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate text-slate-700">{t.title}</span>
+                <div className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <span className="block truncate text-slate-700">{t.title}</span>
+                    {t.deadline ? (
+                      <span className="text-xs text-slate-400">Due {new Date(t.deadline).toLocaleDateString()}</span>
+                    ) : null}
+                  </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <Badge tone={t.status === 'CLIENT_REVIEW' ? 'amber' : ['COMPLETED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
+                    <Badge tone={['COMPLETED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
                       {STATUS_LABEL[t.status] ?? t.status}
                     </Badge>
                     <TaskActionsMenu taskId={t.id} />
                   </div>
                 </div>
+                <TaskFiles taskId={t.id} />
                 <TaskUpdatesFeed taskId={t.id} />
               </li>
             ))}
@@ -204,7 +149,7 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
   );
 }
 
-function DeliverableFiles({ taskId }: { taskId: string }) {
+function TaskFiles({ taskId }: { taskId: string }) {
   const [files, setFiles] = useState<{ id: string; displayName: string; versions: { id: string; versionNumber: number }[] }[]>([]);
 
   useEffect(() => {
@@ -222,7 +167,7 @@ function DeliverableFiles({ taskId }: { taskId: string }) {
 
   if (files.length === 0) return null;
   return (
-    <div className="mt-1 flex flex-wrap gap-2">
+    <div className="mt-1.5 flex flex-wrap gap-2">
       {files.map((f) => {
         const latest = f.versions[0];
         if (!latest) return null;

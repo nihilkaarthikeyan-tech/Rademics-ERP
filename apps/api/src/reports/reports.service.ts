@@ -9,7 +9,7 @@ import type { AuthUser } from '../auth/auth-user';
 const num = (d: Prisma.Decimal | number | null | undefined) => Number(d ?? 0);
 const round = (n: number, p = 2) => Math.round(n * 10 ** p) / 10 ** p;
 const isoWeekday = (d: Date) => (d.getUTCDay() === 0 ? 7 : d.getUTCDay());
-const OPEN_STATUSES: TaskStatus[] = ['ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW', 'CLIENT_REVIEW'];
+const OPEN_STATUSES: TaskStatus[] = ['ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW'];
 
 export interface ReportQuery { from?: string; to?: string }
 

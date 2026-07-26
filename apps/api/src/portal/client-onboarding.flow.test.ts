@@ -271,7 +271,7 @@ describe('Client onboarding: Super Admin → client login → project access', (
     await expect(auth.login('cara@acme.com', 'WrongPass999', meta)).rejects.toThrow();
   });
 
-  it('grants the client APPROVER access to a project and binds the project to the org', async () => {
+  it('grants the client access to a project and binds the project to the org', async () => {
     const { clientAdmin, db } = build();
     const org = await clientAdmin.createOrg({ name: 'Acme Ltd' }, SA, meta);
     const created = await clientAdmin.createClientUser(
@@ -282,13 +282,8 @@ describe('Client onboarding: Super Admin → client login → project access', (
     );
     db.projects.set('p1', { id: 'p1', clientOrgId: null });
 
-    const access = await clientAdmin.grantAccess(
-      'p1',
-      { clientUserId: created.id, level: 'APPROVER' },
-      SA,
-      meta,
-    );
-    expect(access.level).toBe('APPROVER');
+    const access = await clientAdmin.grantAccess('p1', { clientUserId: created.id }, SA, meta);
+    expect(access.projectId).toBe('p1');
     expect(db.projects.get('p1').clientOrgId).toBe(org.id); // project now locked to this client
   });
 
@@ -298,7 +293,7 @@ describe('Client onboarding: Super Admin → client login → project access', (
     db.users.set('emp1', { id: 'emp1', role: 'EMPLOYEE', clientOrgId: null });
 
     await expect(
-      clientAdmin.grantAccess('p1', { clientUserId: 'emp1', level: 'VIEWER' }, SA, meta),
+      clientAdmin.grantAccess('p1', { clientUserId: 'emp1' }, SA, meta),
     ).rejects.toThrow(/not a client-org user/i);
   });
 
@@ -337,15 +332,5 @@ describe('Permission matrix: who can manage clients vs. use the portal', () => {
     expect(view.CLIENT).toBe(Grant.ALLOW);
     expect(view.SUPER_ADMIN).toBe(Grant.DENY);
     expect(view.EMPLOYEE).toBe(Grant.DENY);
-  });
-
-  it('only a client can approve a deliverable, and only when scoped (Approver on that project)', () => {
-    const approve = PERMISSION_MATRIX['portal.deliverable.approve'];
-    expect(approve.CLIENT).toBe(Grant.SCOPED);
-    // No staff role may sign off on the client's behalf — including the two that
-    // now run projects since the PM role was removed (2026-07-25).
-    expect(approve.SUPER_ADMIN).toBe(Grant.DENY);
-    expect(approve.HR).toBe(Grant.DENY);
-    expect(approve.TEAM_LEAD).toBe(Grant.DENY);
   });
 });

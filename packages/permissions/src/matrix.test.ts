@@ -5,9 +5,9 @@ import { ROLE_ORDER, Role, ResourceType } from './roles.js';
 import { resolveGrant, hasUnscopedCapability } from './index.js';
 
 describe('Role & Permission Matrix (Spec §3)', () => {
-  it('has exactly 44 capabilities across 8 groups', () => {
-    expect(CAPABILITIES).toHaveLength(44);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(44); // no duplicate keys
+  it('has exactly 42 capabilities across 8 groups', () => {
+    expect(CAPABILITIES).toHaveLength(42);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(42); // no duplicate keys
   });
 
   it('has a grant for every capability × every role', () => {
@@ -32,7 +32,8 @@ describe('Role & Permission Matrix (Spec §3)', () => {
     ['tasks.update_own_status', Role.CLIENT, Grant.DENY],
     ['files.upload', Role.CLIENT, Grant.SCOPED],
     ['projects.view_own_team', Role.TEAM_LEAD, Grant.SCOPED],
-    ['portal.deliverable.approve', Role.CLIENT, Grant.SCOPED],
+    // The client has no approval power left (2026-07-27) — view + request-status only.
+    ['portal.progress.view', Role.CLIENT, Grant.ALLOW],
     ['reports.dashboard.view', Role.TEAM_LEAD, Grant.SCOPED],
     ['audit.log.view', Role.SUPER_ADMIN, Grant.ALLOW],
     ['audit.log.view', Role.HR, Grant.DENY],

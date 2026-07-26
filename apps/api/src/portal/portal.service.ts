@@ -1,30 +1,27 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { TaskAction } from '@rademics/types';
 import { PrismaService } from '../prisma/prisma.service';
-import { TasksService } from '../projects/tasks.service';
 import { FilesService } from '../files/files.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { AuthUser } from '../auth/auth-user';
-
-interface Meta {
-  ip?: string | null;
-  userAgent?: string | null;
-}
 
 const DONE_STATUSES = ['COMPLETED', 'CLOSED'];
 
 /**
  * Client portal read/write surface (Spec §5.5). Every query is scoped through
- * ClientProjectAccess: a client can only reach projects explicitly granted to them,
- * and only the CLIENT-VISIBLE slice of those. Cross-org / non-granted ids resolve to
- * 404 (enumeration impossible, §10). Internal task details, assignee names, internal
- * comments and internal files are never selected into a portal response.
+ * ClientProjectAccess: a client can only reach projects explicitly granted to them.
+ * Cross-org / non-granted ids resolve to 404 (enumeration impossible, §10). Internal
+ * task details, assignee names, internal comments and internal files are never
+ * selected into a portal response.
+ *
+ * 2026-07-27: the client has no approval power at all — view progress, read the
+ * staff-shared update feed, and ask for a status update. That is the entire
+ * surface. There is no more Viewer/Approver distinction (see ClientProjectAccess) —
+ * a grant row's existence IS the access.
  */
 @Injectable()
 export class PortalService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly tasks: TasksService,
     private readonly files: FilesService,
     private readonly notifications: NotificationsService,
   ) {}
@@ -40,19 +37,18 @@ export class PortalService {
     }
   }
 
-  /** projectId → access level, for exactly the projects this client user may see. */
-  private async accessMap(userId: string): Promise<Map<string, 'VIEWER' | 'APPROVER'>> {
+  /** Every projectId this client user may see. */
+  private async accessSet(userId: string): Promise<Set<string>> {
     const rows = await this.prisma.clientProjectAccess.findMany({
       where: { clientUserId: userId },
-      select: { projectId: true, level: true },
+      select: { projectId: true },
     });
-    return new Map(rows.map((r) => [r.projectId, r.level]));
+    return new Set(rows.map((r) => r.projectId));
   }
 
   async listProjects(user: AuthUser) {
     await this.assertActiveClient(user);
-    const access = await this.accessMap(user.id);
-    const ids = [...access.keys()];
+    const ids = [...(await this.accessSet(user.id))];
     if (ids.length === 0) return [];
 
     const projects = await this.prisma.project.findMany({
@@ -61,11 +57,7 @@ export class PortalService {
         id: true,
         name: true,
         status: true,
-        tasks: {
-          where: { clientFacing: true },
-          select: { status: true },
-        },
-        _count: { select: { tasks: { where: { clientFacing: true, status: 'CLIENT_REVIEW' } } } },
+        tasks: { where: { clientFacing: true }, select: { status: true } },
       },
     });
 
@@ -73,44 +65,14 @@ export class PortalService {
       id: p.id,
       name: p.name,
       status: p.status,
-      level: access.get(p.id),
       percentComplete: this.percent(p.tasks),
-      awaitingApproval: p._count.tasks,
-    }));
-  }
-
-  /** Client's own invoices (Spec §5.5, §17.7). Scoped to the user's org; drafts and
-   *  cancelled invoices are never exposed. Only client-facing fields are serialized. */
-  async listInvoices(user: AuthUser) {
-    await this.assertActiveClient(user);
-    const u = await this.prisma.user.findUnique({ where: { id: user.id }, select: { clientOrgId: true } });
-    if (!u?.clientOrgId) return [];
-    const invoices = await this.prisma.invoice.findMany({
-      where: { clientOrgId: u.clientOrgId, status: { in: ['SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE'] } },
-      orderBy: { issueDate: 'desc' },
-      select: {
-        id: true, number: true, status: true, issueDate: true, dueDate: true,
-        total: true, amountPaid: true, project: { select: { name: true } },
-      },
-    });
-    return invoices.map((i) => ({
-      id: i.id,
-      number: i.number,
-      status: i.status,
-      issueDate: i.issueDate,
-      dueDate: i.dueDate,
-      total: Number(i.total),
-      amountPaid: Number(i.amountPaid),
-      balance: Math.round((Number(i.total) - Number(i.amountPaid)) * 100) / 100,
-      projectName: i.project?.name ?? null,
     }));
   }
 
   async getProject(id: string, user: AuthUser) {
     await this.assertActiveClient(user);
-    const access = await this.accessMap(user.id);
-    const level = access.get(id);
-    if (!level) throw new NotFoundException('Project not found'); // no access → 404, not 403 (§10)
+    const access = await this.accessSet(user.id);
+    if (!access.has(id)) throw new NotFoundException('Project not found'); // no access → 404, not 403 (§10)
 
     const project = await this.prisma.project.findUnique({
       where: { id },
@@ -134,54 +96,16 @@ export class PortalService {
       const tasks = project.tasks.filter((t) => t.moduleId === m.id);
       return { id: m.id, name: m.name, percentComplete: this.percent(tasks) };
     });
-    const deliverables = project.tasks
-      .filter((t) => t.status === 'CLIENT_REVIEW')
-      .map((t) => ({ id: t.id, title: t.title, deadline: t.deadline, canApprove: level === 'APPROVER' }));
 
     return {
       id: project.id,
       name: project.name,
       status: project.status,
       description: project.description,
-      level,
       percentComplete: this.percent(project.tasks),
       milestones,
-      deliverables,
-      // Client-visible task list, minus CLIENT_REVIEW tasks — those are already
-      // shown (with actions) in `deliverables` above; keeping them here too would
-      // list the same task twice.
-      items: project.tasks
-        .filter((t) => t.status !== 'CLIENT_REVIEW')
-        .map((t) => ({ id: t.id, title: t.title, status: t.status, deadline: t.deadline })),
+      items: project.tasks.map((t) => ({ id: t.id, title: t.title, status: t.status, deadline: t.deadline })),
     };
-  }
-
-  async listDeliverables(user: AuthUser) {
-    await this.assertActiveClient(user);
-    const access = await this.accessMap(user.id);
-    const ids = [...access.keys()];
-    if (ids.length === 0) return [];
-
-    const tasks = await this.prisma.task.findMany({
-      where: { projectId: { in: ids }, clientFacing: true, status: 'CLIENT_REVIEW' },
-      select: { id: true, title: true, deadline: true, project: { select: { id: true, name: true } } },
-      orderBy: { updatedAt: 'desc' },
-    });
-    return tasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      deadline: t.deadline,
-      project: t.project,
-      canApprove: access.get(t.project.id) === 'APPROVER',
-    }));
-  }
-
-  approve(taskId: string, comment: string | undefined, user: AuthUser, meta: Meta) {
-    return this.decide(taskId, TaskAction.CLIENT_APPROVE, comment, user, meta);
-  }
-
-  requestRevision(taskId: string, comment: string, user: AuthUser, meta: Meta) {
-    return this.decide(taskId, TaskAction.CLIENT_REQUEST_REVISION, comment, user, meta);
   }
 
   async listFiles(taskId: string, user: AuthUser) {
@@ -211,10 +135,9 @@ export class PortalService {
   }
 
   /**
-   * "Ask for a status update" (2026-07-27) — deliberately open to VIEWER and
-   * APPROVER alike: it's a question, not a decision, so it doesn't need the
-   * approve/request-revision gate. A short cooldown stops an impatient client
-   * from re-triggering the same notification every few minutes.
+   * "Ask for a status update" (2026-07-27) — the client's only write action.
+   * A short cooldown stops an impatient client from re-triggering the same
+   * notification every few minutes.
    */
   async requestStatus(taskId: string, user: AuthUser) {
     await this.assertActiveClient(user);
@@ -230,7 +153,7 @@ export class PortalService {
       },
     });
     if (!task || !task.clientFacing) throw new NotFoundException('Task not found');
-    const access = await this.accessMap(user.id);
+    const access = await this.accessSet(user.id);
     if (!access.has(task.project.id)) throw new NotFoundException('Task not found');
 
     const COOLDOWN_MS = 60 * 60 * 1000;
@@ -260,33 +183,15 @@ export class PortalService {
       select: { fileAsset: { select: { task: { select: { projectId: true } } } } },
     });
     const projectId = v?.fileAsset?.task?.projectId;
-    const access = await this.accessMap(user.id);
+    const access = await this.accessSet(user.id);
     if (!projectId || !access.has(projectId)) throw new NotFoundException('File not found');
     return this.files.download(versionId, user); // enforces AVAILABLE + CLIENT_VISIBLE
   }
 
   // ── helpers ──
-  private async decide(taskId: string, action: TaskAction, comment: string | undefined, user: AuthUser, meta: Meta) {
-    await this.assertActiveClient(user);
-    const task = await this.prisma.task.findUnique({
-      where: { id: taskId },
-      select: { id: true, projectId: true, clientFacing: true },
-    });
-    if (!task || !task.clientFacing) throw new NotFoundException('Deliverable not found');
-
-    const access = await this.accessMap(user.id);
-    if (!access.has(task.projectId)) throw new NotFoundException('Deliverable not found');
-    if (access.get(task.projectId) !== 'APPROVER') {
-      throw new ForbiddenException('Only an Approver can act on deliverables');
-    }
-    // Delegate to the §6 state machine: validates the transition, writes immutable
-    // history, and notifies the PM (Spec §5.5).
-    return this.tasks.transition(taskId, action, comment, user, meta);
-  }
-
   private async assertTaskAccess(taskId: string, userId: string): Promise<void> {
     const task = await this.prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
-    const access = await this.accessMap(userId);
+    const access = await this.accessSet(userId);
     if (!task || !access.has(task.projectId)) throw new NotFoundException('Not found');
   }
 

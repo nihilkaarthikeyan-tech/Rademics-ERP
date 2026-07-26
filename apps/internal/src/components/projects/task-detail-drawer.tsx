@@ -75,7 +75,6 @@ const STATUS_LABEL: Record<string, string> = {
   ACKNOWLEDGED: 'Accepted',
   IN_PROGRESS: 'In progress',
   SUBMITTED_FOR_REVIEW: 'In review',
-  CLIENT_REVIEW: 'With the client',
   COMPLETED: 'Completed',
   CLOSED: 'Closed',
   CANCELLED: 'Cancelled',
@@ -83,7 +82,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_TONE: Record<string, 'green' | 'amber' | 'slate' | 'red' | 'blue'> = {
   DRAFT: 'slate', ASSIGNED: 'blue', ACKNOWLEDGED: 'blue', IN_PROGRESS: 'amber',
-  SUBMITTED_FOR_REVIEW: 'amber', CLIENT_REVIEW: 'amber', COMPLETED: 'green',
+  SUBMITTED_FOR_REVIEW: 'amber', COMPLETED: 'green',
   CLOSED: 'slate', CANCELLED: 'red',
 };
 
@@ -179,11 +178,8 @@ function activityPhrase(h: HistoryEntry, actor: string): { actor: string | null;
     case 'ACKNOWLEDGE': return { actor, verb: 'accepted the task' };
     case 'START_WORK': return { actor, verb: 'started work' };
     case 'SUBMIT': return { actor, verb: 'submitted it for review' };
-    case 'APPROVE_REVIEW':
-      return { actor, verb: h.toStatus === 'CLIENT_REVIEW' ? 'approved it and sent it to the client' : 'approved the work' };
+    case 'APPROVE_REVIEW': return { actor, verb: 'approved the work' };
     case 'SEND_BACK': return { actor, verb: 'sent it back for changes' };
-    case 'CLIENT_APPROVE': return { actor: null, verb: 'The client approved the work' };
-    case 'CLIENT_REQUEST_REVISION': return { actor: null, verb: 'The client asked for changes' };
     // MARK_INVOICED / CLOSE_WITHOUT_INVOICING are gone from the chain (2026-07-26)
     // but stay here as strings: old history rows may still carry them.
     case 'MARK_INVOICED': return { actor, verb: 'marked it invoiced' };
@@ -194,25 +190,16 @@ function activityPhrase(h: HistoryEntry, actor: string): { actor: string | null;
   }
 }
 
-/** The pipeline the stepper draws — 7 segments, 8 when the client signs off. */
-function pipelineStages(clientFacing: boolean): string[] {
-  return [
-    'Draft', 'Assigned', 'Accepted', 'In progress', 'In review',
-    ...(clientFacing ? ['With the client'] : []),
-    'Completed', 'Closed',
-  ];
-}
+/** The pipeline the stepper draws — same 7 stages whether client-facing or not
+ *  (2026-07-27): the client no longer gates a stage of its own. */
+const PIPELINE_STAGES = ['Draft', 'Assigned', 'Accepted', 'In progress', 'In review', 'Completed', 'Closed'];
+const PIPELINE_ORDER: TaskStatus[] = [
+  'DRAFT', 'ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW', 'COMPLETED', 'CLOSED',
+];
 
-function stageIndex(status: TaskStatus, clientFacing: boolean): number {
-  const order: string[] = [
-    'DRAFT', 'ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW',
-    ...(clientFacing ? ['CLIENT_REVIEW'] : []),
-    'COMPLETED', 'CLOSED',
-  ];
-  const i = order.indexOf(status);
-  // A non-client-facing task can't be in CLIENT_REVIEW; if data ever says so, sit it at review.
-  if (i === -1) return status === 'CLIENT_REVIEW' ? 4 : 0;
-  return i;
+function stageIndex(status: TaskStatus): number {
+  const i = PIPELINE_ORDER.indexOf(status);
+  return i === -1 ? 0 : i;
 }
 
 function Avatar({ name, className = 'h-7 w-7 text-[11px]' }: { name: string; className?: string }) {
@@ -240,7 +227,6 @@ export function TaskDetailDrawer({
   onClose,
   onChanged,
   pm,
-  clientName,
 }: {
   taskId: string;
   members: AssignableUser[];
@@ -249,7 +235,6 @@ export function TaskDetailDrawer({
   /** The project's appointed manager, when the caller has it loaded — used only
    *  for names in copy. Eligibility always comes from the task's own project.pmId. */
   pm?: { id: string; name: string } | null;
-  clientName?: string | null;
 }) {
   const me = useMe();
   const [task, setTask] = useState<TaskDetail | null>(null);
@@ -401,7 +386,6 @@ export function TaskDetailDrawer({
 
   const assigneeName = task?.assignee?.name ?? null;
   const pmDisplay = pmName ?? 'a project manager';
-  const clientDisplay = clientName ?? 'the client';
 
   const history = task?.history ?? [];
   const newest = history[history.length - 1] ?? null;
@@ -469,12 +453,6 @@ export function TaskDetailDrawer({
             avatar: null,
           };
         return { chip: 'waiting', text: <>Waiting for {name(pmDisplay)} to review the submitted work.</>, avatar: null };
-      case 'CLIENT_REVIEW':
-        return {
-          chip: 'waiting',
-          text: <>With {name(clientDisplay)} for sign-off. It moves on its own when they approve or ask for changes.</>,
-          avatar: null,
-        };
       case 'COMPLETED':
         return isManager
           ? { chip: 'your', text: <>Work approved — close the task to wrap it up.</>, avatar: null }
@@ -494,7 +472,7 @@ export function TaskDetailDrawer({
       case TaskAction.SUBMIT:
         return `Sends it to ${pmDisplay} for review.`;
       case TaskAction.APPROVE_REVIEW:
-        return task?.clientFacing ? 'Approving sends it to the client for sign-off.' : 'Approving marks it completed.';
+        return 'Approving marks it completed.';
       case TaskAction.CLOSE:
         return 'Wraps it up for good.';
       default:
@@ -520,14 +498,11 @@ export function TaskDetailDrawer({
 
   const activity = [...history].reverse();
   const shownActivity = showAllActivity ? activity : activity.slice(0, 5);
-  const returnedNote =
-    task?.status === 'IN_PROGRESS' && newest && (newest.action === 'SEND_BACK' || newest.action === 'CLIENT_REQUEST_REVISION')
-      ? newest
-      : null;
+  const returnedNote = task?.status === 'IN_PROGRESS' && newest?.action === 'SEND_BACK' ? newest : null;
   const cancelEntry = [...history].reverse().find((h) => h.action === 'CANCEL') ?? null;
 
-  const stages = task ? pipelineStages(task.clientFacing) : [];
-  const currentStage = task ? stageIndex(task.status, task.clientFacing) : 0;
+  const stages = task ? PIPELINE_STAGES : [];
+  const currentStage = task ? stageIndex(task.status) : 0;
 
   return (
     <div

@@ -9,10 +9,10 @@ import { apiFetch, ApiError, type Me } from '@/lib/api';
 import { clearToken } from '@/lib/session';
 
 // Portal top-nav only, no sidebar (Spec §16.2).
+// 2026-07-27: Approvals and Invoices removed — the client views progress and
+// can ask for a status update, nothing more.
 const NAV = [
   { label: 'Dashboard', href: '/dashboard' },
-  { label: 'Approvals', href: '/approvals' },
-  { label: 'Invoices', href: '/invoices' },
   { label: 'Profile', href: '/profile' },
 ];
 

@@ -376,8 +376,7 @@ export class TasksService {
    * clock (see lastClientUpdateAt stamping in transition()/assign()/addComment()).
    * Staff-only nudge: the client never sees a countdown or a "you were
    * ignored" message, matching how the acceptance sweep stays internal too.
-   * Skipped once the ball is in the CLIENT's court (CLIENT_REVIEW) or the
-   * task is finished — nobody on staff can "update" either of those.
+   * Skipped once the task is finished — nothing to update at that point.
    */
   async runClientUpdateSweep(now = new Date()): Promise<{ reminded: number }> {
     const THREE_DAYS = 3 * 86_400_000;
@@ -385,7 +384,7 @@ export class TasksService {
     const stale = await this.prisma.task.findMany({
       where: {
         clientFacing: true,
-        status: { notIn: ['CLIENT_REVIEW', 'COMPLETED', 'CLOSED', 'CANCELLED'] },
+        status: { notIn: ['COMPLETED', 'CLOSED', 'CANCELLED'] },
         OR: [{ lastClientUpdateAt: null, createdAt: { lt: cutoff } }, { lastClientUpdateAt: { lt: cutoff } }],
       },
       select: {
@@ -511,22 +510,11 @@ export class TasksService {
     const task = await this.loadForTransition(taskId);
 
     const transition = this.findTransition(task.status as SharedTaskStatus, action);
-    const to = nextTaskStatus(task.status as SharedTaskStatus, action, { clientFacing: task.clientFacing });
+    const to = nextTaskStatus(task.status as SharedTaskStatus, action);
     if (!transition || !to) {
       throw new BadRequestException(`Illegal transition: ${action} from ${task.status} (§6)`);
     }
     this.assertActor(transition.actors, actor, task);
-
-    // A CLIENT reaching this shared endpoint must be an APPROVER on THIS task's
-    // project. assertActor only checks the CLIENT_APPROVER role, not org scope — so
-    // without this a client could approve/reject another client's deliverable by
-    // POSTing here directly, bypassing the org-scoped portal path (§5.5, §10).
-    if (actor.role === 'CLIENT') {
-      const approver = await this.prisma.clientProjectAccess.count({
-        where: { clientUserId: actor.id, projectId: task.projectId, level: 'APPROVER' },
-      });
-      if (!approver) throw new ForbiddenException('You do not have access to this deliverable');
-    }
 
     if (transition.requiresComment && !comment?.trim()) {
       throw new BadRequestException('A comment is required for this action (§6)');
@@ -573,7 +561,7 @@ export class TasksService {
       after: { status: to, action },
       ...meta,
     });
-    await this.notifyOnTransition(task, action, to as SharedTaskStatus);
+    await this.notifyOnTransition(task, action);
     return updated;
   }
 
@@ -722,8 +710,6 @@ export class TasksService {
           );
         case 'TEAM_LEAD':
           return user.role === 'TEAM_LEAD' || user.role === 'SUPER_ADMIN';
-        case 'CLIENT_APPROVER':
-          return user.role === 'CLIENT';
         default:
           return false;
       }
@@ -737,11 +723,10 @@ export class TasksService {
       title: string;
       assigneeId: string | null;
       projectId: string;
-      project: { pmId: string | null; clientId: string | null };
+      project: { pmId: string | null };
       watchers: { userId: string }[];
     },
     action: TaskAction,
-    to: SharedTaskStatus,
   ): Promise<void> {
     const base = { eventGroup: 'tasks', body: task.title, entityType: 'Task', entityId: task.id };
     switch (action) {
@@ -752,25 +737,9 @@ export class TasksService {
         await this.notifications.notify({ ...base, userId: task.assigneeId ?? '', type: 'TASK_SENT_BACK', title: 'Your task was sent back' });
         break;
       case TaskAction.APPROVE_REVIEW:
-        if (to === 'CLIENT_REVIEW') {
-          // Notify every Approver-level client user on this project (Spec §5.5).
-          const approvers = await this.prisma.clientProjectAccess.findMany({
-            where: { projectId: task.projectId, level: 'APPROVER' },
-            select: { clientUserId: true },
-          });
-          const recipients = approvers.length
-            ? approvers.map((a) => a.clientUserId)
-            : [task.project.clientId]; // fallback to the primary contact
-          await this.notifications.notifyMany(recipients, { ...base, type: 'CLIENT_APPROVAL_REQUESTED', title: 'A deliverable awaits your approval' });
-        } else {
-          await this.notifications.notifyMany([task.assigneeId, ...task.watchers.map((w) => w.userId)], { ...base, type: 'TASK_COMPLETED', title: 'A task was completed' });
-        }
-        break;
-      case TaskAction.CLIENT_APPROVE:
-        await this.notifications.notify({ ...base, userId: task.project.pmId ?? '', type: 'CLIENT_APPROVED', title: 'The client approved a deliverable' });
-        break;
-      case TaskAction.CLIENT_REQUEST_REVISION:
-        await this.notifications.notifyMany([task.project.pmId, task.assigneeId], { ...base, type: 'CLIENT_REVISION_REQUESTED', title: 'The client requested a revision' });
+        // Always → COMPLETED now (2026-07-27) — the client no longer sits
+        // between internal approval and completion.
+        await this.notifications.notifyMany([task.assigneeId, ...task.watchers.map((w) => w.userId)], { ...base, type: 'TASK_COMPLETED', title: 'A task was completed' });
         break;
       case TaskAction.CANCEL:
         await this.notifications.notifyMany([task.assigneeId, ...task.watchers.map((w) => w.userId)], { ...base, type: 'TASK_CANCELLED', title: 'A task was cancelled' });

@@ -11,7 +11,7 @@ import type { AuthUser } from '../auth/auth-user';
 interface Meta { ip?: string | null; userAgent?: string | null }
 
 const ALL_PROJECTS = 'ALL' as const;
-const OPEN_STATUSES: TaskStatus[] = ['ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW', 'CLIENT_REVIEW'];
+const OPEN_STATUSES: TaskStatus[] = ['ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW'];
 
 /**
  * The four AI features (Spec §7) behind the provider-agnostic gateway. Every feature
@@ -187,7 +187,7 @@ export class AiService {
     const forecastDate = weeksToFinish !== null ? new Date(Date.now() + weeksToFinish * 7 * 86_400_000) : null;
 
     // Bottleneck: which stage holds the most open tasks.
-    const inReview = openTasks.filter((t) => t.status === 'SUBMITTED_FOR_REVIEW' || t.status === 'CLIENT_REVIEW').length;
+    const inReview = openTasks.filter((t) => t.status === 'SUBMITTED_FOR_REVIEW').length;
     const bottleneck = inReview > openTasks.length / 2 ? 'review stage' : 'execution stage';
     const risk = weeksToFinish === null ? 'HIGH' : weeksToFinish <= 2 ? 'LOW' : weeksToFinish <= 5 ? 'MEDIUM' : 'HIGH';
     const reasons = [
