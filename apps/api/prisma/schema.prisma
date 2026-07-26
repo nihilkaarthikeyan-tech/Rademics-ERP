@@ -624,6 +624,10 @@ model Task {
   deadline       DateTime?
   clientFacing   Boolean      @default(false) // §6 flag, settable by PM/TL
   status         TaskStatus   @default(DRAFT)
+  // When the task entered its current status. A handoff that nobody picks up
+  // (ASSIGNED but never accepted) is invisible without this — it powers the
+  // daily acceptance reminders and the board's "waiting" marker.
+  statusChangedAt DateTime @default(now())
 
   createdById String? @db.Uuid
   createdBy   User?   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)

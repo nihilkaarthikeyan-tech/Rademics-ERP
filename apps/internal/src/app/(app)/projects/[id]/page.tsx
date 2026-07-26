@@ -1,7 +1,8 @@
 'use client';
 
-import { use, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, use, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Badge, Button, Card, CardContent, EmptyState, Input, Label, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
@@ -16,7 +17,15 @@ interface TaskRow {
   clientFacing: boolean;
   deadline: string | null;
   overdue: boolean;
+  statusChangedAt: string;
   assignee: { id: string; name: string } | null;
+}
+
+/** Days a task has been sitting unaccepted — null under the 1-day grace. */
+function unacceptedDays(t: TaskRow): number | null {
+  if (t.status !== 'ASSIGNED') return null;
+  const days = Math.floor((Date.now() - new Date(t.statusChangedAt).getTime()) / 86_400_000);
+  return days >= 1 ? days : null;
 }
 interface ProjectDetail {
   id: string;
@@ -54,9 +63,19 @@ const CORE_COLUMNS = ['DRAFT', 'ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMI
 // that check needs the loaded project, so it lives in the component below.
 const CAN_CREATE_TASK = ['SUPER_ADMIN', 'HR'];
 
-export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+/** useSearchParams needs a Suspense boundary at build time — thin wrapper only. */
+export default function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <ProjectDetail_ {...props} />
+    </Suspense>
+  );
+}
+
+function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const me = useMe();
+  const router = useRouter();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [members, setMembers] = useState<AssignableUser[]>([]);
@@ -86,6 +105,22 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Deep link from a notification: /projects/<id>?task=<taskId> opens the panel.
+  // Subscribed (not read-once): clicking a notification while ALREADY on this
+  // project page only changes the query string — the component never remounts.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const wanted = searchParams.get('task');
+    if (wanted) setOpenTaskId(wanted);
+  }, [searchParams]);
+
+  function closeTask() {
+    setOpenTaskId(null);
+    // Drop ?task= through the router (not history.replaceState) so
+    // useSearchParams updates and the same notification can reopen it later.
+    router.replace(`/projects/${id}`, { scroll: false });
+  }
 
   const filtered = useMemo(
     () => (priorityFilter ? tasks.filter((t) => t.priority === priorityFilter) : tasks),
@@ -248,7 +283,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           members={members}
           pm={project.pm}
           clientName={project.client?.name ?? null}
-          onClose={() => setOpenTaskId(null)}
+          onClose={closeTask}
           onChanged={loadTasks}
         />
       ) : null}
@@ -257,6 +292,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 }
 
 function TaskCard({ task, onOpen }: { task: TaskRow; onOpen: (id: string) => void }) {
+  const waiting = unacceptedDays(task);
   return (
     <button
       onClick={() => onOpen(task.id)}
@@ -272,6 +308,13 @@ function TaskCard({ task, onOpen }: { task: TaskRow; onOpen: (id: string) => voi
         {task.assignee ? task.assignee.name : 'Unassigned'}
         {task.deadline ? ` · ${new Date(task.deadline).toLocaleDateString()}` : ''}
       </div>
+      {/* A handoff nobody picked up is the silent stall this board exists to
+          prevent — say it on the card, not only inside the panel. */}
+      {waiting !== null ? (
+        <div className="mt-1.5 rounded bg-warning-soft px-1.5 py-0.5 text-[11px] font-medium text-warning">
+          Not accepted yet · {waiting} day{waiting === 1 ? '' : 's'}
+        </div>
+      ) : null}
     </button>
   );
 }
@@ -473,6 +516,9 @@ function NewTaskModal({
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
+                    {typeof m.openTasks === 'number'
+                      ? ` — ${m.openTasks === 0 ? 'free' : `${m.openTasks} open task${m.openTasks === 1 ? '' : 's'}`}`
+                      : ''}
                   </option>
                 ))}
               </select>

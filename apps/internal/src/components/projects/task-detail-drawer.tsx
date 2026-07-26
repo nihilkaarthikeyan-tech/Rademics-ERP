@@ -35,6 +35,8 @@ export interface AssignableUser {
   email: string;
   role: string;
   resourceType: string;
+  /** Live workload: tasks not yet finished. Lets the assigner pick the free person. */
+  openTasks?: number;
 }
 
 interface HistoryEntry {
@@ -850,6 +852,9 @@ export function TaskDetailDrawer({
                                     <span className="block text-xs text-slate-500">
                                       {roleLabel(m.role)}
                                       {m.resourceType === 'FREELANCE' ? ' · Freelance' : ''}
+                                      {typeof m.openTasks === 'number'
+                                        ? ` · ${m.openTasks === 0 ? 'free' : `${m.openTasks} open task${m.openTasks === 1 ? '' : 's'}`}`
+                                        : ''}
                                     </span>
                                   </span>
                                   {selected ? <Check className="h-4 w-4 shrink-0 text-accent" /> : null}

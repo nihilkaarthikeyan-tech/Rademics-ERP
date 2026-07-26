@@ -193,12 +193,28 @@ export class ProjectsService {
   }
 
   /** Active internal users who can hold tasks (Spec §5.9 assignment screens, §24). */
-  listAssignableUsers() {
-    return this.prisma.user.findMany({
+  async listAssignableUsers() {
+    // openTasks = live workload, so whoever assigns can pick the free person,
+    // not just a familiar name. "Open" mirrors My Work: work not yet finished.
+    const users = await this.prisma.user.findMany({
       where: { status: 'ACTIVE', role: { in: ['TEAM_LEAD', 'EMPLOYEE'] } },
-      select: { id: true, name: true, email: true, role: true, resourceType: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        resourceType: true,
+        _count: {
+          select: {
+            assignedTasks: {
+              where: { status: { notIn: ['COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED'] } },
+            },
+          },
+        },
+      },
       orderBy: { name: 'asc' },
     });
+    return users.map(({ _count, ...u }) => ({ ...u, openTasks: _count.assignedTasks }));
   }
 
   /**

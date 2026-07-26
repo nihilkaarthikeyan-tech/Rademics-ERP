@@ -44,6 +44,7 @@ const TASK_SELECT = {
   deadline: true,
   clientFacing: true,
   status: true,
+  statusChangedAt: true,
   createdAt: true,
   updatedAt: true,
   assignee: { select: { id: true, name: true, email: true } },
@@ -207,11 +208,18 @@ export class TasksService {
     if (!task) throw new NotFoundException('Task not found');
 
     if ((await this.resolveViewScope(user)) === 'OWN') {
+      // The board (list endpoint) already shows every task in a project you are
+      // part of — opening one of those cards must not 403. Project membership
+      // (you hold a task in it) grants READ here; acting on the task stays
+      // gated per-action by assertActor, so a teammate can look but not touch.
       const involved =
         task.assignee?.id === user.id ||
         task.createdById === user.id ||
         task.project.pmId === user.id ||
-        task.watchers.some((w) => w.user.id === user.id);
+        task.watchers.some((w) => w.user.id === user.id) ||
+        (await this.prisma.task.count({
+          where: { projectId: task.project.id, assigneeId: user.id },
+        })) > 0;
       if (!involved) throw new ForbiddenException('You do not have access to this task');
     }
 
@@ -310,6 +318,57 @@ export class TasksService {
     return { items: items.map((t) => ({ ...t, overdue: this.isOverdue(t) })) };
   }
 
+  /**
+   * Daily sweep for handoffs nobody picked up: tasks sitting in ASSIGNED for
+   * 24h+ remind their assignee each morning; at 48h+ the project's manager is
+   * told too. An unaccepted task blocks the whole §6 chain silently — this is
+   * the chase. Runs from the tasks queue (see tasks.processor.ts).
+   */
+  async runAcceptanceSweep(now = new Date()): Promise<{ reminded: number; escalated: number }> {
+    const DAY = 86_400_000;
+    const stale = await this.prisma.task.findMany({
+      where: {
+        status: 'ASSIGNED',
+        assigneeId: { not: null },
+        statusChangedAt: { lt: new Date(now.getTime() - DAY) },
+      },
+      select: {
+        id: true,
+        title: true,
+        assigneeId: true,
+        statusChangedAt: true,
+        assignee: { select: { name: true } },
+        project: { select: { pmId: true } },
+      },
+    });
+    let escalated = 0;
+    for (const t of stale) {
+      const days = Math.floor((now.getTime() - t.statusChangedAt.getTime()) / DAY);
+      await this.notifications.notify({
+        userId: t.assigneeId!,
+        type: 'TASK_ACCEPT_REMINDER',
+        eventGroup: 'tasks',
+        title: 'Reminder: a task is waiting for you to accept it',
+        body: `${t.title} — assigned ${days} day${days === 1 ? '' : 's'} ago`,
+        entityType: 'Task',
+        entityId: t.id,
+      });
+      if (days >= 2 && t.project.pmId && t.project.pmId !== t.assigneeId) {
+        await this.notifications.notify({
+          userId: t.project.pmId,
+          type: 'TASK_ACCEPT_STALLED',
+          eventGroup: 'tasks',
+          title: 'A task is stuck waiting to be accepted',
+          body: `${t.assignee?.name ?? 'The assignee'} hasn't accepted "${t.title}" (${days} days)`,
+          entityType: 'Task',
+          entityId: t.id,
+        });
+        escalated += 1;
+      }
+    }
+    return { reminded: stale.length, escalated };
+  }
+
   // ── Assign / Reassign (Spec §6, §24) ──
   async assign(taskId: string, assigneeId: string, actor: AuthUser, meta: Meta) {
     const task = await this.loadForTransition(taskId);
@@ -349,7 +408,7 @@ export class TasksService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const t = await tx.task.update({
         where: { id: taskId },
-        data: { assigneeId, status: 'ASSIGNED' },
+        data: { assigneeId, status: 'ASSIGNED', statusChangedAt: new Date() },
         select: TASK_SELECT,
       });
       await tx.taskStatusHistory.create({
@@ -428,7 +487,7 @@ export class TasksService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const t = await tx.task.update({
         where: { id: taskId },
-        data: { status: to as PrismaTaskStatus },
+        data: { status: to as PrismaTaskStatus, statusChangedAt: new Date() },
         select: TASK_SELECT,
       });
       await tx.taskStatusHistory.create({

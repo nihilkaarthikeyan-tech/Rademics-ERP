@@ -11,6 +11,7 @@ import { navForRole, NAV_GROUPS } from '@/lib/nav';
 import { MeContext } from '@/lib/me-context';
 import { AttendanceProvider } from '@/lib/attendance-context';
 import { NotificationsBell } from '@/components/notifications-bell';
+import { MyWorkBadge } from '@/components/my-work-badge';
 import { GlobalSearch } from '@/components/global-search';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -126,6 +127,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         >
                           <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-slate-400')} />
                           {item.label}
+                          {item.href === '/my-work' ? <MyWorkBadge /> : null}
                         </Link>
                       );
                     })}
