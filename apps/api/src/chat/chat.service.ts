@@ -1,11 +1,31 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../attendance/presence.service';
 import { FilesService } from '../files/files.service';
+import { AuditService } from '../audit/audit.service';
 import type { AuthUser } from '../auth/auth-user';
 
 /** Audit metadata shape produced by reqMeta(). */
 type Meta = { ip?: string | null; userAgent?: string | null };
+
+/** Roles that may remove ANYONE's message, for moderation — not just their own. */
+const CAN_MODERATE = ['SUPER_ADMIN', 'HR'];
+
+/**
+ * Per-PERSON flood guard, deliberately not the app's IP-based @Throttle
+ * (app.module.ts): an office shares one IP, so an IP limit tight enough to
+ * stop one person spamming would also cap everyone else sitting behind the
+ * same NAT. This counts THIS user's own recent messages instead.
+ */
+const FLOOD_LIMIT = 8;
+const FLOOD_WINDOW_MS = 10_000;
 
 /** What the UI needs to render one attachment: name, size, type, scan state. */
 const ATTACHMENT_SELECT = {
@@ -53,6 +73,23 @@ function shapeAttachments(files: AssetRow[]) {
     .filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
+type MessageRow = {
+  id: string;
+  body: string;
+  createdAt: Date;
+  deletedAt: Date | null;
+  author: { id: string; name: string } | null;
+  files: AssetRow[];
+};
+
+/** A deleted message keeps its row (attribution, audit) but shows as a tombstone. */
+function shapeMessage(m: MessageRow) {
+  if (m.deletedAt) {
+    return { id: m.id, body: '', createdAt: m.createdAt, author: m.author, files: [], deleted: true };
+  }
+  return { id: m.id, body: m.body, createdAt: m.createdAt, author: m.author, files: shapeAttachments(m.files), deleted: false };
+}
+
 /**
  * Company chat v1 (2026-07-26): ONE general room every staff member is in.
  * Messages persist here for history and are pushed live over the presence
@@ -70,6 +107,7 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly presence: PresenceService,
     private readonly files: FilesService,
+    private readonly audit: AuditService,
   ) {}
 
   /** Chat is internal — clients have the portal, never the company room. */
@@ -91,11 +129,12 @@ export class ChatService {
         id: true,
         body: true,
         createdAt: true,
+        deletedAt: true,
         author: { select: { id: true, name: true } },
         files: { select: ATTACHMENT_SELECT },
       },
     });
-    const items = rows.reverse().map(({ files, ...m }) => ({ ...m, files: shapeAttachments(files) }));
+    const items = rows.reverse().map(shapeMessage);
     return { items, hasMore: rows.length >= take };
   }
 
@@ -105,6 +144,7 @@ export class ChatService {
     if (!text && fileAssetIds.length === 0) {
       throw new BadRequestException('Write something or attach a file');
     }
+    await this.assertNotFlooding(user);
 
     // Only your own not-yet-sent drafts may be attached — otherwise a caller
     // could pass someone else's asset id and republish their file.
@@ -140,18 +180,72 @@ export class ChatService {
           id: true,
           body: true,
           createdAt: true,
+          deletedAt: true,
           author: { select: { id: true, name: true } },
           files: { select: ATTACHMENT_SELECT },
         },
       });
     });
 
-    const shaped = { ...message, files: shapeAttachments(message.files) };
+    const shaped = shapeMessage(message);
     // Live to every open staff app; senders dedupe by id on their own append.
     this.presence.emitToAll('chat:message', shaped);
     // Your own message never counts as unread for you.
     await this.markRead(user);
     return shaped;
+  }
+
+  /** Cheap, per-user check — a handful of quick messages is normal conversation;
+   *  a burst past this is a script or someone trying to drown out the room. */
+  private async assertNotFlooding(user: AuthUser): Promise<void> {
+    const recent = await this.prisma.chatMessage.count({
+      where: { authorId: user.id, createdAt: { gte: new Date(Date.now() - FLOOD_WINDOW_MS) } },
+    });
+    if (recent >= FLOOD_LIMIT) {
+      throw new HttpException(
+        "You're sending messages too fast — wait a few seconds and try again.",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  /**
+   * Delete a message: the author may remove their own; HR/Super Admin may
+   * remove ANYONE's for moderation. Soft-delete — the row (and who sent it,
+   * what it said) stays for the audit trail; every other viewer just sees a
+   * quiet "message removed" tombstone once the live event lands.
+   */
+  async remove(user: AuthUser, messageId: string, meta: Meta) {
+    this.assertStaff(user);
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, body: true, authorId: true, deletedAt: true },
+    });
+    if (!message || message.deletedAt) throw new NotFoundException('Message not found');
+
+    const isAuthor = message.authorId === user.id;
+    const isModerator = CAN_MODERATE.includes(user.role);
+    if (!isAuthor && !isModerator) {
+      throw new ForbiddenException('You can only delete your own messages');
+    }
+
+    await this.prisma.chatMessage.update({
+      where: { id: messageId },
+      data: { deletedAt: new Date(), deletedById: user.id },
+    });
+
+    await this.audit.record({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: 'CHAT_MESSAGE_DELETED',
+      entityType: 'ChatMessage',
+      entityId: messageId,
+      before: { body: message.body, authorId: message.authorId, moderated: !isAuthor },
+      ...meta,
+    });
+
+    this.presence.emitToAll('chat:messageDeleted', { id: messageId });
+    return { id: messageId, deleted: true };
   }
 
   // ── Attachments ──
@@ -187,6 +281,8 @@ export class ChatService {
    * Download a chat attachment. Any staff member may open anything shared in
    * the company room — but ONLY chat files come through here, so this can
    * never be used to reach a task or profile file the caller can't see.
+   * A deleted message's attachments go with it: moderating a message must
+   * also pull whatever was attached to it out of reach.
    * `inline` renders in the browser (image thumbnails, viewing a PDF) instead
    * of forcing a Save dialog.
    */
@@ -194,9 +290,11 @@ export class ChatService {
     this.assertStaff(user);
     const version = await this.prisma.fileVersion.findUnique({
       where: { id: versionId },
-      select: { fileAsset: { select: { chatMessageId: true } } },
+      select: { fileAsset: { select: { chatMessageId: true, chatMessage: { select: { deletedAt: true } } } } },
     });
-    if (!version?.fileAsset.chatMessageId) throw new NotFoundException('File not found');
+    if (!version?.fileAsset.chatMessageId || version.fileAsset.chatMessage?.deletedAt) {
+      throw new NotFoundException('File not found');
+    }
     return this.files.download(versionId, user, inline);
   }
 
@@ -258,6 +356,7 @@ export class ChatService {
     const count = await this.prisma.chatMessage.count({
       where: {
         authorId: { not: user.id },
+        deletedAt: null,
         ...(state ? { createdAt: { gt: state.lastReadAt } } : {}),
       },
     });

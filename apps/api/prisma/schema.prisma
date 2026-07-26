@@ -290,10 +290,12 @@ model User {
   notificationPrefs NotificationPreference[]
 
   // ── Notices & chat (2026-07-26) ──
-  announcements    Announcement[]    @relation("AnnouncementAuthor")
-  announcementPins AnnouncementPin[]
-  chatMessages     ChatMessage[]     @relation("ChatAuthor")
-  chatReadState    ChatReadState?
+  announcements       Announcement[]     @relation("AnnouncementAuthor")
+  announcementPins    AnnouncementPin[]
+  announcementReads   AnnouncementRead[]
+  chatMessages        ChatMessage[]      @relation("ChatAuthor")
+  deletedChatMessages ChatMessage[]      @relation("ChatMessageDeleter")
+  chatReadState       ChatReadState?
 
   // ── Files (Spec §5.6) ──
   createdFiles     FileAsset[]   @relation("FileCreator")
@@ -1166,10 +1168,16 @@ model Announcement {
   title String
   body  String
 
+  /// 2026-07-26: HR/SA may flag a notice as requiring an explicit read. The
+  /// person can't treat it as a normal item until they click Acknowledge —
+  /// reserved for genuinely critical notices (see AnnouncementRead).
+  requiresAck Boolean @default(false)
+
   createdById String? @db.Uuid
   createdBy   User?   @relation("AnnouncementAuthor", fields: [createdById], references: [id], onDelete: SetNull)
 
-  pins AnnouncementPin[]
+  pins  AnnouncementPin[]
+  reads AnnouncementRead[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1191,6 +1199,24 @@ model AnnouncementPin {
   @@map("announcement_pins")
 }
 
+/// Read receipt (2026-07-26): stamped the first time a notice appears in a
+/// person's list (viewedAt), so HR can see who has been shown it. A SEPARATE,
+/// explicit action sets acknowledgedAt — only meaningful for requiresAck
+/// notices — proving the person actually clicked "I've read this", not just
+/// that it rendered on their screen.
+model AnnouncementRead {
+  announcementId String       @db.Uuid
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  viewedAt       DateTime  @default(now())
+  acknowledgedAt DateTime?
+
+  @@id([announcementId, userId])
+  @@map("announcement_reads")
+}
+
 /// Company chat v1: ONE general room every staff member is in. Messages are
 /// delivered live over the presence socket and persisted here for history.
 model ChatMessage {
@@ -1202,6 +1228,14 @@ model ChatMessage {
   author   User?   @relation("ChatAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
   files FileAsset[]
+
+  /// Soft-delete (2026-07-26): the author may remove their own message; HR/SA
+  /// may remove ANY message for moderation. The row stays (attributed
+  /// deletion, audit trail) — the API blanks body/files for callers so the UI
+  /// shows a quiet "message removed" tombstone instead of the content.
+  deletedAt   DateTime?
+  deletedById String?   @db.Uuid
+  deletedBy   User?     @relation("ChatMessageDeleter", fields: [deletedById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 

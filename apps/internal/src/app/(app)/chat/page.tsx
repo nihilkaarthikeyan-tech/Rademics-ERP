@@ -8,6 +8,7 @@ import {
   Paperclip,
   SendHorizonal,
   ShieldAlert,
+  Trash2,
   X,
 } from 'lucide-react';
 import { Button, LoadingState } from '@rademics/ui';
@@ -30,7 +31,11 @@ interface ChatMessage {
   createdAt: string;
   author: { id: string; name: string } | null;
   files: Attachment[];
+  deleted: boolean;
 }
+
+/** Matches the API's CAN_MODERATE — HR/Super Admin may remove ANYONE's message. */
+const CAN_MODERATE = ['SUPER_ADMIN', 'HR'];
 
 interface ActivePerson {
   id: string;
@@ -95,6 +100,7 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +143,14 @@ export default function ChatPage() {
       markRead(); // the room is open on screen — nothing here is "unread"
     });
     socket.on('presence:update', () => loadActive());
+    socket.on('chat:messageDeleted', ({ id }: { id: string }) => {
+      // Live for every open room, not just the person who clicked delete —
+      // becomes a quiet tombstone rather than vanishing (which would look
+      // like a rendering glitch to anyone mid-read).
+      setMessages((prev) =>
+        prev ? prev.map((m) => (m.id === id ? { ...m, deleted: true, body: '', files: [] } : m)) : prev,
+      );
+    });
     return () => {
       socket.close();
     };
@@ -244,6 +258,21 @@ export default function ChatPage() {
       }
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  async function deleteMessage(id: string) {
+    setError(null);
+    try {
+      await apiFetch(`/chat/messages/${id}`, { method: 'DELETE' });
+      setConfirmDeleteId(null);
+      // The socket echo also does this for us, but resolving locally means
+      // it settles the instant the request succeeds, not after a round trip.
+      setMessages((prev) =>
+        prev ? prev.map((m) => (m.id === id ? { ...m, deleted: true, body: '', files: [] } : m)) : prev,
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not delete that message.');
+    }
   }
 
   /** Images open for viewing (inline); everything else prompts to save. */
@@ -366,6 +395,7 @@ export default function ChatPage() {
             {(messages ?? []).map((m, i) => {
               const prev = i > 0 ? messages![i - 1] : null;
               const mine = m.author?.id === me.id;
+              const canDeleteThis = !m.deleted && (mine || CAN_MODERATE.includes(me.role));
               const name = m.author?.name ?? 'Someone';
               const newDay = !prev || dayLabel(prev.createdAt) !== dayLabel(m.createdAt);
               // Consecutive messages from one person collapse under one avatar.
@@ -418,13 +448,38 @@ export default function ChatPage() {
                           </span>
                         </div>
                       )}
-                      {m.body ? (
-                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
-                          {m.body}
-                        </p>
-                      ) : null}
 
-                      {m.files.length > 0 ? (
+                      {m.deleted ? (
+                        <p className="text-sm italic text-slate-400">Message removed</p>
+                      ) : (
+                        <>
+                          {m.body ? (
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
+                              {m.body}
+                            </p>
+                          ) : null}
+
+                          {confirmDeleteId === m.id ? (
+                            <div className="mt-1 flex items-center gap-2 rounded-md bg-danger-soft px-2 py-1">
+                              <span className="text-xs text-danger">Delete this message? This can't be undone.</span>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="text-xs text-slate-500 hover:text-slate-700"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => void deleteMessage(m.id)}
+                                className="text-xs font-medium text-danger hover:underline"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+
+                      {!m.deleted && m.files.length > 0 ? (
                         <div className="mt-1.5 flex flex-wrap gap-2">
                           {m.files.map((f) => {
                             if (f.scanStatus === 'INFECTED') {
@@ -490,6 +545,17 @@ export default function ChatPage() {
                         </div>
                       ) : null}
                     </div>
+
+                    {canDeleteThis ? (
+                      <button
+                        onClick={() => setConfirmDeleteId(m.id)}
+                        title={mine ? 'Delete your message' : 'Remove this message (moderation)'}
+                        aria-label="Delete message"
+                        className="shrink-0 self-start rounded-md p-1 text-slate-300 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
                   </div>
                 </li>
               );

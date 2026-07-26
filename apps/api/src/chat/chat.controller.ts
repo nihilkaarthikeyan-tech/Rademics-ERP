@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import type { Request } from 'express';
 import {
@@ -79,6 +79,12 @@ export class ChatController {
   @Post('read')
   markRead(@CurrentUser() user: AuthUser) {
     return this.chat.markRead(user);
+  }
+
+  /** Author deletes their own message; HR/Super Admin may delete anyone's (moderation). */
+  @Delete('messages/:id')
+  removeMessage(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.chat.remove(user, id, reqMeta(req));
   }
 
   @Get('unread-count')
