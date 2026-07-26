@@ -16,6 +16,21 @@ function apiOrigins() {
   }
 }
 
+/**
+ * Storage (MinIO/S3) origin — chat attachments are the first feature to load
+ * this INTO the page (an <img> preview), rather than only ever opening it via
+ * window.open() for a download, which CSP does not govern. Without this,
+ * every inline image preview is silently blocked by img-src.
+ */
+function storageOrigin() {
+  const raw = process.env.NEXT_PUBLIC_STORAGE_URL ?? 'http://localhost:9000';
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return 'http://localhost:9000';
+  }
+}
+
 /** Origin the browser SDK posts error envelopes to, parsed from the DSN's host. */
 function sentryIngestOrigin() {
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
@@ -40,6 +55,7 @@ const httpsEnabled = process.env.PUBLIC_HTTPS !== 'false';
  */
 function contentSecurityPolicy() {
   const [apiHttp, apiWs] = apiOrigins();
+  const storage = storageOrigin();
   const turnstile = 'https://challenges.cloudflare.com';
   const sentry = sentryIngestOrigin();
   const scriptSrc = isProd
@@ -53,11 +69,12 @@ function contentSecurityPolicy() {
     "form-action 'self'",
     `script-src ${scriptSrc}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // storage: chat/task attachment previews load presigned MinIO URLs directly.
+    `img-src 'self' data: blob: ${storage}`,
     "font-src 'self' data:",
     // Browser Sentry SDK posts error envelopes here (Spec §11) — no-op (thus safe
     // to omit) if NEXT_PUBLIC_SENTRY_DSN isn't set.
-    `connect-src 'self' ${apiHttp} ${apiWs} ${turnstile}${sentry ? ` ${sentry}` : ''}`,
+    `connect-src 'self' ${apiHttp} ${apiWs} ${storage} ${turnstile}${sentry ? ` ${sentry}` : ''}`,
     `frame-src ${turnstile}`, // Turnstile's own challenge widget (Spec §10 CAPTCHA)
     ...(isProd && httpsEnabled ? ['upgrade-insecure-requests'] : []),
   ].join('; ');

@@ -782,6 +782,11 @@ model FileAsset {
   profileUserId String? @db.Uuid
   profileUser   User?   @relation("ProfileFiles", fields: [profileUserId], references: [id], onDelete: Cascade)
 
+  // Chat attachment (2026-07-26). Null while the upload is still a draft — the
+  // sender picks files BEFORE the message exists, and posting links them.
+  chatMessageId String?      @db.Uuid
+  chatMessage   ChatMessage? @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
+
   displayName String // original filename, preserved for display (§24)
 
   createdById String? @db.Uuid
@@ -794,6 +799,7 @@ model FileAsset {
 
   @@index([taskId])
   @@index([profileUserId])
+  @@index([chatMessageId])
   @@map("file_assets")
 }
 
@@ -1189,10 +1195,13 @@ model AnnouncementPin {
 /// delivered live over the presence socket and persisted here for history.
 model ChatMessage {
   id   String @id @default(uuid()) @db.Uuid
+  /// May be empty when the message is purely an attachment.
   body String
 
   authorId String? @db.Uuid
   author   User?   @relation("ChatAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  files FileAsset[]
 
   createdAt DateTime @default(now())
 

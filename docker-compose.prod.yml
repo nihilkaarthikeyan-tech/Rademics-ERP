@@ -100,6 +100,8 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: "https://api.52digit.com/api"
+        # Public nginx vhost for MinIO (see the minio service's port comment above).
+        NEXT_PUBLIC_STORAGE_URL: "https://storage.52digit.com"
         PUBLIC_HTTPS: "true"
         # Real values come from .env.production via --env-file (see header note) —
         # nothing secret-shaped is typed directly into this tracked file.

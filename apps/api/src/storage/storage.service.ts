@@ -44,10 +44,22 @@ export class StorageService implements OnModuleInit {
     return this.client.presignedPutObject(this.bucket, key, expirySeconds);
   }
 
-  /** Presigned GET so the browser downloads directly from storage (§5.6). */
-  presignedDownload(key: string, expirySeconds: number, downloadName?: string): Promise<string> {
+  /**
+   * Presigned GET so the browser downloads directly from storage (§5.6).
+   * `inline` renders in the browser (an <img> src, or a tab that previews a
+   * PDF/image) instead of forcing a Save dialog — the default stays
+   * `attachment` so every existing caller (task files, portal) is unchanged.
+   */
+  presignedDownload(
+    key: string,
+    expirySeconds: number,
+    downloadName?: string,
+    inline = false,
+  ): Promise<string> {
     const headers = downloadName
-      ? { 'response-content-disposition': `attachment; filename="${downloadName.replace(/"/g, '')}"` }
+      ? {
+          'response-content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${downloadName.replace(/"/g, '')}"`,
+        }
       : undefined;
     return this.client.presignedGetObject(this.bucket, key, expirySeconds, headers);
   }

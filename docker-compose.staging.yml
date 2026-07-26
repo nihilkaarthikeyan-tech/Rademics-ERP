@@ -98,6 +98,7 @@ services:
         # substituted from .env.staging via --env-file (empty defaults keep the
         # feature a no-op if unset), never typed into this tracked file.
         NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-https://staging-api.52digit.com/api}"
+        NEXT_PUBLIC_STORAGE_URL: "${NEXT_PUBLIC_STORAGE_URL:-https://staging-storage.52digit.com}"
         PUBLIC_HTTPS: "true"
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: "${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}"
         NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"

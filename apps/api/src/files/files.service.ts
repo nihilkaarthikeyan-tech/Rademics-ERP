@@ -162,7 +162,7 @@ export class FilesService {
   }
 
   // ── Presigned download — only AVAILABLE versions; clients need CLIENT_VISIBLE (§5.6) ──
-  async download(versionId: string, user: AuthUser) {
+  async download(versionId: string, user: AuthUser, inline = false) {
     const rules = await this.fileRules();
     const v = await this.prisma.fileVersion.findUnique({
       where: { id: versionId },
@@ -177,7 +177,7 @@ export class FilesService {
     if (user.role === 'CLIENT' && v.visibility !== 'CLIENT_VISIBLE') {
       throw new NotFoundException('File not found');
     }
-    const url = await this.storage.presignedDownload(v.storageKey, rules.presignedSeconds, v.originalName);
+    const url = await this.storage.presignedDownload(v.storageKey, rules.presignedSeconds, v.originalName, inline);
     return { url, expiresInSeconds: rules.presignedSeconds };
   }
 

@@ -34,6 +34,9 @@ RUN pnpm --filter @rademics/api prisma:generate
 # PUBLIC_HTTPS=false drops HSTS + upgrade-insecure-requests so the app works when
 # served over plain HTTP by IP (flip to true once a domain + TLS are in place).
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api
+# The browser loads chat/task attachment previews directly from storage (presigned
+# MinIO URLs) — CSP img-src/connect-src need this origin, hence it's public too.
+ARG NEXT_PUBLIC_STORAGE_URL=http://localhost:9000
 ARG PUBLIC_HTTPS=false
 # Turnstile site key is public by design (embedded in the login page's HTML) —
 # empty default keeps the widget a no-op (Turnstile component) until configured.
@@ -51,6 +54,7 @@ ARG SENTRY_PROJECT=""
 ARG SENTRY_PORTAL_PROJECT=""
 ARG SENTRY_AUTH_TOKEN=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_STORAGE_URL=$NEXT_PUBLIC_STORAGE_URL
 ENV PUBLIC_HTTPS=$PUBLIC_HTTPS
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
