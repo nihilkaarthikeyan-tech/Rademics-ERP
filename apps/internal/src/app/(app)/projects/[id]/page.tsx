@@ -18,6 +18,8 @@ interface TaskRow {
   deadline: string | null;
   overdue: boolean;
   statusChangedAt: string;
+  lastClientUpdateAt: string | null;
+  createdAt: string;
   assignee: { id: string; name: string } | null;
 }
 
@@ -26,6 +28,16 @@ function unacceptedDays(t: TaskRow): number | null {
   if (t.status !== 'ASSIGNED') return null;
   const days = Math.floor((Date.now() - new Date(t.statusChangedAt).getTime()) / 86_400_000);
   return days >= 1 ? days : null;
+}
+
+/** Days since the client last saw any movement — null once it's out of staff's
+ *  hands (CLIENT_REVIEW) or finished; mirrors the server's runClientUpdateSweep. */
+const CLIENT_SETTLED = ['CLIENT_REVIEW', 'COMPLETED', 'CLOSED', 'CANCELLED'];
+function clientStaleDays(t: TaskRow): number | null {
+  if (!t.clientFacing || CLIENT_SETTLED.includes(t.status)) return null;
+  const since = new Date(t.lastClientUpdateAt ?? t.createdAt).getTime();
+  const days = Math.floor((Date.now() - since) / 86_400_000);
+  return days >= 3 ? days : null;
 }
 interface ProjectDetail {
   id: string;
@@ -292,6 +304,7 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
 
 function TaskCard({ task, onOpen }: { task: TaskRow; onOpen: (id: string) => void }) {
   const waiting = unacceptedDays(task);
+  const clientStale = clientStaleDays(task);
   return (
     <button
       onClick={() => onOpen(task.id)}
@@ -312,6 +325,13 @@ function TaskCard({ task, onOpen }: { task: TaskRow; onOpen: (id: string) => voi
       {waiting !== null ? (
         <div className="mt-1.5 rounded bg-warning-soft px-1.5 py-0.5 text-[11px] font-medium text-warning">
           Not accepted yet · {waiting} day{waiting === 1 ? '' : 's'}
+        </div>
+      ) : null}
+      {/* The client can't see movement on this one — same silent-stall idea,
+          just measured by what the client has been shown, not internal status. */}
+      {clientStale !== null ? (
+        <div className="mt-1.5 rounded bg-warning-soft px-1.5 py-0.5 text-[11px] font-medium text-warning">
+          Client waiting for update · {clientStale} day{clientStale === 1 ? '' : 's'}
         </div>
       ) : null}
     </button>

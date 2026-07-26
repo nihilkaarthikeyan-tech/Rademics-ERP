@@ -257,6 +257,7 @@ export function TaskDetailDrawer({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState('');
+  const [shareWithClient, setShareWithClient] = useState(false);
   const [checkText, setCheckText] = useState('');
   const [pendingAction, setPendingAction] = useState<{ action: TaskAction; requiresComment: boolean } | null>(null);
   const [actionComment, setActionComment] = useState('');
@@ -361,8 +362,12 @@ export function TaskDetailDrawer({
   function addComment() {
     if (!comment.trim()) return;
     void act(async () => {
-      await apiFetch(`/tasks/${taskId}/comments`, { method: 'POST', body: JSON.stringify({ body: comment }) });
+      await apiFetch(`/tasks/${taskId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body: comment, clientVisible: shareWithClient }),
+      });
       setComment('');
+      setShareWithClient(false);
     });
   }
 
@@ -964,7 +969,9 @@ export function TaskDetailDrawer({
                       <div className="flex items-center gap-2">
                         <Avatar name={c.author?.name ?? 'Unknown'} className="h-6 w-6 text-[10px]" />
                         <span className="text-sm font-medium text-slate-800">{c.author?.name ?? 'Unknown'}</span>
-                        {c.visibility === 'CLIENT_VISIBLE' ? <Badge tone="blue">Client-visible</Badge> : null}
+                        {c.visibility === 'CLIENT_VISIBLE' ? (
+                          <Badge tone="blue">Shared with client</Badge>
+                        ) : null}
                         <span className="text-xs text-slate-400" title={new Date(c.createdAt).toLocaleString()}>
                           {relTime(c.createdAt)}
                         </span>
@@ -982,6 +989,20 @@ export function TaskDetailDrawer({
                     Post
                   </Button>
                 </div>
+                {/* Only client-facing tasks can share progress with the client —
+                    matches the API's own rule, so the control never offers something
+                    the server would reject. */}
+                {task.clientFacing ? (
+                  <label className="mt-1.5 flex items-center gap-2 text-xs text-slate-500">
+                    <input
+                      type="checkbox"
+                      className="accent-accent"
+                      checked={shareWithClient}
+                      onChange={(e) => setShareWithClient(e.target.checked)}
+                    />
+                    Share this update with the client — they'll see it in their progress feed
+                  </label>
+                ) : null}
               </Section>
 
               {activity.length > 0 ? (

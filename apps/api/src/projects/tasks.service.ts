@@ -45,6 +45,7 @@ const TASK_SELECT = {
   clientFacing: true,
   status: true,
   statusChangedAt: true,
+  lastClientUpdateAt: true,
   createdAt: true,
   updatedAt: true,
   assignee: { select: { id: true, name: true, email: true } },
@@ -369,6 +370,49 @@ export class TasksService {
     return { reminded: stale.length, escalated };
   }
 
+  /**
+   * Daily chase for client-facing tasks the client hasn't seen movement on in
+   * 3+ days — a status change or a client-visible comment both reset the
+   * clock (see lastClientUpdateAt stamping in transition()/assign()/addComment()).
+   * Staff-only nudge: the client never sees a countdown or a "you were
+   * ignored" message, matching how the acceptance sweep stays internal too.
+   * Skipped once the ball is in the CLIENT's court (CLIENT_REVIEW) or the
+   * task is finished — nobody on staff can "update" either of those.
+   */
+  async runClientUpdateSweep(now = new Date()): Promise<{ reminded: number }> {
+    const THREE_DAYS = 3 * 86_400_000;
+    const cutoff = new Date(now.getTime() - THREE_DAYS);
+    const stale = await this.prisma.task.findMany({
+      where: {
+        clientFacing: true,
+        status: { notIn: ['CLIENT_REVIEW', 'COMPLETED', 'CLOSED', 'CANCELLED'] },
+        OR: [{ lastClientUpdateAt: null, createdAt: { lt: cutoff } }, { lastClientUpdateAt: { lt: cutoff } }],
+      },
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        lastClientUpdateAt: true,
+        assigneeId: true,
+        project: { select: { pmId: true, client: { select: { name: true } } } },
+      },
+    });
+    for (const t of stale) {
+      const since = t.lastClientUpdateAt ?? t.createdAt;
+      const days = Math.floor((now.getTime() - since.getTime()) / 86_400_000);
+      const recipients = [...new Set([t.assigneeId, t.project.pmId].filter((x): x is string => Boolean(x)))];
+      await this.notifications.notifyMany(recipients, {
+        type: 'CLIENT_UPDATE_DUE',
+        eventGroup: 'tasks',
+        title: 'A client is waiting for an update',
+        body: `${t.title}${t.project.client ? ` (${t.project.client.name})` : ''} — no update in ${days} day${days === 1 ? '' : 's'}`,
+        entityType: 'Task',
+        entityId: t.id,
+      });
+    }
+    return { reminded: stale.length };
+  }
+
   // ── Assign / Reassign (Spec §6, §24) ──
   async assign(taskId: string, assigneeId: string, actor: AuthUser, meta: Meta) {
     const task = await this.loadForTransition(taskId);
@@ -405,10 +449,18 @@ export class TasksService {
       }
     }
 
+    const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
       const t = await tx.task.update({
         where: { id: taskId },
-        data: { assigneeId, status: 'ASSIGNED', statusChangedAt: new Date() },
+        data: {
+          assigneeId,
+          status: 'ASSIGNED',
+          statusChangedAt: now,
+          // The client's status label changes too (e.g. "Not started" → "Planned")
+          // — that's visible movement, so it counts as a client update.
+          lastClientUpdateAt: task.clientFacing ? now : undefined,
+        },
         select: TASK_SELECT,
       });
       await tx.taskStatusHistory.create({
@@ -484,10 +536,17 @@ export class TasksService {
       if (openSub) throw new BadRequestException('Cannot close a task with open subtasks (§24)');
     }
 
+    const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
       const t = await tx.task.update({
         where: { id: taskId },
-        data: { status: to as PrismaTaskStatus, statusChangedAt: new Date() },
+        data: {
+          status: to as PrismaTaskStatus,
+          statusChangedAt: now,
+          // A status move is visible progress to the client — resets the
+          // 3-day staleness clock the same way a client-visible comment does.
+          lastClientUpdateAt: task.clientFacing ? now : undefined,
+        },
         select: TASK_SELECT,
       });
       await tx.taskStatusHistory.create({
@@ -542,6 +601,11 @@ export class TasksService {
       },
       include: { author: { select: { id: true, name: true } } },
     });
+
+    // A client-visible comment IS a progress update — resets the staleness clock.
+    if (dto.clientVisible) {
+      await this.prisma.task.update({ where: { id: taskId }, data: { lastClientUpdateAt: new Date() } });
+    }
 
     if (dto.mentionUserIds?.length) {
       await this.notifications.notifyMany([...new Set(dto.mentionUserIds)], {

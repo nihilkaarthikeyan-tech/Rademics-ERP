@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { TaskAction } from '@rademics/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../projects/tasks.service';
 import { FilesService } from '../files/files.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AuthUser } from '../auth/auth-user';
 
 interface Meta {
@@ -25,6 +26,7 @@ export class PortalService {
     private readonly prisma: PrismaService,
     private readonly tasks: TasksService,
     private readonly files: FilesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Org must exist and be active, else the portal shows an "access ended" page (§25). */
@@ -186,6 +188,69 @@ export class PortalService {
     await this.assertActiveClient(user);
     await this.assertTaskAccess(taskId, user.id);
     return this.files.listForTask(taskId, user); // FilesService scopes clients to AVAILABLE + CLIENT_VISIBLE
+  }
+
+  /**
+   * The progress feed (2026-07-27): client-visible comments staff have posted
+   * on this task, oldest first — a running story of what's happened, not just
+   * a bare status word. Attribution is deliberate here (unlike the rest of the
+   * portal, which strips assignee/internal identity): a note written FOR the
+   * client to read is a curated, staff-approved message, not an internal
+   * routing detail — showing who wrote it builds trust rather than leaking
+   * anything.
+   */
+  async listUpdates(taskId: string, user: AuthUser) {
+    await this.assertActiveClient(user);
+    await this.assertTaskAccess(taskId, user.id);
+    const updates = await this.prisma.comment.findMany({
+      where: { taskId, visibility: 'CLIENT_VISIBLE' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, body: true, createdAt: true, author: { select: { name: true } } },
+    });
+    return updates.map((u) => ({ id: u.id, body: u.body, createdAt: u.createdAt, authorName: u.author?.name ?? null }));
+  }
+
+  /**
+   * "Ask for a status update" (2026-07-27) — deliberately open to VIEWER and
+   * APPROVER alike: it's a question, not a decision, so it doesn't need the
+   * approve/request-revision gate. A short cooldown stops an impatient client
+   * from re-triggering the same notification every few minutes.
+   */
+  async requestStatus(taskId: string, user: AuthUser) {
+    await this.assertActiveClient(user);
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: {
+        id: true,
+        title: true,
+        clientFacing: true,
+        assigneeId: true,
+        lastStatusRequestAt: true,
+        project: { select: { id: true, pmId: true } },
+      },
+    });
+    if (!task || !task.clientFacing) throw new NotFoundException('Task not found');
+    const access = await this.accessMap(user.id);
+    if (!access.has(task.project.id)) throw new NotFoundException('Task not found');
+
+    const COOLDOWN_MS = 60 * 60 * 1000;
+    if (task.lastStatusRequestAt && Date.now() - task.lastStatusRequestAt.getTime() < COOLDOWN_MS) {
+      throw new BadRequestException("You already asked recently — we'll get back to you soon.");
+    }
+
+    await this.prisma.task.update({ where: { id: taskId }, data: { lastStatusRequestAt: new Date() } });
+
+    const recipients = [...new Set([task.assigneeId, task.project.pmId].filter((x): x is string => Boolean(x)))];
+    const client = await this.prisma.user.findUnique({ where: { id: user.id }, select: { name: true } });
+    await this.notifications.notifyMany(recipients, {
+      type: 'CLIENT_STATUS_REQUESTED',
+      eventGroup: 'tasks',
+      title: 'The client is asking for a status update',
+      body: `${client?.name ?? 'A client'} asked about "${task.title}"`,
+      entityType: 'Task',
+      entityId: task.id,
+    });
+    return { requested: true };
   }
 
   async download(versionId: string, user: AuthUser) {

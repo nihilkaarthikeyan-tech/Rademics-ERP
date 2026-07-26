@@ -1,8 +1,16 @@
 'use client';
 
-import { use, useCallback, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ClipboardCheck, Download, ListChecks, Milestone as MilestoneIcon } from 'lucide-react';
+import {
+  ArrowLeft,
+  ClipboardCheck,
+  Download,
+  ListChecks,
+  Milestone as MilestoneIcon,
+  MoreVertical,
+  MessageSquareText,
+} from 'lucide-react';
 import { Badge, Button, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 
@@ -26,6 +34,22 @@ const STATUS_LABEL: Record<string, string> = {
   SUBMITTED_FOR_REVIEW: 'In review', CLIENT_REVIEW: 'Awaiting your approval', COMPLETED: 'Completed',
   CLOSED: 'Completed', CANCELLED: 'Cancelled',
 };
+
+function relTime(iso: string): string {
+  const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  if (hours < 48) return 'yesterday';
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const date = new Date(iso);
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  if (date.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+  return date.toLocaleDateString(undefined, opts);
+}
 
 export default function PortalProjectDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -99,20 +123,26 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
           <div>
             <ul className="flex flex-col gap-2">
               {project.deliverables.map((d) => (
-                <li key={d.id} className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">{d.title}</div>
-                    {d.deadline ? <div className="text-xs text-slate-400">Due {new Date(d.deadline).toLocaleDateString()}</div> : null}
-                    <DeliverableFiles taskId={d.id} />
-                  </div>
-                  {d.canApprove ? (
-                    <div className="flex shrink-0 gap-2">
-                      <Button size="sm" disabled={busyId === d.id} onClick={() => decide(d.id, 'approve')}>Approve</Button>
-                      <Button size="sm" variant="outline" disabled={busyId === d.id} onClick={() => decide(d.id, 'request-revision')}>Request revision</Button>
+                <li key={d.id} className="rounded-lg border border-slate-100 p-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-slate-700">{d.title}</div>
+                      {d.deadline ? <div className="text-xs text-slate-400">Due {new Date(d.deadline).toLocaleDateString()}</div> : null}
+                      <DeliverableFiles taskId={d.id} />
                     </div>
-                  ) : (
-                    <Badge tone="slate">View only</Badge>
-                  )}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {d.canApprove ? (
+                        <div className="flex gap-2">
+                          <Button size="sm" disabled={busyId === d.id} onClick={() => decide(d.id, 'approve')}>Approve</Button>
+                          <Button size="sm" variant="outline" disabled={busyId === d.id} onClick={() => decide(d.id, 'request-revision')}>Request revision</Button>
+                        </div>
+                      ) : (
+                        <Badge tone="slate">View only</Badge>
+                      )}
+                      <TaskActionsMenu taskId={d.id} />
+                    </div>
+                  </div>
+                  <TaskUpdatesFeed taskId={d.id} />
                 </li>
               ))}
             </ul>
@@ -154,11 +184,17 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
         ) : (
           <ul className="flex flex-col divide-y divide-slate-100">
             {project.items.map((t) => (
-              <li key={t.id} className="flex items-center justify-between py-2.5 text-sm">
-                <span className="text-slate-700">{t.title}</span>
-                <Badge tone={t.status === 'CLIENT_REVIEW' ? 'amber' : ['COMPLETED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
-                  {STATUS_LABEL[t.status] ?? t.status}
-                </Badge>
+              <li key={t.id} className="py-2.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate text-slate-700">{t.title}</span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Badge tone={t.status === 'CLIENT_REVIEW' ? 'amber' : ['COMPLETED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
+                      {STATUS_LABEL[t.status] ?? t.status}
+                    </Badge>
+                    <TaskActionsMenu taskId={t.id} />
+                  </div>
+                </div>
+                <TaskUpdatesFeed taskId={t.id} />
               </li>
             ))}
           </ul>
@@ -196,6 +232,114 @@ function DeliverableFiles({ taskId }: { taskId: string }) {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** Small "⋯" menu — today just "Ask for a status update", room to grow later. */
+function TaskActionsMenu({ taskId }: { taskId: string }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  async function requestStatus() {
+    setOpen(false);
+    try {
+      await apiFetch(`/portal/tasks/${taskId}/request-status`, { method: 'POST', body: '{}' });
+      setNote('Request sent — the team has been notified.');
+    } catch (e) {
+      setNote(e instanceof ApiError ? e.message : 'Could not send the request.');
+    }
+    setTimeout(() => setNote(null), 5000);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Task actions"
+        aria-haspopup="true"
+        aria-expanded={open}
+        className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {open ? (
+        <div className="absolute right-0 z-10 mt-1 w-52 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          <button
+            onClick={() => void requestStatus()}
+            className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Ask for a status update
+          </button>
+        </div>
+      ) : null}
+      {note ? (
+        <div className="absolute right-0 z-10 mt-1 w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-lg">
+          {note}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Read-only progress notes staff shared on this task — collapsed by default,
+ *  fetched only once the client actually wants to see them. */
+function TaskUpdatesFeed({ taskId }: { taskId: string }) {
+  const [open, setOpen] = useState(false);
+  const [updates, setUpdates] = useState<
+    { id: string; body: string; createdAt: string; authorName: string | null }[] | null
+  >(null);
+
+  async function toggle() {
+    if (!open && updates === null) {
+      try {
+        setUpdates(await apiFetch(`/portal/tasks/${taskId}/updates`));
+      } catch {
+        setUpdates([]);
+      }
+    }
+    setOpen((o) => !o);
+  }
+
+  return (
+    <div className="mt-1.5">
+      <button
+        onClick={() => void toggle()}
+        className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+      >
+        <MessageSquareText className="h-3 w-3" />
+        {open ? 'Hide updates' : updates ? `Updates (${updates.length})` : 'Show updates'}
+      </button>
+      {open ? (
+        <div className="mt-1.5 flex flex-col gap-1.5 rounded-md bg-slate-50 p-2.5">
+          {updates === null ? (
+            <p className="text-xs text-slate-400">Loading…</p>
+          ) : updates.length === 0 ? (
+            <p className="text-xs text-slate-400">No updates shared yet.</p>
+          ) : (
+            updates.map((u) => (
+              <div key={u.id} className="text-xs">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-medium text-slate-600">{u.authorName ?? 'The team'}</span>
+                  <span className="text-slate-400" title={new Date(u.createdAt).toLocaleString()}>
+                    {relTime(u.createdAt)}
+                  </span>
+                </div>
+                <p className="mt-0.5 leading-relaxed text-slate-600">{u.body}</p>
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

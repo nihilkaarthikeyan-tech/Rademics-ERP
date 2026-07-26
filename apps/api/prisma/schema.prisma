@@ -638,6 +638,13 @@ model Task {
   // daily acceptance reminders and the board's "waiting" marker.
   statusChangedAt DateTime @default(now())
 
+  // 2026-07-27: last time a client-facing task showed the client something new
+  // (a status change, or a client-visible comment). Powers the 3-day staleness
+  // nudge — a client-facing task the client can't see any movement on for days
+  // is the exact silent-stall problem statusChangedAt already solves internally.
+  lastClientUpdateAt   DateTime?
+  lastStatusRequestAt  DateTime? // client's own "ask for a status update" cooldown
+
   createdById String? @db.Uuid
   createdBy   User?   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
 

@@ -68,6 +68,20 @@ export class PortalController {
     return this.portal.listFiles(id, user);
   }
 
+  /** Progress feed (2026-07-27): client-visible comments staff posted on this task. */
+  @Get('tasks/:id/updates')
+  @RequireCapability('portal.progress.view')
+  updates(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.portal.listUpdates(id, user);
+  }
+
+  /** "Ask for a status update" — open to VIEWER and APPROVER alike (it's a question, not a decision). */
+  @Post('tasks/:id/request-status')
+  @RequireCapability('portal.progress.view')
+  requestStatus(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.portal.requestStatus(id, user);
+  }
+
   @Get('files/versions/:id/download')
   @RequireCapability('portal.files.download')
   download(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
