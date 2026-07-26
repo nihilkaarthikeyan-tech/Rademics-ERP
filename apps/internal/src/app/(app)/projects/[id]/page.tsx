@@ -3,7 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { Badge, Button, Card, CardContent, Input, Label, LoadingState } from '@rademics/ui';
+import { Badge, Button, Card, CardContent, EmptyState, Input, Label, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
 import { TaskDetailDrawer, type AssignableUser } from '@/components/projects/task-detail-drawer';
@@ -21,7 +21,6 @@ interface TaskRow {
 interface ProjectDetail {
   id: string;
   name: string;
-  type: string;
   status: string;
   description: string | null;
   budgetAmount: string | null;
@@ -43,7 +42,17 @@ const COLUMNS: { key: string; label: string }[] = [
   { key: 'CANCELLED', label: 'Cancelled' },
 ];
 const PRIORITY_TONE: Record<string, 'red' | 'amber' | 'slate'> = { HIGH: 'red', MEDIUM: 'amber', LOW: 'slate' };
-const CAN_CREATE_TASK = ['SUPER_ADMIN', 'PM', 'TEAM_LEAD'];
+const DONE_STATUSES = ['COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED'];
+/**
+ * Columns always shown, because they are where work actively moves. The rest
+ * (client review, completed, invoiced, closed, cancelled) only appear once they
+ * hold something — otherwise every new project opens as ten empty columns that
+ * scroll sideways off the screen and say nothing.
+ */
+const CORE_COLUMNS = ['DRAFT', 'ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW'];
+// Roles that can run any project. The person APPOINTED to this project can too —
+// that check needs the loaded project, so it lives in the component below.
+const CAN_CREATE_TASK = ['SUPER_ADMIN', 'HR'];
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -83,8 +92,24 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     [tasks, priorityFilter],
   );
 
+  const stats = useMemo(() => {
+    const done = tasks.filter((t) => DONE_STATUSES.includes(t.status)).length;
+    return {
+      total: tasks.length,
+      done,
+      pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0,
+      inFlight: tasks.filter((t) => t.status === 'IN_PROGRESS').length,
+      unassigned: tasks.filter((t) => !t.assignee && !DONE_STATUSES.includes(t.status)).length,
+      overdue: tasks.filter((t) => t.overdue).length,
+    };
+  }, [tasks]);
+
   if (state === 'loading') return <LoadingState />;
   if (state === 'error' || !project) return <p className="text-sm text-slate-500">Could not load project.</p>;
+
+  // Authority over a project is per-project since the PM role was removed: either
+  // the role runs every project, or you are the one appointed to this one.
+  const runsThisProject = CAN_CREATE_TASK.includes(me.role) || project.pm?.id === me.id;
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -93,25 +118,64 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       </Link>
 
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold text-slate-800">{project.name}</h1>
-            <Badge tone={project.type === 'STREAM' ? 'blue' : 'slate'}>
-              {project.type === 'STREAM' ? 'Work stream' : 'Project'}
-            </Badge>
             <Badge tone="green">{project.status}</Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
-            {project.pm ? `PM: ${project.pm.name}` : 'No PM'}
-            {project.client ? ` · Client: ${project.client.name}` : ''}
-            {project.budgetAmount != null ? ` · Budget: ₹${Number(project.budgetAmount).toLocaleString()}` : ''}
-          </p>
+          {project.description ? (
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">{project.description}</p>
+          ) : null}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
+            {project.pm ? (
+              <span>
+                Run by <span className="font-medium text-slate-700">{project.pm.name}</span>
+              </span>
+            ) : (
+              // An unassigned project is a gap someone should close, not a neutral
+              // fact — so it reads as a prompt rather than grey filler.
+              <span className="rounded-md bg-amber-50 px-2 py-0.5 text-amber-800">
+                No project manager{CAN_CREATE_TASK.includes(me.role) ? ' — you and HR are running it' : ''}
+              </span>
+            )}
+            {project.client ? <span>Client: {project.client.name}</span> : null}
+            {project.budgetAmount != null ? (
+              <span>Budget: ₹{Number(project.budgetAmount).toLocaleString()}</span>
+            ) : null}
+          </div>
         </div>
-        {CAN_CREATE_TASK.includes(me.role) ? <Button onClick={() => setCreating(true)}>New task</Button> : null}
+        {runsThisProject ? <Button onClick={() => setCreating(true)}>New task</Button> : null}
       </div>
 
-      {/* View toggle + filters */}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      {/* Progress at a glance — the question anyone opening a project asks first. */}
+      {stats.total > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-white/70 bg-white/60 px-4 py-3 shadow-glass backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all"
+                style={{ width: `${stats.pct}%` }}
+              />
+            </div>
+            <span className="text-sm font-medium text-slate-700">{stats.pct}% done</span>
+          </div>
+          <span className="text-sm text-slate-500">
+            {stats.done} of {stats.total} finished
+          </span>
+          {stats.inFlight > 0 ? (
+            <span className="text-sm text-slate-500">{stats.inFlight} in progress</span>
+          ) : null}
+          {stats.unassigned > 0 ? (
+            <span className="text-sm text-slate-500">{stats.unassigned} unassigned</span>
+          ) : null}
+          {stats.overdue > 0 ? (
+            <span className="text-sm font-medium text-red-600">{stats.overdue} overdue</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* View toggle + filters — pointless before any work exists */}
+      <div className={`mt-4 flex flex-wrap items-center gap-2 ${tasks.length === 0 ? 'hidden' : ''}`}>
         <div className="inline-flex rounded-md border border-slate-200 p-0.5">
           {(['board', 'list', 'calendar'] as const).map((v) => (
             <button
@@ -137,7 +201,29 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="mt-4">
-        {view === 'board' ? (
+        {tasks.length === 0 ? (
+          // A brand-new project: say what to do next instead of showing a row of
+          // empty columns. This is the first screen anyone sees after creating one.
+          <EmptyState
+            title="No tasks yet"
+            description={
+              runsThisProject
+                ? 'Add the first piece of work and assign it to someone — they are notified straight away and it appears in their My Work.'
+                : 'Work added to this project will appear here.'
+            }
+            action={runsThisProject ? <Button onClick={() => setCreating(true)}>Create the first task</Button> : undefined}
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            title="Nothing matches that filter"
+            description="No tasks with this priority. Clear the filter to see the rest."
+            action={
+              <Button variant="outline" onClick={() => setPriorityFilter('')}>
+                Show all priorities
+              </Button>
+            }
+          />
+        ) : view === 'board' ? (
           <BoardView tasks={filtered} onOpen={setOpenTaskId} />
         ) : view === 'list' ? (
           <ListView tasks={filtered} onOpen={setOpenTaskId} />
@@ -150,6 +236,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <NewTaskModal
           projectId={id}
           modules={project.modules}
+          members={members}
           onClose={() => setCreating(false)}
           onCreated={loadTasks}
         />
@@ -159,6 +246,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <TaskDetailDrawer
           taskId={openTaskId}
           members={members}
+          pm={project.pm}
+          clientName={project.client?.name ?? null}
           onClose={() => setOpenTaskId(null)}
           onChanged={loadTasks}
         />
@@ -188,9 +277,13 @@ function TaskCard({ task, onOpen }: { task: TaskRow; onOpen: (id: string) => voi
 }
 
 function BoardView({ tasks, onOpen }: { tasks: TaskRow[]; onOpen: (id: string) => void }) {
+  // Show the working columns plus any later stage that actually holds a task.
+  const columns = COLUMNS.filter(
+    (c) => CORE_COLUMNS.includes(c.key) || tasks.some((t) => t.status === c.key),
+  );
   return (
     <div className="flex gap-3 overflow-x-auto pb-3">
-      {COLUMNS.map((col) => {
+      {columns.map((col) => {
         const colTasks = tasks.filter((t) => t.status === col.key);
         return (
           <div key={col.key} className="w-64 shrink-0">
@@ -279,33 +372,48 @@ function CalendarView({ tasks, onOpen }: { tasks: TaskRow[]; onOpen: (id: string
 function NewTaskModal({
   projectId,
   modules,
+  members,
   onClose,
   onCreated,
 }: {
   projectId: string;
   modules: { id: string; name: string }[];
+  members: AssignableUser[];
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
   const [priority, setPriority] = useState('MEDIUM');
   const [moduleId, setModuleId] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
   const [deadline, setDeadline] = useState('');
   const [clientFacing, setClientFacing] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // Caught here rather than at the API so the person is told before losing the
+    // form — the server enforces the same rule regardless (§24).
+    if (clientFacing && !deadline) {
+      setError('A client-facing task needs a deadline — the client sees it.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
+      // One request creates AND assigns: the API accepts assigneeId on create, so
+      // there is no second trip through the assign screen.
       await apiFetch('/tasks', {
         method: 'POST',
         body: JSON.stringify({
           projectId,
           title,
+          description: description || undefined,
+          assigneeId: assigneeId || undefined,
           priority,
           moduleId: moduleId || undefined,
           estimatedHours: estimatedHours ? Number(estimatedHours) : undefined,
@@ -327,10 +435,52 @@ function NewTaskModal({
       <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         <CardContent className="pt-6">
           <h2 className="text-lg font-semibold text-slate-800">New task</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Pick someone now and the task goes straight to them. Leave it unassigned to keep it as a draft.
+          </p>
           <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
             <div>
-              <Label htmlFor="t-title">Title</Label>
-              <Input id="t-title" required minLength={3} value={title} onChange={(e) => setTitle(e.target.value)} />
+              <Label htmlFor="t-title">What needs doing?</Label>
+              <Input
+                id="t-title"
+                required
+                minLength={3}
+                placeholder="e.g. Draft the paper publication annexure"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="t-desc">Details <span className="font-normal text-slate-400">(optional)</span></Label>
+              <textarea
+                id="t-desc"
+                rows={3}
+                placeholder="Anything the person needs to know before starting."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              />
+            </div>
+            <div>
+              <Label htmlFor="t-assignee">Assign to</Label>
+              <select
+                id="t-assignee"
+                value={assigneeId}
+                onChange={(e) => setAssigneeId(e.target.value)}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm"
+              >
+                <option value="">Nobody yet — save as draft</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                {assigneeId
+                  ? 'They will be notified straight away and it lands in their My Work list.'
+                  : 'You can assign it later from the task itself.'}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -342,31 +492,71 @@ function NewTaskModal({
                 </select>
               </div>
               <div>
-                <Label htmlFor="t-module">Module</Label>
-                <select id="t-module" value={moduleId} onChange={(e) => setModuleId(e.target.value)} className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm">
-                  <option value="">None</option>
-                  {modules.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="t-est">Estimate (hours)</Label>
-                <Input id="t-est" type="number" step="0.25" min="0.25" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
-              </div>
-              <div>
                 <Label htmlFor="t-deadline">Deadline</Label>
                 <Input id="t-deadline" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
               </div>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={clientFacing} onChange={(e) => setClientFacing(e.target.checked)} />
-              Client-facing (requires a deadline)
+
+            {/*
+              Module and Estimate are secondary: a project usually has no modules
+              at all (the dropdown would offer only "None"), and few tasks get an
+              hour estimate at the moment they are written down. Neither can be
+              edited later — the task drawer shows them read-only — so they stay
+              reachable here rather than being dropped, just out of the main path.
+            */}
+            {modules.length > 0 || showMore ? (
+              <div className="grid grid-cols-2 gap-3">
+                {modules.length > 0 ? (
+                  <div>
+                    <Label htmlFor="t-module">Module</Label>
+                    <select id="t-module" value={moduleId} onChange={(e) => setModuleId(e.target.value)} className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm">
+                      <option value="">None</option>
+                      {modules.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                {showMore ? (
+                  <div>
+                    <Label htmlFor="t-est">
+                      Estimate <span className="font-normal text-slate-400">(hours)</span>
+                    </Label>
+                    <Input id="t-est" type="number" step="0.25" min="0.25" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!showMore ? (
+              <button
+                type="button"
+                onClick={() => setShowMore(true)}
+                className="self-start text-sm text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+              >
+                Add a time estimate
+              </button>
+            ) : null}
+            <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={clientFacing}
+                onChange={(e) => setClientFacing(e.target.checked)}
+              />
+              <span>
+                The client will see this
+                <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                  Once approved it goes to the client for sign-off. Needs a deadline.
+                </span>
+              </span>
             </label>
-            {error ? <p className="text-xs text-slate-900">{error}</p> : null}
+            {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create'}</Button>
+              <Button type="submit" disabled={busy}>
+                {busy ? 'Creating…' : assigneeId ? 'Create & assign' : 'Create draft'}
+              </Button>
             </div>
           </form>
         </CardContent>
