@@ -100,6 +100,8 @@ enum TaskPriority {
 }
 
 /// Task status — the §6 state machine spine. Mirrors @rademics/types TaskStatus.
+// INVOICED was removed 2026-07-26: billing is Finance-module work, not a task
+// step. Completed tasks are closed directly by whoever runs the project.
 enum TaskStatus {
   DRAFT
   ASSIGNED
@@ -108,7 +110,6 @@ enum TaskStatus {
   SUBMITTED_FOR_REVIEW
   CLIENT_REVIEW
   COMPLETED
-  INVOICED
   CLOSED
   CANCELLED
 }
@@ -287,6 +288,12 @@ model User {
   mentionedIn       CommentMention[]
   notifications     Notification[]
   notificationPrefs NotificationPreference[]
+
+  // ── Notices & chat (2026-07-26) ──
+  announcements    Announcement[]    @relation("AnnouncementAuthor")
+  announcementPins AnnouncementPin[]
+  chatMessages     ChatMessage[]     @relation("ChatAuthor")
+  chatReadState    ChatReadState?
 
   // ── Files (Spec §5.6) ──
   createdFiles     FileAsset[]   @relation("FileCreator")
@@ -1142,4 +1149,63 @@ model ClientProjectAccess {
   @@unique([projectId, clientUserId])
   @@index([clientUserId])
   @@map("client_project_access")
+}
+
+// ─── Company notices & chat (2026-07-26) ─────────────────────────────────────
+
+/// A company notice: written by Super Admin or HR, visible to all staff.
+/// Everyone can personally pin the ones they want kept on top (AnnouncementPin).
+model Announcement {
+  id    String @id @default(uuid()) @db.Uuid
+  title String
+  body  String
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation("AnnouncementAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  pins AnnouncementPin[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@map("announcements")
+}
+
+/// Per-person pin: keeps a notice at the top of THAT person's list only.
+model AnnouncementPin {
+  announcementId String       @db.Uuid
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([announcementId, userId])
+  @@map("announcement_pins")
+}
+
+/// Company chat v1: ONE general room every staff member is in. Messages are
+/// delivered live over the presence socket and persisted here for history.
+model ChatMessage {
+  id   String @id @default(uuid()) @db.Uuid
+  body String
+
+  authorId String? @db.Uuid
+  author   User?   @relation("ChatAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("chat_messages")
+}
+
+/// Per-person last-read pointer for the general room — powers the unread badge.
+model ChatReadState {
+  userId String @id @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  lastReadAt DateTime @default(now())
+
+  @@map("chat_read_state")
 }

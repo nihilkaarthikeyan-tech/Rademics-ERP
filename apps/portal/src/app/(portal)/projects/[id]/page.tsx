@@ -24,7 +24,7 @@ interface PortalProjectDetail {
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Not started', ASSIGNED: 'Planned', ACKNOWLEDGED: 'Planned', IN_PROGRESS: 'In progress',
   SUBMITTED_FOR_REVIEW: 'In review', CLIENT_REVIEW: 'Awaiting your approval', COMPLETED: 'Completed',
-  INVOICED: 'Completed', CLOSED: 'Completed', CANCELLED: 'Cancelled',
+  CLOSED: 'Completed', CANCELLED: 'Cancelled',
 };
 
 export default function PortalProjectDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -156,7 +156,7 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
             {project.items.map((t) => (
               <li key={t.id} className="flex items-center justify-between py-2.5 text-sm">
                 <span className="text-slate-700">{t.title}</span>
-                <Badge tone={t.status === 'CLIENT_REVIEW' ? 'amber' : ['COMPLETED', 'INVOICED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
+                <Badge tone={t.status === 'CLIENT_REVIEW' ? 'amber' : ['COMPLETED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
                   {STATUS_LABEL[t.status] ?? t.status}
                 </Badge>
               </li>

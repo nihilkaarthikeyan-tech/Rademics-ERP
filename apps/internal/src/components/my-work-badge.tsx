@@ -10,7 +10,7 @@ interface MineResponse {
 }
 
 /** Statuses that still need something from the person — matches My Work's "open". */
-const DONE = ['COMPLETED', 'INVOICED'];
+const DONE = ['COMPLETED'];
 
 /**
  * Live count pill on the "My Work" nav item. Work assigned to you must be

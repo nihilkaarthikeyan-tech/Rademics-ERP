@@ -67,8 +67,10 @@ export class ProjectsController {
     return this.projects.listModules(id, user);
   }
 
+  // No declared capability: a fixed key can't express "appointed to this
+  // project" — the guard would 403 an appointed Employee manager before the
+  // service could check. The service authorises (HR/SA or the project's pm).
   @Post(':id/modules')
-  @RequireCapability('projects.create_edit')
   addModule(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateModuleDto,

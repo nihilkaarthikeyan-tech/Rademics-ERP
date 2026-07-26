@@ -207,7 +207,7 @@ export class ProjectsService {
         _count: {
           select: {
             assignedTasks: {
-              where: { status: { notIn: ['COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED'] } },
+              where: { status: { notIn: ['COMPLETED', 'CLOSED', 'CANCELLED'] } },
             },
           },
         },
@@ -237,8 +237,22 @@ export class ProjectsService {
 
   // ── Modules ──
   async addModule(projectId: string, dto: CreateModuleDto, actor: AuthUser) {
-    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, pmId: true },
+    });
     if (!project) throw new NotFoundException('Project not found');
+
+    // Same rule as update(): HR/SA by role, or the manager appointed to THIS
+    // project. Structuring work into modules is part of running the project.
+    const grant = await this.capabilities.resolveGrant(
+      actor.role,
+      actor.resourceType,
+      'projects.create_edit',
+    );
+    if (grant !== Grant.ALLOW && project.pmId !== actor.id) {
+      throw new ForbiddenException('Only the project manager, HR or a Super Admin can add modules');
+    }
     try {
       return await this.prisma.module.create({
         data: { projectId, name: dto.name.trim(), position: dto.position ?? 0 },

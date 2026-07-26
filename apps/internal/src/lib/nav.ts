@@ -13,6 +13,8 @@ import {
   ScrollText,
   Building2,
   Monitor,
+  Megaphone,
+  MessagesSquare,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -33,6 +35,8 @@ const ALL: 'all' = 'all';
 export const NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', roles: ALL, icon: LayoutDashboard, group: 'Workspace' },
   { label: 'My Work', href: '/my-work', roles: ['HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: ListTodo, group: 'Workspace' },
+  { label: 'Notices', href: '/notices', roles: ALL, icon: Megaphone, group: 'Workspace' },
+  { label: 'Chat', href: '/chat', roles: ALL, icon: MessagesSquare, group: 'Workspace' },
   { label: 'Attendance', href: '/attendance', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Clock, group: 'Workspace' },
   { label: 'Leave', href: '/leave', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: CalendarDays, group: 'Workspace' },
   { label: 'Desktop Agent', href: '/desktop-agent', roles: ALL, icon: Monitor, group: 'Workspace' },

@@ -305,7 +305,7 @@ export class AiService {
 
     if (q.includes('overdue')) {
       const overdue = await this.prisma.task.findMany({
-        where: { ...projectFilter, deadline: { lt: new Date() }, status: { notIn: ['COMPLETED', 'CLOSED', 'CANCELLED', 'INVOICED'] } },
+        where: { ...projectFilter, deadline: { lt: new Date() }, status: { notIn: ['COMPLETED', 'CLOSED', 'CANCELLED'] } },
         select: { id: true, title: true, deadline: true, project: { select: { name: true } } },
         take: 20,
       });

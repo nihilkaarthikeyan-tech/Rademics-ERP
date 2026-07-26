@@ -49,7 +49,9 @@ async function main(): Promise<void> {
   console.log(`Verifying Phase 4 against ${BASE}\n`);
   const stamp = Date.now();
 
-  const saToken = await login('admin@rademics.local', 'ChangeMe123!');
+  // Self-sufficient: create our own SA — demo credentials change, stamps don't.
+  await ensureUser(`sa.${stamp}@rademics.local`, 'SUPER_ADMIN', 'Password123!');
+  const saToken = await login(`sa.${stamp}@rademics.local`, 'Password123!');
   check('Super Admin login', !!saToken);
 
   // Actors
@@ -58,16 +60,26 @@ async function main(): Promise<void> {
   const clientId = await ensureUser(`client.${stamp}@rademics.local`, 'CLIENT', 'Password123!');
   const pmToken = await login(`pm.${stamp}@rademics.local`, 'Password123!');
   const empToken = await login(`emp.${stamp}@rademics.local`, 'Password123!');
-  const finToken = await login('admin@rademics.local', 'ChangeMe123!'); // SA acts as Finance for MARK_INVOICED
 
   // ── Project + module (budget gating §5.4) ──
+  // Since the PM role was removed (2026-07-25), projects are created by SA/HR,
+  // who appoint the manager via pmId — the appointee then runs THIS project.
   const proj = await req('/projects', {
-    method: 'POST', token: pmToken,
-    body: { name: `Website Revamp ${stamp}`, type: 'PROJECT', pmId, clientId, budgetAmount: 500000, startDate: '2026-07-01' },
+    method: 'POST', token: saToken,
+    body: { name: `Website Revamp ${stamp}`, pmId, clientId, budgetAmount: 500000, startDate: '2026-07-01' },
   });
-  check('PM creates project', proj.status >= 200 && proj.status < 300, `(${proj.status})`);
+  check('SA creates project appointing a manager', proj.status >= 200 && proj.status < 300, `(${proj.status})`);
   const projectId = proj.json?.id;
-  check('PM sees budgetAmount (§5.4 gating)', proj.json?.budgetAmount != null);
+  const pmView = await req(`/projects/${projectId}`, { token: pmToken });
+  check('appointed manager sees budgetAmount (§5.4 gating)', pmView.json?.budgetAmount != null);
+
+  // §5.5 scoping: a client can only approve deliverables on projects granted to
+  // them at APPROVER level — without this row the transition is a clean 403.
+  await prisma.clientProjectAccess.upsert({
+    where: { projectId_clientUserId: { projectId, clientUserId: clientId } },
+    update: { level: 'APPROVER' },
+    create: { projectId, clientUserId: clientId, level: 'APPROVER' },
+  });
 
   const empProjView = await req(`/projects/${projectId}`, { token: empToken });
   check('Employee GET project -> 403 (projects.view_all denied)', empProjView.status === 403, `(${empProjView.status})`);
@@ -122,10 +134,10 @@ async function main(): Promise<void> {
   await req(`/tasks/${taskId}/transition`, { method: 'POST', token: empToken, body: { action: 'SUBMIT' } });
   const approve = await req(`/tasks/${taskId}/transition`, { method: 'POST', token: pmToken, body: { action: 'APPROVE_REVIEW' } });
   check('APPROVE_REVIEW on non-client task (→COMPLETED)', approve.json?.status === 'COMPLETED', `(${approve.json?.status})`);
-  const invoiced = await req(`/tasks/${taskId}/transition`, { method: 'POST', token: finToken, body: { action: 'MARK_INVOICED' } });
-  check('MARK_INVOICED (Finance)', invoiced.json?.status === 'INVOICED', `(${invoiced.json?.status})`);
+  // Invoicing left the task chain 2026-07-26: a completed task is closed directly
+  // by whoever runs the project. Billing stays in the Finance module.
   const closed = await req(`/tasks/${taskId}/transition`, { method: 'POST', token: pmToken, body: { action: 'CLOSE' } });
-  check('CLOSE (→CLOSED)', closed.json?.status === 'CLOSED');
+  check('CLOSE from COMPLETED (→CLOSED, no invoicing step)', closed.json?.status === 'CLOSED', `(${closed.json?.status})`);
   // Cancel from Closed is illegal
   const cancelClosed = await req(`/tasks/${taskId}/transition`, { method: 'POST', token: pmToken, body: { action: 'CANCEL', comment: 'nope' } });
   check('CANCEL from CLOSED -> 400 (§6)', cancelClosed.status === 400, `(${cancelClosed.status})`);
@@ -162,7 +174,7 @@ async function main(): Promise<void> {
   await req(`/tasks/${parentId}/transition`, { method: 'POST', token: empToken, body: { action: 'START_WORK' } });
   await req(`/tasks/${parentId}/transition`, { method: 'POST', token: empToken, body: { action: 'SUBMIT' } });
   await req(`/tasks/${parentId}/transition`, { method: 'POST', token: pmToken, body: { action: 'APPROVE_REVIEW' } });
-  const closeOpenSub = await req(`/tasks/${parentId}/transition`, { method: 'POST', token: pmToken, body: { action: 'CLOSE_WITHOUT_INVOICING' } });
+  const closeOpenSub = await req(`/tasks/${parentId}/transition`, { method: 'POST', token: pmToken, body: { action: 'CLOSE' } });
   check('CLOSE with open subtask -> 400 (§24)', closeOpenSub.status === 400, `(${closeOpenSub.status})`);
 
   // ── Immutable history ──
@@ -186,7 +198,7 @@ async function main(): Promise<void> {
   check('client-visible comment on internal task -> 400 (§5.4)', badVisible.status === 400, `(${badVisible.status})`);
 
   // ── RBAC: employee cannot create a project ──
-  const empProj = await req('/projects', { method: 'POST', token: empToken, body: { name: 'x', type: 'PROJECT' } });
+  const empProj = await req('/projects', { method: 'POST', token: empToken, body: { name: 'x' } });
   check('Employee create project -> 403 (§3/§10)', empProj.status === 403, `(${empProj.status})`);
 
   // ── Deactivation task-reassignment (§25) ──

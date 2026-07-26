@@ -24,7 +24,7 @@ const GROUPS: { title: string; statuses: string[] }[] = [
   { title: 'To do', statuses: ['ASSIGNED', 'ACKNOWLEDGED'] },
   { title: 'In progress', statuses: ['IN_PROGRESS'] },
   { title: 'In review', statuses: ['SUBMITTED_FOR_REVIEW', 'CLIENT_REVIEW'] },
-  { title: 'Done', statuses: ['COMPLETED', 'INVOICED'] },
+  { title: 'Done', statuses: ['COMPLETED'] },
 ];
 
 export default function MyWorkPage() {
@@ -49,7 +49,7 @@ export default function MyWorkPage() {
     apiFetch<AssignableUser[]>('/projects/assignable-users').then(setMembers).catch(() => setMembers([]));
   }, [load]);
 
-  const open = useMemo(() => tasks.filter((t) => !['COMPLETED', 'INVOICED'].includes(t.status)), [tasks]);
+  const open = useMemo(() => tasks.filter((t) => t.status !== 'COMPLETED'), [tasks]);
 
   if (state === 'loading') return <LoadingState />;
 

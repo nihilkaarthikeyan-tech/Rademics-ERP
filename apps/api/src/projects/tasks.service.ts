@@ -606,7 +606,7 @@ export class TasksService {
   private isOverdue(task: { deadline: Date | null; status: string }): boolean {
     // Overdue is a COMPUTED flag, never a status (§6).
     if (!task.deadline) return false;
-    const terminal = ['COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED'];
+    const terminal = ['COMPLETED', 'CLOSED', 'CANCELLED'];
     return !terminal.includes(task.status) && task.deadline < new Date();
   }
 
@@ -658,8 +658,6 @@ export class TasksService {
           );
         case 'TEAM_LEAD':
           return user.role === 'TEAM_LEAD' || user.role === 'SUPER_ADMIN';
-        case 'FINANCE':
-          return user.role === 'FINANCE' || user.role === 'SUPER_ADMIN';
         case 'CLIENT_APPROVER':
           return user.role === 'CLIENT';
         default:

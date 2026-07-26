@@ -24,6 +24,8 @@ import { AiModule } from './ai/ai.module';
 import { ReportsModule } from './reports/reports.module';
 import { RetentionModule } from './retention/retention.module';
 import { DesktopModule } from './desktop/desktop.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
+import { ChatModule } from './chat/chat.module';
 import { SearchModule } from './search/search.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { SentryExceptionFilter } from './observability/sentry.filter';
@@ -60,6 +62,8 @@ import { CapabilityGuard } from './rbac/capability.guard';
     ReportsModule,
     RetentionModule,
     DesktopModule,
+    AnnouncementsModule,
+    ChatModule,
     SearchModule,
     ObservabilityModule,
   ],

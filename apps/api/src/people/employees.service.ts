@@ -223,7 +223,7 @@ export class EmployeesService {
    * and the project PM is notified (Spec §25). History is preserved (immutable §6).
    */
   private async reassignOpenTasks(userId: string, actor: AuthUser): Promise<number> {
-    const TERMINAL = ['COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED'] as const;
+    const TERMINAL = ['COMPLETED', 'CLOSED', 'CANCELLED'] as const;
     const open = await this.prisma.task.findMany({
       where: { assigneeId: userId, status: { notIn: [...TERMINAL] } },
       select: { id: true, title: true, status: true, project: { select: { pmId: true } } },

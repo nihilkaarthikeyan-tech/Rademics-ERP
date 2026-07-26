@@ -44,6 +44,20 @@ export class PresenceService {
     }
   }
 
+  /**
+   * Push to every connected socket on this namespace — the company chat's one
+   * general room (2026-07-26). Safe as a broadcast: only the staff app connects
+   * to this namespace (the client portal has no socket layer).
+   */
+  emitToAll(event: string, payload: unknown): void {
+    if (!this.server) return;
+    try {
+      this.server.emit(event, payload);
+    } catch (err) {
+      this.logger.warn(`emitToAll failed: ${(err as Error).message}`);
+    }
+  }
+
   private broadcast(userId: string, online: boolean): void {
     if (!this.server) return; // no subscribers yet — REST/polling still reflects DB truth
     try {

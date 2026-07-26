@@ -150,9 +150,9 @@ async function main(): Promise<void> {
 
   const allStatuses: TaskStatus[] = [
     'DRAFT', 'ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW',
-    'CLIENT_REVIEW', 'COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED',
+    'CLIENT_REVIEW', 'COMPLETED', 'CLOSED', 'CANCELLED',
   ];
-  const assignees = [emp3, emp4, emp3, emp4, emp3, emp4, emp3, emp4, emp3, emp4];
+  const assignees = [emp3, emp4, emp3, emp4, emp3, emp4, emp3, emp4, emp3];
 
   const existingTaskCount = await prisma.task.count({ where: { projectId: projA.id, title: { startsWith: 'DEMO ·' } } });
   if (existingTaskCount === 0) {

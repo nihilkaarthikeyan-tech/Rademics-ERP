@@ -241,7 +241,7 @@ export class ListTasksQuery {
   @IsOptional()
   @IsIn([
     'DRAFT', 'ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW',
-    'CLIENT_REVIEW', 'COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED',
+    'CLIENT_REVIEW', 'COMPLETED', 'CLOSED', 'CANCELLED',
   ])
   status?: string;
 

@@ -77,7 +77,6 @@ const STATUS_LABEL: Record<string, string> = {
   SUBMITTED_FOR_REVIEW: 'In review',
   CLIENT_REVIEW: 'With the client',
   COMPLETED: 'Completed',
-  INVOICED: 'Invoiced',
   CLOSED: 'Closed',
   CANCELLED: 'Cancelled',
 };
@@ -85,7 +84,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_TONE: Record<string, 'green' | 'amber' | 'slate' | 'red' | 'blue'> = {
   DRAFT: 'slate', ASSIGNED: 'blue', ACKNOWLEDGED: 'blue', IN_PROGRESS: 'amber',
   SUBMITTED_FOR_REVIEW: 'amber', CLIENT_REVIEW: 'amber', COMPLETED: 'green',
-  INVOICED: 'green', CLOSED: 'slate', CANCELLED: 'red',
+  CLOSED: 'slate', CANCELLED: 'red',
 };
 
 const PRIORITY_TONE: Record<string, 'red' | 'amber' | 'slate'> = { HIGH: 'red', MEDIUM: 'amber', LOW: 'slate' };
@@ -97,19 +96,17 @@ const ACTION_LABEL: Record<string, string> = {
   SUBMIT: 'Submit for review',
   APPROVE_REVIEW: 'Approve',
   SEND_BACK: 'Send back…',
-  MARK_INVOICED: 'Mark invoiced',
   CLOSE: 'Close task',
-  CLOSE_WITHOUT_INVOICING: 'Close without invoicing',
 };
 
 /** Forward movement — rendered as the primary button, before any outline action. */
 const FORWARD_ACTIONS: string[] = [
   TaskAction.ACKNOWLEDGE, TaskAction.START_WORK, TaskAction.SUBMIT,
-  TaskAction.APPROVE_REVIEW, TaskAction.MARK_INVOICED, TaskAction.CLOSE,
+  TaskAction.APPROVE_REVIEW, TaskAction.CLOSE,
 ];
 
 /** Statuses where "Overdue" would just shout at finished work. */
-const SETTLED = ['COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED'];
+const SETTLED = ['COMPLETED', 'CLOSED', 'CANCELLED'];
 
 // Same rendering as the dashboard's people initials (dashboard-overview.tsx) —
 // copied, not imported: components don't reach across app areas for 3 lines.
@@ -187,6 +184,8 @@ function activityPhrase(h: HistoryEntry, actor: string): { actor: string | null;
     case 'SEND_BACK': return { actor, verb: 'sent it back for changes' };
     case 'CLIENT_APPROVE': return { actor: null, verb: 'The client approved the work' };
     case 'CLIENT_REQUEST_REVISION': return { actor: null, verb: 'The client asked for changes' };
+    // MARK_INVOICED / CLOSE_WITHOUT_INVOICING are gone from the chain (2026-07-26)
+    // but stay here as strings: old history rows may still carry them.
     case 'MARK_INVOICED': return { actor, verb: 'marked it invoiced' };
     case 'CLOSE': return { actor, verb: 'closed the task' };
     case 'CLOSE_WITHOUT_INVOICING': return { actor, verb: 'closed it without invoicing' };
@@ -195,12 +194,12 @@ function activityPhrase(h: HistoryEntry, actor: string): { actor: string | null;
   }
 }
 
-/** The pipeline the stepper draws — 8 segments, 9 when the client signs off. */
+/** The pipeline the stepper draws — 7 segments, 8 when the client signs off. */
 function pipelineStages(clientFacing: boolean): string[] {
   return [
     'Draft', 'Assigned', 'Accepted', 'In progress', 'In review',
     ...(clientFacing ? ['With the client'] : []),
-    'Completed', 'Invoiced', 'Closed',
+    'Completed', 'Closed',
   ];
 }
 
@@ -208,7 +207,7 @@ function stageIndex(status: TaskStatus, clientFacing: boolean): number {
   const order: string[] = [
     'DRAFT', 'ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW',
     ...(clientFacing ? ['CLIENT_REVIEW'] : []),
-    'COMPLETED', 'INVOICED', 'CLOSED',
+    'COMPLETED', 'CLOSED',
   ];
   const i = order.indexOf(status);
   // A non-client-facing task can't be in CLIENT_REVIEW; if data ever says so, sit it at review.
@@ -264,10 +263,9 @@ export function TaskDetailDrawer({
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignQuery, setAssignQuery] = useState('');
   const [assignPick, setAssignPick] = useState<AssignableUser | null>(null);
-  const [confirmSkipInvoice, setConfirmSkipInvoice] = useState(false);
   const [showAllActivity, setShowAllActivity] = useState(false);
 
-  const anyPanelOpen = pendingAction !== null || assignOpen || confirmSkipInvoice;
+  const anyPanelOpen = pendingAction !== null || assignOpen;
 
   const load = useCallback(async () => {
     try {
@@ -286,7 +284,6 @@ export function TaskDetailDrawer({
   const closePanels = useCallback(() => {
     setPendingAction(null);
     setAssignOpen(false);
-    setConfirmSkipInvoice(false);
   }, []);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -321,26 +318,18 @@ export function TaskDetailDrawer({
 
   function openReason(action: TaskAction, requiresComment: boolean) {
     setAssignOpen(false);
-    setConfirmSkipInvoice(false);
     setPendingAction({ action, requiresComment });
     setActionComment('');
   }
 
   function openAssign() {
     setPendingAction(null);
-    setConfirmSkipInvoice(false);
     setAssignOpen(true);
     setAssignQuery('');
     setAssignPick(null);
   }
 
   function startTransition(action: TaskAction, requiresComment: boolean) {
-    if (action === TaskAction.CLOSE_WITHOUT_INVOICING) {
-      setPendingAction(null);
-      setAssignOpen(false);
-      setConfirmSkipInvoice(true);
-      return;
-    }
     if (requiresComment || action === TaskAction.CANCEL) {
       openReason(action, requiresComment);
       return;
@@ -482,19 +471,9 @@ export function TaskDetailDrawer({
           avatar: null,
         };
       case 'COMPLETED':
-        if (canPerform(['FINANCE'], ctx))
-          return { chip: 'your', text: <>Work approved — mark it invoiced once it&apos;s on an invoice.</>, avatar: null };
-        if (isManager)
-          return {
-            chip: 'waiting',
-            text: <>Waiting for Finance to invoice this. You can close it without invoicing instead.</>,
-            avatar: null,
-          };
-        return { chip: 'waiting', text: <>Work approved. Waiting for Finance to invoice it.</>, avatar: null };
-      case 'INVOICED':
         return isManager
-          ? { chip: 'your', text: <>Invoiced — close the task to wrap it up.</>, avatar: null }
-          : { chip: 'waiting', text: <>Invoiced — waiting for {name(pmDisplay)} to close it.</>, avatar: null };
+          ? { chip: 'your', text: <>Work approved — close the task to wrap it up.</>, avatar: null }
+          : { chip: 'waiting', text: <>Approved. Waiting for {name(pmDisplay)} to close it.</>, avatar: null };
       default:
         return { chip: 'waiting', text: <>Nothing pending.</>, avatar: null };
     }
@@ -511,8 +490,6 @@ export function TaskDetailDrawer({
         return `Sends it to ${pmDisplay} for review.`;
       case TaskAction.APPROVE_REVIEW:
         return task?.clientFacing ? 'Approving sends it to the client for sign-off.' : 'Approving marks it completed.';
-      case TaskAction.MARK_INVOICED:
-        return 'Records that this work is on an invoice.';
       case TaskAction.CLOSE:
         return 'Wraps it up for good.';
       default:
@@ -522,9 +499,7 @@ export function TaskDetailDrawer({
 
   const forward = myActions.filter((a) => FORWARD_ACTIONS.includes(a.action));
   const sendBack = myActions.find((a) => a.action === TaskAction.SEND_BACK) ?? null;
-  const skipInvoice = myActions.find((a) => a.action === TaskAction.CLOSE_WITHOUT_INVOICING) ?? null;
-  const hasZoneC =
-    forward.length > 0 || sendBack !== null || skipInvoice !== null || canManageAssignment;
+  const hasZoneC = forward.length > 0 || sendBack !== null || canManageAssignment;
   const firstForward = forward[0] ?? null;
   const primaryCaption = firstForward ? consequence(firstForward.action) : null;
 
@@ -545,8 +520,6 @@ export function TaskDetailDrawer({
       ? newest
       : null;
   const cancelEntry = [...history].reverse().find((h) => h.action === 'CANCEL') ?? null;
-  const closedQuietly =
-    history.some((h) => h.action === 'CLOSE_WITHOUT_INVOICING') && !history.some((h) => h.action === 'MARK_INVOICED');
 
   const stages = task ? pipelineStages(task.clientFacing) : [];
   const currentStage = task ? stageIndex(task.status, task.clientFacing) : 0;
@@ -605,11 +578,7 @@ export function TaskDetailDrawer({
                 task.status === 'CLOSED' ? (
                   <div className="flex items-start gap-2 rounded-lg bg-slate-100/80 px-4 py-3 text-sm text-slate-600">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                    <span>
-                      {closedQuietly
-                        ? 'Closed without invoicing — finished, and deliberately not billed.'
-                        : 'Closed — this task is finished. Nothing more happens to it.'}
-                    </span>
+                    <span>Closed — this task is finished. Nothing more happens to it.</span>
                   </div>
                 ) : (
                   <div className="rounded-lg bg-danger-soft px-4 py-3 text-sm text-danger">
@@ -730,17 +699,6 @@ export function TaskDetailDrawer({
                             {ACTION_LABEL.SEND_BACK}
                           </Button>
                         ) : null}
-                        {skipInvoice ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className={OUTLINE_ON_GLASS}
-                            disabled={busy || anyPanelOpen}
-                            onClick={() => startTransition(TaskAction.CLOSE_WITHOUT_INVOICING, false)}
-                          >
-                            {ACTION_LABEL.CLOSE_WITHOUT_INVOICING}
-                          </Button>
-                        ) : null}
                       </div>
                       {primaryCaption ? <p className="mt-1.5 text-xs text-slate-500">{primaryCaption}</p> : null}
 
@@ -775,29 +733,6 @@ export function TaskDetailDrawer({
                               onClick={() => runTransition(TaskAction.SEND_BACK, actionComment.trim())}
                             >
                               Send back
-                            </Button>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {/* Close-without-invoicing confirm — deliberate, but no essay. */}
-                      {confirmSkipInvoice ? (
-                        <div className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3">
-                          <p className="text-sm text-slate-700">
-                            Close without invoicing? This skips Finance — only for work that won&apos;t be billed.
-                          </p>
-                          <div className="mt-2 flex justify-end gap-2">
-                            <Button size="sm" variant="ghost" onClick={closePanels} disabled={busy}>
-                              Keep it
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className={OUTLINE_ON_GLASS}
-                              disabled={busy}
-                              onClick={() => runTransition(TaskAction.CLOSE_WITHOUT_INVOICING)}
-                            >
-                              Close it
                             </Button>
                           </div>
                         </div>

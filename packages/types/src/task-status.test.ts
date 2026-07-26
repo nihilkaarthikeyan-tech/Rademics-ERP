@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import {
   TaskStatus,
   TaskAction,
@@ -60,8 +60,14 @@ describe('Task state machine (Spec §6)', () => {
     expect(nextTaskStatus(TaskStatus.DRAFT, TaskAction.START_WORK, { clientFacing: false })).toBeNull();
     // Cannot submit something that is only Assigned.
     expect(nextTaskStatus(TaskStatus.ASSIGNED, TaskAction.SUBMIT, { clientFacing: false })).toBeNull();
-    // Cannot invoice something still in progress.
-    expect(nextTaskStatus(TaskStatus.IN_PROGRESS, TaskAction.MARK_INVOICED, { clientFacing: false })).toBeNull();
+    // Cannot close something still in progress.
+    expect(nextTaskStatus(TaskStatus.IN_PROGRESS, TaskAction.CLOSE, { clientFacing: false })).toBeNull();
+  });
+
+  it('a completed task closes directly — no invoicing step (2026-07-26)', () => {
+    expect(nextTaskStatus(TaskStatus.COMPLETED, TaskAction.CLOSE, { clientFacing: false })).toBe(
+      TaskStatus.CLOSED,
+    );
   });
 
   it('mandatory-comment actions are flagged (§6)', () => {
@@ -92,42 +98,42 @@ describe('Viewer eligibility (UI mirror of assertActor)', () => {
     {
       name: 'the assignee (plain employee)',
       ctx: onTask(ASSIGNEE_ID, 'EMPLOYEE'),
-      expects: { ASSIGNEE: true, PROJECT_MANAGER: false, TEAM_LEAD: false, FINANCE: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: true, PROJECT_MANAGER: false, TEAM_LEAD: false, CLIENT_APPROVER: false },
     },
     {
       name: 'the appointed manager (plain employee)',
       ctx: onTask(PM_ID, 'EMPLOYEE'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: false, FINANCE: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: false, CLIENT_APPROVER: false },
     },
     {
       name: 'an unrelated employee',
       ctx: onTask('user-bystander', 'EMPLOYEE'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, FINANCE: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, CLIENT_APPROVER: false },
     },
     {
       name: 'HR',
       ctx: onTask('user-hr', 'HR'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: false, FINANCE: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: false, CLIENT_APPROVER: false },
     },
     {
       name: 'a team lead',
       ctx: onTask('user-tl', 'TEAM_LEAD'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: true, FINANCE: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: true, CLIENT_APPROVER: false },
     },
     {
       name: 'finance',
       ctx: onTask('user-fin', 'FINANCE'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, FINANCE: true, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, CLIENT_APPROVER: false },
     },
     {
       name: 'super admin',
       ctx: onTask('user-sa', 'SUPER_ADMIN'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: true, FINANCE: true, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: true, TEAM_LEAD: true, CLIENT_APPROVER: false },
     },
     {
       name: 'a client (staff app never grants client actions)',
       ctx: onTask('user-client', 'CLIENT'),
-      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, FINANCE: false, CLIENT_APPROVER: false },
+      expects: { ASSIGNEE: false, PROJECT_MANAGER: false, TEAM_LEAD: false, CLIENT_APPROVER: false },
     },
   ];
 

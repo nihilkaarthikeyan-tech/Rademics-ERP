@@ -150,7 +150,7 @@ export class ReportsService {
     const rows = [];
     for (const u of users) {
       const completedTasks = await this.prisma.task.findMany({
-        where: { assigneeId: u.id, status: { in: ['COMPLETED', 'CLOSED', 'INVOICED'] }, updatedAt: { gte: from, lte: to } },
+        where: { assigneeId: u.id, status: { in: ['COMPLETED', 'CLOSED'] }, updatedAt: { gte: from, lte: to } },
         select: { id: true, estimatedHours: true, actualHours: true, deadline: true, updatedAt: true, history: { select: { toStatus: true, action: true, createdAt: true } } },
       });
       const count = completedTasks.length;
@@ -204,8 +204,8 @@ export class ReportsService {
     const rows = [];
     for (const p of projects) {
       const total = p.tasks.length;
-      const done = p.tasks.filter((t) => ['COMPLETED', 'CLOSED', 'INVOICED'].includes(t.status)).length;
-      const overdue = p.tasks.filter((t) => t.deadline && t.deadline < new Date() && !['COMPLETED', 'CLOSED', 'CANCELLED', 'INVOICED'].includes(t.status)).length;
+      const done = p.tasks.filter((t) => ['COMPLETED', 'CLOSED'].includes(t.status)).length;
+      const overdue = p.tasks.filter((t) => t.deadline && t.deadline < new Date() && !['COMPLETED', 'CLOSED', 'CANCELLED'].includes(t.status)).length;
       const pct = total > 0 ? round((done / total) * 100) : 0;
       const recentDone = await this.prisma.taskStatusHistory.count({ where: { task: { projectId: p.id }, toStatus: { in: ['COMPLETED', 'CLOSED'] }, createdAt: { gte: fourWeeksAgo } } });
       const perWeek = round(recentDone / 4, 1);

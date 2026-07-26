@@ -46,12 +46,11 @@ const COLUMNS: { key: string; label: string }[] = [
   { key: 'SUBMITTED_FOR_REVIEW', label: 'In review' },
   { key: 'CLIENT_REVIEW', label: 'Client review' },
   { key: 'COMPLETED', label: 'Completed' },
-  { key: 'INVOICED', label: 'Invoiced' },
   { key: 'CLOSED', label: 'Closed' },
   { key: 'CANCELLED', label: 'Cancelled' },
 ];
 const PRIORITY_TONE: Record<string, 'red' | 'amber' | 'slate'> = { HIGH: 'red', MEDIUM: 'amber', LOW: 'slate' };
-const DONE_STATUSES = ['COMPLETED', 'INVOICED', 'CLOSED', 'CANCELLED'];
+const DONE_STATUSES = ['COMPLETED', 'CLOSED', 'CANCELLED'];
 /**
  * Columns always shown, because they are where work actively moves. The rest
  * (client review, completed, invoiced, closed, cancelled) only appear once they

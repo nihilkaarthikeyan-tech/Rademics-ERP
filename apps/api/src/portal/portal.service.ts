@@ -10,7 +10,7 @@ interface Meta {
   userAgent?: string | null;
 }
 
-const DONE_STATUSES = ['COMPLETED', 'INVOICED', 'CLOSED'];
+const DONE_STATUSES = ['COMPLETED', 'CLOSED'];
 
 /**
  * Client portal read/write surface (Spec §5.5). Every query is scoped through

@@ -89,6 +89,9 @@ export function NotificationsBell() {
         // Task gone or no longer accessible — My Work is the safe landing.
         router.push('/my-work');
       }
+    } else if (n.entityType === 'Announcement') {
+      setOpen(false);
+      router.push('/notices');
     }
   }
 
@@ -127,7 +130,8 @@ export function NotificationsBell() {
             ) : (
               <ul className="divide-y divide-slate-50">
                 {items.map((n) => {
-                  const clickable = n.entityType === 'Task' && n.entityId;
+                  const clickable =
+                    Boolean(n.entityId) && (n.entityType === 'Task' || n.entityType === 'Announcement');
                   return (
                     <li key={n.id}>
                       <button
@@ -146,7 +150,11 @@ export function NotificationsBell() {
                         {n.body ? <div className="text-xs text-slate-500">{n.body}</div> : null}
                         <div className="mt-0.5 flex items-center justify-between text-[11px] text-slate-400">
                           <span>{new Date(n.createdAt).toLocaleString()}</span>
-                          {clickable ? <span className="text-accent">Open task →</span> : null}
+                          {clickable ? (
+                            <span className="text-accent">
+                              {n.entityType === 'Announcement' ? 'Open notice →' : 'Open task →'}
+                            </span>
+                          ) : null}
                         </div>
                       </button>
                     </li>

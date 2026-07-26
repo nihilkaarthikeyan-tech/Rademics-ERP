@@ -17,7 +17,9 @@ export const TaskStatus = {
   SUBMITTED_FOR_REVIEW: 'SUBMITTED_FOR_REVIEW',
   CLIENT_REVIEW: 'CLIENT_REVIEW',
   COMPLETED: 'COMPLETED',
-  INVOICED: 'INVOICED',
+  // INVOICED was removed 2026-07-26: billing lives in the Finance module and is
+  // not a step of the task chain. A completed task is simply closed by whoever
+  // runs the project.
   CLOSED: 'CLOSED',
   CANCELLED: 'CANCELLED',
 } as const;
@@ -34,9 +36,9 @@ export const TaskAction = {
   SEND_BACK: 'SEND_BACK',
   CLIENT_APPROVE: 'CLIENT_APPROVE',
   CLIENT_REQUEST_REVISION: 'CLIENT_REQUEST_REVISION',
-  MARK_INVOICED: 'MARK_INVOICED',
+  // MARK_INVOICED / CLOSE_WITHOUT_INVOICING removed 2026-07-26 with the
+  // invoicing step (billing is Finance-module work, not a task transition).
   CLOSE: 'CLOSE',
-  CLOSE_WITHOUT_INVOICING: 'CLOSE_WITHOUT_INVOICING',
   CANCEL: 'CANCEL',
 } as const;
 
@@ -54,8 +56,7 @@ export type TransitionActor =
   | 'PROJECT_MANAGER'
   | 'TEAM_LEAD'
   | 'ASSIGNEE'
-  | 'CLIENT_APPROVER'
-  | 'FINANCE';
+  | 'CLIENT_APPROVER';
 
 export interface TaskTransition {
   from: TaskStatus;
@@ -101,9 +102,7 @@ export const TASK_TRANSITIONS: readonly TaskTransition[] = [
     actors: ['CLIENT_APPROVER'],
     requiresComment: true,
   },
-  { from: TaskStatus.COMPLETED, action: TaskAction.MARK_INVOICED, to: TaskStatus.INVOICED, actors: ['FINANCE'] },
-  { from: TaskStatus.INVOICED, action: TaskAction.CLOSE, to: TaskStatus.CLOSED, actors: ['PROJECT_MANAGER'] },
-  { from: TaskStatus.COMPLETED, action: TaskAction.CLOSE_WITHOUT_INVOICING, to: TaskStatus.CLOSED, actors: ['PROJECT_MANAGER'] },
+  { from: TaskStatus.COMPLETED, action: TaskAction.CLOSE, to: TaskStatus.CLOSED, actors: ['PROJECT_MANAGER'] },
   { from: TaskStatus.DRAFT, action: TaskAction.CANCEL, to: TaskStatus.CANCELLED, actors: ['PROJECT_MANAGER'], requiresComment: true, fromAny: true },
 ] as const;
 
@@ -141,8 +140,6 @@ export function canPerform(actors: readonly TransitionActor[], ctx: TaskViewerCt
         );
       case 'TEAM_LEAD':
         return ctx.meRole === 'TEAM_LEAD' || ctx.meRole === 'SUPER_ADMIN';
-      case 'FINANCE':
-        return ctx.meRole === 'FINANCE' || ctx.meRole === 'SUPER_ADMIN';
       case 'CLIENT_APPROVER':
         return false;
       default:
