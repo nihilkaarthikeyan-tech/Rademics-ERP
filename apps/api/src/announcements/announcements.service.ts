@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PresenceService } from '../attendance/presence.service';
 import type { AuthUser } from '../auth/auth-user';
 
 /** Company notices (2026-07-26): management writes, all staff read + pin. */
@@ -11,6 +12,7 @@ export class AnnouncementsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly presence: PresenceService,
   ) {}
 
   /** Notices are internal — the client portal never surfaces them. */
@@ -54,6 +56,12 @@ export class AnnouncementsService {
       select: { id: true, title: true },
     });
 
+    // Anyone with the Notices page open sees it appear without a refresh —
+    // same live-push pattern chat uses, just a different event name. The bell
+    // notification below is the "I wasn't looking at that page" channel;
+    // this one is "I already am".
+    this.presence.emitToAll('announcement:posted', { id: announcement.id, title: announcement.title });
+
     // Everyone on staff hears about a new notice — that is the point of one.
     const staff = await this.prisma.user.findMany({
       where: { status: 'ACTIVE', role: { not: 'CLIENT' }, id: { not: actor.id } },
@@ -95,6 +103,8 @@ export class AnnouncementsService {
     const exists = await this.prisma.announcement.count({ where: { id } });
     if (!exists) throw new NotFoundException('Notice not found');
     await this.prisma.announcement.delete({ where: { id } });
+    // Live: it vanishes from every open Notices page, not just the poster's own.
+    this.presence.emitToAll('announcement:removed', { id });
     return { id, deleted: true };
   }
 }

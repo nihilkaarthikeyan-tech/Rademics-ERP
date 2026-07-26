@@ -5,6 +5,7 @@ import { Megaphone, Pin } from 'lucide-react';
 import { Button, EmptyState, Input, Label, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
+import { connectPresence } from '@/lib/socket';
 
 interface Notice {
   id: string;
@@ -53,6 +54,21 @@ export default function NoticesPage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  // Live: a page left open all day must show a new notice without a manual
+  // reload — the same socket chat already uses, just its own event names.
+  // Posting/removing calls load() itself too; the socket echo just re-runs
+  // the same idempotent fetch, which is harmless.
+  useEffect(() => {
+    const socket = connectPresence();
+    socket.on('announcement:posted', () => void load());
+    socket.on('announcement:removed', ({ id }: { id: string }) => {
+      setNotices((prev) => (prev ? prev.filter((n) => n.id !== id) : prev));
+    });
+    return () => {
+      socket.close();
+    };
   }, [load]);
 
   async function post(e: React.FormEvent) {
