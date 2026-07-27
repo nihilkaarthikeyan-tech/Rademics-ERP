@@ -1,16 +1,12 @@
 import { app, ipcMain, type BrowserWindow } from 'electron';
 import type { AuthStore } from './auth-store';
 import type { StatusPoller } from './status-poller';
-import { ApiError } from './api-client';
+import { errorMessage } from './error-message';
 import { restartToInstallUpdate } from './updater';
 import { loadSavedLogin, saveLogin } from './saved-login';
 import { IpcChannel, type LoginPayload, type LoginResult } from '../shared/ipc';
 
-function errorMessage(err: unknown): string {
-  if (err instanceof ApiError) return err.message;
-  if (err instanceof Error) return err.message;
-  return 'Something went wrong';
-}
+
 
 export function registerIpcHandlers(opts: {
   auth: AuthStore;
