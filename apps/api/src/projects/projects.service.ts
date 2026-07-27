@@ -25,6 +25,7 @@ const BUDGET_ROLES = new Set(['SUPER_ADMIN', 'HR', 'FINANCE']);
 
 const PROJECT_SELECT = {
   id: true,
+  number: true, // rendered as RAD-001 in the UI; how a client is pointed at a project
   name: true,
   status: true,
   description: true,

@@ -551,7 +551,14 @@ model RegularizationRequest {
 
 /// A Project or Work Stream (Spec §5.4). Budget is visible only to PM/Finance/Admin (§3).
 model Project {
-  id          String        @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
+  // Human-facing reference, rendered as RAD-001 (see formatProjectCode in
+  // @rademics/types). Backed by a Postgres sequence rather than a count()+1 in
+  // application code: two projects created in the same instant would otherwise
+  // read the same count and collide, and this number is how a client is pointed
+  // at a project — a duplicate means the wrong client sees the wrong work.
+  // Immutable once assigned.
+  number      Int           @unique @default(autoincrement())
   name        String
   status      ProjectStatus @default(ACTIVE)
   description String?

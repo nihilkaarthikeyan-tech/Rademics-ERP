@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ClientAdminService } from './client-admin.service';
-import { CreateClientOrgDto, CreateClientUserDto, GrantAccessDto } from './dto';
+import { CreateClientOrgDto, CreateClientUserDto, GrantAccessDto, OnboardClientDto } from './dto';
 import { RequireCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { reqMeta } from '../common/req-meta';
@@ -22,6 +22,28 @@ export class ClientAdminController {
   @RequireCapability('portal.users.manage')
   listOrgs() {
     return this.admin.listOrgs();
+  }
+
+  /**
+   * Resolve typed project codes to names for the onboarding form's confirmation
+   * step. Read-only and behind the same capability as the write it precedes.
+   */
+  @Get('lookup-projects')
+  @RequireCapability('portal.users.manage')
+  lookupProjects(@Query('numbers') numbers?: string) {
+    const parsed = (numbers ?? '')
+      .split(',')
+      .map((n) => Number(n.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    if (parsed.length === 0) return [];
+    return this.admin.lookupProjects(parsed.slice(0, 50));
+  }
+
+  /** Create a client and grant their projects in one step (2026-07-27). */
+  @Post('onboard')
+  @RequireCapability('portal.users.manage')
+  onboard(@Body() dto: OnboardClientDto, @CurrentUser() actor: AuthUser, @Req() req: Request) {
+    return this.admin.onboardClient(dto, actor, reqMeta(req));
   }
 
   @Post(':orgId/users')

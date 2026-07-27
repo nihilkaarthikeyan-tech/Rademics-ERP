@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Badge, Button, Card, CardContent, EmptyState, ErrorState, Input, Label, LoadingState } from '@rademics/ui';
+import { formatProjectCode } from '@rademics/types';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
 
 interface ProjectRow {
   id: string;
+  number: number;
   name: string;
   status: string;
   pm: { id: string; name: string } | null;
@@ -83,6 +85,8 @@ export default function ProjectsPage() {
                       <Badge tone={STATUS_TONE[p.status] ?? 'slate'}>{p.status}</Badge>
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                      <span className="font-mono">{formatProjectCode(p.number)}</span>
+                      <span>·</span>
                       {p.pm ? <span>Manager: {p.pm.name}</span> : <span>No manager yet</span>}
                     </div>
                     <div className="mt-3 text-xs text-slate-500">

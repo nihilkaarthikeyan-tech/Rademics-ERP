@@ -1,4 +1,16 @@
-import { IsEmail, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
+  IsEmail,
+  IsInt,
+  IsPositive,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 const NAME_REGEX = /^[\p{L} .'-]+$/u;
 
@@ -19,6 +31,33 @@ export class CreateClientUserDto {
   @MinLength(2)
   @MaxLength(150)
   name!: string;
+}
+
+/**
+ * One-step client onboarding (2026-07-27): name + email + which projects.
+ *
+ * The org is created behind this rather than asked for. It stays in the data
+ * model because the portal refuses entry without one, invoices hang off it, and
+ * deactivating it is the kill switch that ends portal access — but a Super
+ * Admin onboarding a single contact should not have to think about it.
+ */
+export class OnboardClientDto {
+  @IsString()
+  @Matches(NAME_REGEX)
+  @MinLength(2)
+  @MaxLength(150)
+  name!: string;
+
+  @IsEmail()
+  email!: string;
+
+  /** Project.number values (what "RAD-007" resolves to), not ids. */
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @IsInt({ each: true })
+  @IsPositive({ each: true })
+  projectNumbers!: number[];
 }
 
 /** No more Viewer/Approver level (2026-07-27) — a grant just IS the access. */

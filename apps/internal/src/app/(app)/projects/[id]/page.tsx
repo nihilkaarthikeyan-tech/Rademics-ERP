@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Badge, Button, Card, CardContent, EmptyState, Input, Label, LoadingState } from '@rademics/ui';
+import { formatProjectCode } from '@rademics/types';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
 import { TaskDetailDrawer, type AssignableUser } from '@/components/projects/task-detail-drawer';
@@ -41,6 +42,7 @@ function clientStaleDays(t: TaskRow): number | null {
 }
 interface ProjectDetail {
   id: string;
+  number: number;
   name: string;
   status: string;
   description: string | null;
@@ -165,6 +167,8 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            {/* The reference a Super Admin types when giving a client this project. */}
+            <span className="font-mono text-sm text-slate-400">{formatProjectCode(project.number)}</span>
             <h1 className="text-xl font-semibold text-slate-800">{project.name}</h1>
             <Badge tone="green">{project.status}</Badge>
           </div>
