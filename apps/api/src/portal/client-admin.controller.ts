@@ -24,6 +24,18 @@ export class ClientAdminController {
     return this.admin.listOrgs();
   }
 
+  /**
+   * The clients this staff member works for, with what needs answering.
+   *
+   * Auth-only rather than behind portal.users.manage: that capability is
+   * Super-Admin-only and this is deliberately for everyone else. The scoping
+   * is per-caller inside the service, and no client identity is returned.
+   */
+  @Get('mine')
+  myClients(@CurrentUser() user: AuthUser) {
+    return this.admin.myClients(user);
+  }
+
   /** Projects still free to hand to a client — what the onboarding form lists. */
   @Get('assignable-projects')
   @RequireCapability('portal.users.manage')

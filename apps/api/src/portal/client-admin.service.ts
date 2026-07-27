@@ -271,6 +271,110 @@ export class ClientAdminService {
     };
   }
 
+  /**
+   * The clients a staff member is actually working for.
+   *
+   * Scoped to projects they run or hold a task in — the same "own project" rule
+   * the projects list uses — so this is a view of their own workload, not a
+   * directory of the company's clients. Super Admin and HR, who run every
+   * project, see all of them.
+   *
+   * Identity is never included: a client is CL-012 here, whatever the viewer's
+   * role, because only Super Admin sees names and this screen is for everyone
+   * else. What it adds is the state a staff member needs to act on — how long
+   * the client has been waiting, and whether they have asked.
+   */
+  async myClients(user: AuthUser) {
+    const seesEverything = user.role === 'SUPER_ADMIN' || user.role === 'HR';
+    const projects = await this.prisma.project.findMany({
+      where: {
+        clientOrgId: { not: null },
+        ...(seesEverything
+          ? {}
+          : { OR: [{ pmId: user.id }, { tasks: { some: { assigneeId: user.id } } }] }),
+      },
+      select: {
+        id: true,
+        number: true,
+        name: true,
+        status: true,
+        clientOrg: { select: { id: true, number: true, name: true, status: true } },
+        tasks: {
+          where: { clientFacing: true, status: { notIn: ['COMPLETED', 'CLOSED', 'CANCELLED'] } },
+          select: {
+            id: true,
+            title: true,
+            createdAt: true,
+            lastClientUpdateAt: true,
+            lastStatusRequestAt: true,
+          },
+        },
+      },
+      orderBy: { number: 'asc' },
+    });
+
+    const now = Date.now();
+    const DAY = 86_400_000;
+    // One row per client, not per project — a client with five quiet tasks is
+    // one thing to deal with, not five.
+    const byClient = new Map<string, {
+      clientId: string;
+      code: string;
+      status: string;
+      projects: { id: string; code: string; name: string }[];
+      openClientTasks: number;
+      daysSinceUpdate: number | null;
+      waitingSince: string | null;
+      pendingRequests: { taskId: string; title: string; askedAt: Date }[];
+    }>();
+
+    for (const p of projects) {
+      if (!p.clientOrg) continue;
+      const key = p.clientOrg.id;
+      const row = byClient.get(key) ?? {
+        clientId: p.clientOrg.id,
+        code: formatClientCode(p.clientOrg.number),
+        status: p.clientOrg.status,
+        projects: [],
+        openClientTasks: 0,
+        daysSinceUpdate: null,
+        waitingSince: null,
+        pendingRequests: [],
+      };
+      row.projects.push({ id: p.id, code: formatProjectCode(p.number), name: p.name });
+      row.openClientTasks += p.tasks.length;
+
+      for (const t of p.tasks) {
+        // The oldest silence across their tasks is what matters: that is how
+        // long this client has actually gone without hearing anything.
+        const since = t.lastClientUpdateAt ?? t.createdAt;
+        const days = Math.floor((now - since.getTime()) / DAY);
+        if (row.daysSinceUpdate === null || days > row.daysSinceUpdate) {
+          row.daysSinceUpdate = days;
+          row.waitingSince = since.toISOString();
+        }
+        // A request counts as pending until an update goes out after it.
+        const answered = t.lastClientUpdateAt && t.lastStatusRequestAt
+          ? t.lastClientUpdateAt > t.lastStatusRequestAt
+          : false;
+        if (t.lastStatusRequestAt && !answered) {
+          row.pendingRequests.push({ taskId: t.id, title: t.title, askedAt: t.lastStatusRequestAt });
+        }
+      }
+      byClient.set(key, row);
+    }
+
+    return [...byClient.values()]
+      .map((r) => ({ ...r, updateDue: (r.daysSinceUpdate ?? 0) >= 3 && r.openClientTasks > 0 }))
+      // Anything asked for, or overdue, first — this is a to-do list.
+      .sort((a, b) => {
+        if (a.pendingRequests.length !== b.pendingRequests.length) {
+          return b.pendingRequests.length - a.pendingRequests.length;
+        }
+        return (b.daysSinceUpdate ?? -1) - (a.daysSinceUpdate ?? -1);
+      });
+  }
+
   /** Grant a client user access to a project (§5.5) — view + request-status only. */
   async grantAccess(projectId: string, dto: GrantAccessDto, actor: AuthUser, meta: Meta) {
     const [project, clientUser] = await Promise.all([

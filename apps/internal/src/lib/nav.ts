@@ -12,6 +12,7 @@ import {
   Settings,
   ScrollText,
   Building2,
+  Handshake,
   Monitor,
   Megaphone,
   MessagesSquare,
@@ -42,6 +43,9 @@ export const NAV: NavItem[] = [
   { label: 'Desktop Agent', href: '/desktop-agent', roles: ALL, icon: Monitor, group: 'Workspace' },
   { label: 'Projects', href: '/projects', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: FolderKanban, group: 'Manage' },
   { label: 'People', href: '/people', roles: ['SUPER_ADMIN', 'HR'], icon: Users, group: 'Manage' },
+  // Two different screens on purpose: "My clients" is a staff to-do list keyed
+  // by CL-code, "Clients" is Super Admin administration where names live.
+  { label: 'My clients', href: '/my-clients', roles: ['HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Handshake, group: 'Workspace' },
   { label: 'Clients', href: '/clients', roles: ['SUPER_ADMIN'], icon: Building2, group: 'Manage' },
   { label: 'Finance', href: '/finance', roles: ['SUPER_ADMIN', 'FINANCE'], icon: Wallet, group: 'Manage' },
   { label: 'Reports', href: '/reports', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: BarChart3, group: 'Insights' },

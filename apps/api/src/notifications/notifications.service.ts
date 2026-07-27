@@ -73,9 +73,20 @@ export class NotificationsService {
     if (channel === 'IN_APP_EMAIL') {
       const user = await this.prisma.user.findUnique({
         where: { id: input.userId },
-        select: { email: true },
+        select: { email: true, role: true },
       });
-      if (user?.email) {
+      /**
+       * A client is NEVER emailed from here (2026-07-27). Everything the
+       * company says to a client is read in the portal.
+       *
+       * Enforced structurally rather than by every call site remembering
+       * `channel: 'IN_APP'`: this rule has to survive code nobody has written
+       * yet, and one forgotten flag on some future notification would silently
+       * break a promise made to the client. Account mail — the invite and the
+       * password reset — does not pass through here; it is sent directly by
+       * AuthService, and without it nobody could reach the portal at all.
+       */
+      if (user?.email && user.role !== 'CLIENT') {
         await this.email.enqueue({
           to: user.email,
           subject: input.title,
