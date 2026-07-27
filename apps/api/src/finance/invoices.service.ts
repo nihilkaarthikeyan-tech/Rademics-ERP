@@ -209,7 +209,7 @@ export class InvoicesService {
     const updated = await this.prisma.invoice.update({
       where: { id }, data: { status: 'SENT' }, include: INVOICE_INCLUDE,
     });
-    await this.emailClientContacts(inv.clientOrgId, `Invoice ${inv.number} from ${(await this.getConfig()).companyName}`,
+    await this.notifyClientContacts(inv.clientOrgId, `Invoice ${inv.number} from ${(await this.getConfig()).companyName}`,
       `<p>Invoice <strong>${inv.number}</strong> for ₹${num(inv.total).toFixed(2)} is now available in your portal.</p>`);
     await this.audit.record({
       actorId: actor.id, actorEmail: actor.email, action: 'INVOICE_SENT',
@@ -409,10 +409,33 @@ export class InvoicesService {
     return { ...inv, balance, daysOverdue };
   }
 
-  private async emailClientContacts(clientOrgId: string | null, subject: string, html: string): Promise<void> {
+  /**
+   * Tell the client an invoice is waiting — in the portal, not by email
+   * (2026-07-27). Nothing about the company's correspondence with a client
+   * leaves the portal, and an invoice is no exception: it lands in their inbox
+   * alongside progress updates, and the document itself is downloaded from
+   * their Invoices page, where access is checked per request.
+   *
+   * The `html` argument is deliberately ignored rather than removed from the
+   * signature: the caller composes a rich body for a channel that no longer
+   * exists, and the notification body is built from the subject instead.
+   */
+  private async notifyClientContacts(clientOrgId: string | null, subject: string, _html: string): Promise<void> {
     if (!clientOrgId) return;
-    const users = await this.prisma.user.findMany({ where: { clientOrgId, status: 'ACTIVE' }, select: { email: true } });
-    await Promise.all(users.map((u) => this.email.enqueue({ to: u.email, subject, html, text: subject })));
+    const users = await this.prisma.user.findMany({
+      where: { clientOrgId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    await this.notifications.notifyMany(
+      users.map((u) => u.id),
+      {
+        type: 'INVOICE_SENT',
+        eventGroup: 'finance',
+        title: subject,
+        body: 'You can view and download it from Invoices in your portal.',
+        channel: 'IN_APP',
+      },
+    );
   }
 
   private async notifyPm(projectId: string, title: string): Promise<void> {

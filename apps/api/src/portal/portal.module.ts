@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { FilesModule } from '../files/files.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { FinanceModule } from '../finance/finance.module';
 import { PortalService } from './portal.service';
 import { PortalController } from './portal.controller';
 import { ClientAdminService } from './client-admin.service';
@@ -16,6 +17,7 @@ import { ClientAdminController } from './client-admin.controller';
     AuthModule, // invite client users
     FilesModule, // client-visible file listing/download
     NotificationsModule, // "ask for a status update" notifies the assignee + PM
+    FinanceModule, // invoices are read in the portal now that they are not emailed
   ],
   controllers: [PortalController, ClientAdminController],
   providers: [PortalService, ClientAdminService],

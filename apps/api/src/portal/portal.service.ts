@@ -109,6 +109,68 @@ export class PortalService {
     };
   }
 
+  /**
+   * The client's own invoices (2026-07-27). Correspondence lives in the portal,
+   * so a bill arrives here rather than by email — which means the client needs
+   * somewhere to actually read it.
+   *
+   * Scoped to their org, and DRAFT is excluded: a draft is Finance's working
+   * copy and showing it would be quoting a number nobody has agreed to send.
+   */
+  async listInvoices(user: AuthUser) {
+    await this.assertActiveClient(user);
+    const me = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { clientOrgId: true },
+    });
+    if (!me?.clientOrgId) return [];
+
+    const invoices = await this.prisma.invoice.findMany({
+      where: { clientOrgId: me.clientOrgId, status: { not: 'DRAFT' } },
+      orderBy: { issueDate: 'desc' },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        issueDate: true,
+        dueDate: true,
+        total: true,
+        amountPaid: true,
+        project: { select: { name: true } },
+      },
+    });
+
+    return invoices.map((i) => ({
+      id: i.id,
+      number: i.number,
+      status: i.status,
+      issueDate: i.issueDate,
+      dueDate: i.dueDate,
+      total: Number(i.total),
+      amountPaid: Number(i.amountPaid),
+      balance: Number(i.total) - Number(i.amountPaid),
+      projectName: i.project?.name ?? null,
+    }));
+  }
+
+  /** Confirm this invoice is the caller's, before the PDF is streamed. */
+  async assertInvoiceAccess(invoiceId: string, user: AuthUser): Promise<void> {
+    await this.assertActiveClient(user);
+    const me = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { clientOrgId: true },
+    });
+    const invoice = await this.prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      select: { clientOrgId: true, status: true },
+    });
+    // 404 rather than 403 — consistent with projects, and a 403 would confirm
+    // that an invoice with this id exists.
+    if (!invoice || invoice.status === 'DRAFT' || invoice.clientOrgId !== me?.clientOrgId) {
+      throw new NotFoundException('Invoice not found');
+    }
+  }
+
   async listFiles(taskId: string, user: AuthUser) {
     await this.assertActiveClient(user);
     await this.assertTaskAccess(taskId, user.id);

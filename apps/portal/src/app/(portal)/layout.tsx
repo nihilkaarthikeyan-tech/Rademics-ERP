@@ -14,6 +14,9 @@ import { clearToken } from '@/lib/session';
 // can ask for a status update, nothing more.
 const NAV = [
   { label: 'Dashboard', href: '/dashboard' },
+  // Invoices returned 2026-07-27: bills are no longer emailed, so the client
+  // needs somewhere to read them.
+  { label: 'Invoices', href: '/invoices' },
   { label: 'Profile', href: '/profile' },
 ];
 
