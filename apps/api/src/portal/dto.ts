@@ -51,6 +51,16 @@ export class OnboardClientDto {
   @IsEmail()
   email!: string;
 
+  /**
+   * ClientOrg.number — the client ID reserved when the project was created
+   * ("CL-008" → 8). Required, and it must be the reservation those projects
+   * already hold: pairing both codes is what stops an account being attached
+   * to the wrong client's work.
+   */
+  @IsInt()
+  @IsPositive()
+  clientNumber!: number;
+
   /** Project.number values (what "RAD-007" resolves to), not ids. */
   @IsArray()
   @ArrayNotEmpty()

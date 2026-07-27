@@ -118,9 +118,15 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [pmId, setPmId] = useState('');
+  const [forClient, setForClient] = useState(false);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set once the project exists. Marking it as client work reserves a client
+  // ID, and that code is needed later to create the client's account — so the
+  // modal stays open to show it rather than closing over the one piece of
+  // information the next step depends on.
+  const [created, setCreated] = useState<{ code: string; clientCode: string | null } | null>(null);
 
   // Anyone on staff can be appointed — the appointment IS the authority, so this
   // list is deliberately wide rather than filtered to a job title.
@@ -135,16 +141,20 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
     setBusy(true);
     setError(null);
     try {
-      await apiFetch('/projects', {
+      const project = await apiFetch<{ number: number; clientOrg: { code: string | null } | null }>('/projects', {
         method: 'POST',
         body: JSON.stringify({
           name,
           description: description || undefined,
           pmId: pmId || undefined,
+          forClient: forClient || undefined,
         }),
       });
       onCreated();
-      onClose();
+      setCreated({
+        code: formatProjectCode(project.number),
+        clientCode: project.clientOrg?.code ?? null,
+      });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create project');
     } finally {
@@ -156,6 +166,41 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         <CardContent className="pt-6">
+          {created ? (
+            <div className="flex flex-col gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">Project created</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {created.clientCode
+                    ? 'Write these down — you need both to create the client’s account.'
+                    : 'An internal project. No client will see it.'}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-xs uppercase tracking-wide text-slate-400">Project number</span>
+                  <span className="font-mono text-base font-semibold text-slate-800">{created.code}</span>
+                </div>
+                {created.clientCode ? (
+                  <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-2">
+                    <span className="text-xs uppercase tracking-wide text-slate-400">Client ID</span>
+                    <span className="font-mono text-base font-semibold text-accent">{created.clientCode}</span>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex justify-end gap-2">
+                {created.clientCode ? (
+                  <Link href="/clients/new">
+                    <Button type="button">Create the client account</Button>
+                  </Link>
+                ) : null}
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          ) : (
+          <>
           <h2 className="text-lg font-semibold text-slate-800">New project</h2>
           <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
             <div>
@@ -202,6 +247,21 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
                 and nothing outside it. You can change this later.
               </p>
             </div>
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={forClient}
+                onChange={(e) => setForClient(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-slate-800">This is for a client</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  A client ID is reserved and shown next. You&apos;ll need it, with the project
+                  number, to create their account.
+                </span>
+              </span>
+            </label>
             {error ? <p className="text-xs text-slate-900">{error}</p> : null}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={onClose}>
@@ -212,6 +272,8 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
               </Button>
             </div>
           </form>
+          </>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1142,8 +1142,13 @@ model ClientOrg {
   // only Super Admin sees `name`. Sequence-backed for the same reason project
   // numbers are: a duplicate would make two clients indistinguishable to
   // everyone who only ever sees the code.
-  number Int             @unique @default(autoincrement())
-  name   String          @unique
+  number Int @unique @default(autoincrement())
+  // Null until the client's account is actually created. A client ID is
+  // reserved the moment a project is marked as client work, so the Super Admin
+  // has a code to pair the two with — at that point nobody has said who the
+  // client IS yet. Postgres allows many NULLs under a unique index, so several
+  // reservations can sit unnamed at once.
+  name   String?         @unique
   status ClientOrgStatus @default(ACTIVE)
 
   users    User[]    @relation("OrgUsers")

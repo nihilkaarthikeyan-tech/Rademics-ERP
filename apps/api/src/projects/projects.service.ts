@@ -63,7 +63,9 @@ export class ProjectsService {
   private stripClientIdentity<
     T extends {
       client?: { id: string; name: string; email: string } | null;
-      clientOrg?: { id: string; number: number; name: string } | null;
+      // `name` is null while the client ID is only reserved — the project was
+      // marked as client work but the account has not been created yet.
+      clientOrg?: { id: string; number: number; name: string | null } | null;
     },
   >(project: T, user: AuthUser) {
     const { client, clientOrg, ...rest } = project;
@@ -146,12 +148,21 @@ export class ProjectsService {
     }
     await this.assertRefs(dto.pmId, dto.clientId);
 
+    // Client work reserves a client ID up front. The Super Admin needs a code
+    // to pair with when they later create the client's account, and at this
+    // moment nobody has said who the client is — so the reservation carries a
+    // number and no name. Internal projects reserve nothing.
+    const reservedOrg = dto.forClient
+      ? await this.prisma.clientOrg.create({ data: { name: null }, select: { id: true, number: true } })
+      : null;
+
     const project = await this.prisma.project.create({
       data: {
         name: dto.name.trim(),
         description: dto.description ?? null,
         pmId: dto.pmId ?? null,
         clientId: dto.clientId ?? null,
+        clientOrgId: reservedOrg?.id ?? null,
         startDate: dto.startDate ? new Date(dto.startDate) : null,
         endDate: dto.endDate ? new Date(dto.endDate) : null,
         budgetAmount: dto.budgetAmount ?? null,

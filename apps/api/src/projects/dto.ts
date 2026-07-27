@@ -24,6 +24,16 @@ export class CreateProjectDto {
   @MaxLength(200)
   name!: string;
 
+  /**
+   * This project is work for a client (2026-07-27). Setting it reserves a
+   * client ID (CL-008) and returns it — that code plus the project's own
+   * RAD-### are what the Super Admin pairs when creating the client's account.
+   * Internal projects leave it off and get no client ID at all.
+   */
+  @IsOptional()
+  @IsBoolean()
+  forClient?: boolean;
+
   @IsOptional()
   @IsString()
   @MaxLength(2000)

@@ -31,6 +31,22 @@ export class ClientAdminController {
     return this.admin.assignableProjects();
   }
 
+  /** What a typed client ID + project codes actually resolve to, live. */
+  @Get('verify-pairing')
+  @RequireCapability('portal.users.manage')
+  verifyPairing(@Query('client') client?: string, @Query('projects') projects?: string) {
+    const clientNumber = Number(client);
+    const projectNumbers = (projects ?? '')
+      .split(',')
+      .map((n) => Number(n.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0)
+      .slice(0, 50);
+    return this.admin.verifyPairing(
+      Number.isInteger(clientNumber) && clientNumber > 0 ? clientNumber : null,
+      projectNumbers,
+    );
+  }
+
   /**
    * Resolve typed project codes to names. Read-only and behind the same
    * capability as the write it precedes.

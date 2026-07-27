@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthService } from '../auth/auth.service';
 import type { AuthUser } from '../auth/auth-user';
-import { formatProjectCode } from '@rademics/types';
+import { formatClientCode, formatProjectCode } from '@rademics/types';
 import type { CreateClientOrgDto, CreateClientUserDto, GrantAccessDto, OnboardClientDto } from './dto';
 
 interface Meta {
@@ -118,14 +118,32 @@ export class ClientAdminService {
   }
 
   /**
-   * Create a client and give them their projects in one step.
+   * Create the client's account against the client ID reserved when their
+   * project was created. Both codes are required and must agree.
    *
-   * All-or-nothing: an unknown or already-taken project number aborts the whole
-   * thing rather than creating a half-onboarded client with some of their
-   * access. A half-grant is the failure mode that looks fine on screen and
-   * silently shows the client the wrong set of work.
+   * Requiring the pair is the point: a client ID alone, or a project number
+   * alone, can be mistyped into somebody else's. Demanding both means a single
+   * wrong character produces a mismatch and a refusal rather than an account
+   * quietly attached to another client's work.
+   *
+   * All-or-nothing — any failure aborts before anything is written. A
+   * half-onboarded client looks fine on screen while showing the wrong set of
+   * work.
    */
   async onboardClient(dto: OnboardClientDto, actor: AuthUser, meta: Meta) {
+    const clientCode = formatClientCode(dto.clientNumber);
+    const org = await this.prisma.clientOrg.findUnique({
+      where: { number: dto.clientNumber },
+      select: { id: true, number: true, name: true, status: true },
+    });
+    if (!org) throw new BadRequestException(`No client with ID ${clientCode}`);
+    if (org.name !== null) {
+      throw new ConflictException(`${clientCode} already has an account (${org.name})`);
+    }
+    if (org.status === 'DEACTIVATED') {
+      throw new BadRequestException(`${clientCode} has been deactivated`);
+    }
+
     const numbers = [...new Set(dto.projectNumbers)];
     const projects = await this.prisma.project.findMany({
       where: { number: { in: numbers } },
@@ -138,46 +156,40 @@ export class ClientAdminService {
         `No project with ${missing.length === 1 ? 'code' : 'codes'} ${missing.map(formatProjectCode).join(', ')}`,
       );
     }
-    // A project already bound to another client cannot be re-pointed here; see
-    // the same check in grantAccess.
-    const taken = projects.filter((p) => p.clientOrgId !== null);
-    if (taken.length > 0) {
+    // The pairing check. A project reserved for a DIFFERENT client ID, or never
+    // marked as client work at all, is refused — the two codes must describe
+    // the same thing.
+    const mismatched = projects.filter((p) => p.clientOrgId !== org.id);
+    if (mismatched.length > 0) {
       throw new BadRequestException(
-        `Already assigned to another client: ${taken.map((p) => formatProjectCode(p.number)).join(', ')}`,
+        `${mismatched.map((p) => formatProjectCode(p.number)).join(', ')} ` +
+          `${mismatched.length === 1 ? 'is' : 'are'} not held by ${clientCode}`,
       );
     }
 
     const name = dto.name.trim();
-    // The org is an implementation detail of the portal's scoping, so it takes
-    // the client's own name. Collisions are surfaced as a duplicate-client
-    // error because that is what a repeated name actually means here.
-    let org;
-    try {
-      org = await this.prisma.clientOrg.create({ data: { name } });
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException(`A client named "${name}" already exists`);
-      }
-      throw err;
-    }
-
     const { id: userId } = await this.auth.invite(
       actor,
       { email: dto.email, name, role: 'CLIENT', resourceType: 'INTERNAL' },
       meta,
     );
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: userId }, data: { clientOrgId: org.id } }),
-      this.prisma.clientProjectAccess.createMany({
-        data: projects.map((p) => ({ projectId: p.id, clientUserId: userId })),
-        skipDuplicates: true,
-      }),
-      this.prisma.project.updateMany({
-        where: { id: { in: projects.map((p) => p.id) } },
-        data: { clientOrgId: org.id },
-      }),
-    ]);
+    try {
+      await this.prisma.$transaction([
+        // Naming the reservation is what turns it into a real client.
+        this.prisma.clientOrg.update({ where: { id: org.id }, data: { name } }),
+        this.prisma.user.update({ where: { id: userId }, data: { clientOrgId: org.id } }),
+        this.prisma.clientProjectAccess.createMany({
+          data: projects.map((p) => ({ projectId: p.id, clientUserId: userId })),
+          skipDuplicates: true,
+        }),
+      ]);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException(`A client named "${name}" already exists`);
+      }
+      throw err;
+    }
 
     await this.audit.record({
       actorId: actor.id, actorEmail: actor.email,
@@ -192,9 +204,53 @@ export class ClientAdminService {
 
     return {
       orgId: org.id,
+      clientCode,
       userId,
       email: dto.email,
       projects: projects.map((p) => ({ code: formatProjectCode(p.number), name: p.name })),
+    };
+  }
+
+  /**
+   * Resolve a typed client ID + project codes for the form's confirmation
+   * panel, so the Super Admin sees what the codes mean before submitting
+   * rather than only finding out from a rejection.
+   */
+  async verifyPairing(clientNumber: number | null, projectNumbers: number[]) {
+    const org = clientNumber
+      ? await this.prisma.clientOrg.findUnique({
+          where: { number: clientNumber },
+          select: { id: true, number: true, name: true, status: true },
+        })
+      : null;
+
+    const projects = await this.prisma.project.findMany({
+      where: { number: { in: [...new Set(projectNumbers)] } },
+      select: { id: true, number: true, name: true, clientOrgId: true },
+    });
+
+    return {
+      client: org
+        ? {
+            code: formatClientCode(org.number),
+            found: true as const,
+            // A reservation still waiting for its account — the only state an
+            // account may be created against.
+            available: org.name === null && org.status === 'ACTIVE',
+            takenBy: org.name,
+          }
+        : { code: clientNumber ? formatClientCode(clientNumber) : null, found: false as const },
+      projects: [...new Set(projectNumbers)].map((n) => {
+        const p = projects.find((x) => x.number === n);
+        if (!p) return { number: n, code: formatProjectCode(n), found: false as const };
+        return {
+          number: n,
+          code: formatProjectCode(n),
+          found: true as const,
+          name: p.name,
+          matchesClient: org ? p.clientOrgId === org.id : false,
+        };
+      }),
     };
   }
 
