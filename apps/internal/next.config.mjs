@@ -94,6 +94,10 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Two dev servers from this folder share `.next` and corrupt each other's route
+  // manifests (symptom: 200 from the server but "Nothing lives at this address" in
+  // the browser). Set NEXT_DIST_DIR to give a second instance its own build dir.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // @rademics/ui ships as source (RSC-friendly); transpile it here (Spec §9 shared UI).
   transpilePackages: ['@rademics/ui'],
   // Linting is a separate CI step; don't fail production builds on it.

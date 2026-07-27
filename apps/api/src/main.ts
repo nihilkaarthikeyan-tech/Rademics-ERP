@@ -35,6 +35,10 @@ async function bootstrap(): Promise<void> {
     origin: [
       config.get<string>('INTERNAL_APP_URL', 'http://localhost:3000'),
       config.get<string>('PORTAL_APP_URL', 'http://localhost:3001'),
+      // Dev only: a second internal instance on :3002 so two staff roles can be
+      // driven side by side in separate browser windows. Never allowed in prod —
+      // an extra trusted origin is an extra place a session can be read from.
+      ...(process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3002']),
     ],
     credentials: true,
   });
