@@ -36,8 +36,8 @@ export default function AdminSettingsPage() {
     <div className="mx-auto max-w-3xl">
       <h1 className="text-xl font-semibold text-slate-800">Admin · Settings</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Business-rule defaults (Spec §4). These are stored in the settings store and editable here — full
-        editing UI lands with later phases.
+        Company-wide defaults for attendance, leave and finance. A full editing screen is coming —
+        for now, ask your administrator to change a value.
       </p>
 
       <Card className="mt-4">

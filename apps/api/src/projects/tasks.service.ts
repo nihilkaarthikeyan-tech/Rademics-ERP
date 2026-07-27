@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, type TaskStatus as PrismaTaskStatus } from '@prisma/client';
@@ -59,6 +60,8 @@ function isQuarterHour(v: number): boolean {
 
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -430,6 +433,72 @@ export class TasksService {
       });
     }
     return { reminded: stale.length };
+  }
+
+  /**
+   * Hourly deadline watch (Spec §5.12). Two once-only notifications per task:
+   * a warning to the assignee when the deadline is within 24h, and a
+   * missed-deadline alert to the assignee + project manager the hour after it
+   * passes. The *NotifiedAt stamps make both idempotent — an hourly sweep must
+   * never turn into an hourly nag.
+   */
+  async runDeadlineSweep(now = new Date()): Promise<{ warned: number; missed: number }> {
+    const DAY = 86_400_000;
+    const open: { status: { notIn: PrismaTaskStatus[] } } = {
+      status: { notIn: ['COMPLETED', 'CLOSED', 'CANCELLED'] },
+    };
+
+    // 1) Deadline within the next 24h, assignee not yet warned.
+    const soon = await this.prisma.task.findMany({
+      where: {
+        ...open,
+        assigneeId: { not: null },
+        deadline: { gt: now, lte: new Date(now.getTime() + DAY) },
+        deadlineSoonNotifiedAt: null,
+      },
+      select: { id: true, title: true, deadline: true, assigneeId: true, project: { select: { name: true } } },
+    });
+    for (const t of soon) {
+      await this.notifications.notify({
+        userId: t.assigneeId!,
+        type: 'TASK_DEADLINE_SOON',
+        eventGroup: 'tasks',
+        title: 'A deadline lands within 24 hours',
+        body: `${t.title} (${t.project.name}) — due ${t.deadline!.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`,
+        entityType: 'Task',
+        entityId: t.id,
+      });
+      await this.prisma.task.update({ where: { id: t.id }, data: { deadlineSoonNotifiedAt: now } });
+    }
+
+    // 2) Deadline passed, nobody told yet — assignee AND the project's manager.
+    const missed = await this.prisma.task.findMany({
+      where: { ...open, deadline: { lt: now }, deadlineMissedNotifiedAt: null },
+      select: {
+        id: true,
+        title: true,
+        deadline: true,
+        assigneeId: true,
+        project: { select: { name: true, pmId: true } },
+      },
+    });
+    for (const t of missed) {
+      const recipients = [...new Set([t.assigneeId, t.project.pmId].filter((x): x is string => Boolean(x)))];
+      await this.notifications.notifyManyOrEscalate(recipients, {
+        type: 'TASK_DEADLINE_MISSED',
+        eventGroup: 'tasks',
+        title: 'A task slipped past its deadline',
+        body: `${t.title} (${t.project.name}) — was due ${t.deadline!.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' })}`,
+        entityType: 'Task',
+        entityId: t.id,
+      });
+      await this.prisma.task.update({ where: { id: t.id }, data: { deadlineMissedNotifiedAt: now } });
+    }
+
+    if (soon.length || missed.length) {
+      this.logger.log(`Deadline sweep: ${soon.length} warned, ${missed.length} missed`);
+    }
+    return { warned: soon.length, missed: missed.length };
   }
 
   // ── Assign / Reassign (Spec §6, §24) ──

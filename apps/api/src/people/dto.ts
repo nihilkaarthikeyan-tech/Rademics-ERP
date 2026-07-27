@@ -137,13 +137,15 @@ export class UpdateEmployeeDto {
   skillIds?: string[];
 }
 
-export class SetSalaryDto {
-  // Stored encrypted at rest (Spec §10). Sent as a string; free-form (amount).
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  salary!: string;
+export class SetRoleDto {
+  // CLIENT is deliberately not assignable here: client accounts are org-bound
+  // and made through the client-onboarding flow, not by flipping a role.
+  @IsIn(Object.values(Role).filter((r) => r !== Role.CLIENT))
+  role!: Role;
 }
+
+// SetSalaryDto removed 2026-07-27: the salary feature was taken out at the
+// user's request. The encrypted column remains in the schema, unused.
 
 export class ListEmployeesQuery {
   @IsOptional()

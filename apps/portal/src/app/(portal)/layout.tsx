@@ -118,7 +118,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
       </header>
-      <main id="main-content" className="mx-auto max-w-5xl p-6">{children}</main>
+      <main id="main-content" className="mx-auto max-w-5xl p-4 sm:p-6">{children}</main>
     </div>
   );
 }

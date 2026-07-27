@@ -291,6 +291,8 @@ model User {
   announcementReads   AnnouncementRead[]
   chatMessages        ChatMessage[]      @relation("ChatAuthor")
   deletedChatMessages ChatMessage[]      @relation("ChatMessageDeleter")
+  pinnedChatMessages  ChatMessage[]      @relation("ChatMessagePinner")
+  chatReactions       ChatReaction[]     @relation("ChatReactor")
   chatReadState       ChatReadState?
 
   // ── Files (Spec §5.6) ──
@@ -647,6 +649,11 @@ model Task {
   // is the exact silent-stall problem statusChangedAt already solves internally.
   lastClientUpdateAt   DateTime?
   lastStatusRequestAt  DateTime? // client's own "ask for a status update" cooldown
+
+  /// Deadline sweep (2026-07-27, Spec §5.12): stamped once when the 24h-warning /
+  /// missed-deadline notification is sent, so the hourly job never nags twice.
+  deadlineSoonNotifiedAt   DateTime?
+  deadlineMissedNotifiedAt DateTime?
 
   createdById String? @db.Uuid
   createdBy   User?   @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
@@ -1262,8 +1269,38 @@ model ChatMessage {
 
   createdAt DateTime @default(now())
 
+  /// Author may edit their own message shortly after sending; the label
+  /// "(edited)" is shown to everyone so nothing changes silently.
+  editedAt DateTime?
+
+  /// Pinned announcement (HR/SA). Multiple may be pinned; the UI surfaces the
+  /// most recent. Unpinning clears both fields.
+  pinnedAt   DateTime?
+  pinnedById String?   @db.Uuid
+  pinnedBy   User?     @relation("ChatMessagePinner", fields: [pinnedById], references: [id], onDelete: SetNull)
+
+  reactions ChatReaction[]
+
   @@index([createdAt])
+  @@index([pinnedAt])
   @@map("chat_messages")
+}
+
+/// One emoji reaction by one person on one message. Toggling off deletes the row.
+model ChatReaction {
+  id String @id @default(uuid()) @db.Uuid
+
+  messageId String      @db.Uuid
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  userId String @db.Uuid
+  user   User   @relation("ChatReactor", fields: [userId], references: [id], onDelete: Cascade)
+
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@map("chat_reactions")
 }
 
 /// Per-person last-read pointer for the general room — powers the unread badge.

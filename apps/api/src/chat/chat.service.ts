@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../attendance/presence.service';
 import { FilesService } from '../files/files.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AuthUser } from '../auth/auth-user';
 
 /** Audit metadata shape produced by reqMeta(). */
@@ -26,6 +27,14 @@ const CAN_MODERATE = ['SUPER_ADMIN', 'HR'];
  */
 const FLOOD_LIMIT = 8;
 const FLOOD_WINDOW_MS = 10_000;
+
+/** How long an author may still edit their own message. Long enough to fix a
+ *  typo, short enough that the room's history can't be quietly rewritten. */
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+/** The reaction palette. A fixed set keeps the room professional and renders
+ *  identically for everyone — this is a workplace, not a sticker shop. */
+const REACTION_EMOJI = ['👍', '❤️', '😂', '🎉', '👏', '😮', '😢', '🙏'];
 
 /** What the UI needs to render one attachment: name, size, type, scan state. */
 const ATTACHMENT_SELECT = {
@@ -73,21 +82,66 @@ function shapeAttachments(files: AssetRow[]) {
     .filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
+/** Everything the UI needs for one message — one shape for list, post, edit, pin. */
+const MESSAGE_SELECT = {
+  id: true,
+  body: true,
+  createdAt: true,
+  deletedAt: true,
+  editedAt: true,
+  pinnedAt: true,
+  author: { select: { id: true, name: true } },
+  files: { select: ATTACHMENT_SELECT },
+  reactions: {
+    orderBy: { createdAt: 'asc' },
+    select: { emoji: true, userId: true, user: { select: { name: true } } },
+  },
+} as const;
+
+type ReactionRow = { emoji: string; userId: string; user: { name: string } };
+
 type MessageRow = {
   id: string;
   body: string;
   createdAt: Date;
   deletedAt: Date | null;
+  editedAt: Date | null;
+  pinnedAt: Date | null;
   author: { id: string; name: string } | null;
   files: AssetRow[];
+  reactions: ReactionRow[];
 };
+
+function shapeReactions(reactions: ReactionRow[]) {
+  return reactions.map((r) => ({ emoji: r.emoji, userId: r.userId, userName: r.user.name }));
+}
 
 /** A deleted message keeps its row (attribution, audit) but shows as a tombstone. */
 function shapeMessage(m: MessageRow) {
   if (m.deletedAt) {
-    return { id: m.id, body: '', createdAt: m.createdAt, author: m.author, files: [], deleted: true };
+    return {
+      id: m.id,
+      body: '',
+      createdAt: m.createdAt,
+      author: m.author,
+      files: [],
+      reactions: [],
+      edited: false,
+      pinned: false,
+      deleted: true,
+    };
   }
-  return { id: m.id, body: m.body, createdAt: m.createdAt, author: m.author, files: shapeAttachments(m.files), deleted: false };
+  return {
+    id: m.id,
+    body: m.body,
+    createdAt: m.createdAt,
+    author: m.author,
+    files: shapeAttachments(m.files),
+    reactions: shapeReactions(m.reactions),
+    edited: Boolean(m.editedAt),
+    pinned: Boolean(m.pinnedAt),
+    deleted: false,
+  };
 }
 
 /**
@@ -108,6 +162,7 @@ export class ChatService {
     private readonly presence: PresenceService,
     private readonly files: FilesService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Chat is internal — clients have the portal, never the company room. */
@@ -117,25 +172,37 @@ export class ChatService {
     }
   }
 
-  /** Newest page of history (ascending for display). `before` pages backwards. */
+  /** Newest page of history (ascending for display). `before` pages backwards.
+   *  Includes the caller's read pointer AS OF THIS FETCH so the UI can draw the
+   *  "new messages" line — the page marks the room read immediately after. */
   async list(user: AuthUser, before?: string, limit = 50) {
     this.assertStaff(user);
     const take = Math.min(Math.max(limit, 1), 100);
-    const rows = await this.prisma.chatMessage.findMany({
-      where: before ? { createdAt: { lt: new Date(before) } } : undefined,
-      orderBy: { createdAt: 'desc' },
-      take,
-      select: {
-        id: true,
-        body: true,
-        createdAt: true,
-        deletedAt: true,
-        author: { select: { id: true, name: true } },
-        files: { select: ATTACHMENT_SELECT },
-      },
-    });
+    const [rows, readState] = await Promise.all([
+      this.prisma.chatMessage.findMany({
+        where: before ? { createdAt: { lt: new Date(before) } } : undefined,
+        orderBy: { createdAt: 'desc' },
+        take,
+        select: MESSAGE_SELECT,
+      }),
+      this.prisma.chatReadState.findUnique({
+        where: { userId: user.id },
+        select: { lastReadAt: true },
+      }),
+    ]);
     const items = rows.reverse().map(shapeMessage);
-    return { items, hasMore: rows.length >= take };
+    return { items, hasMore: rows.length >= take, lastReadAt: readState?.lastReadAt ?? null };
+  }
+
+  /** Staff directory for @mention autocomplete — names only, no emails/teams. */
+  async members(user: AuthUser) {
+    this.assertStaff(user);
+    const users = await this.prisma.user.findMany({
+      where: { status: 'ACTIVE', role: { not: 'CLIENT' } },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return users;
   }
 
   async post(user: AuthUser, body: string, fileAssetIds: string[] = []) {
@@ -176,14 +243,7 @@ export class ChatService {
       }
       return tx.chatMessage.findUniqueOrThrow({
         where: { id: m.id },
-        select: {
-          id: true,
-          body: true,
-          createdAt: true,
-          deletedAt: true,
-          author: { select: { id: true, name: true } },
-          files: { select: ATTACHMENT_SELECT },
-        },
+        select: MESSAGE_SELECT,
       });
     });
 
@@ -192,7 +252,43 @@ export class ChatService {
     this.presence.emitToAll('chat:message', shaped);
     // Your own message never counts as unread for you.
     await this.markRead(user);
+    // Mentions ring the bell even for someone who doesn't have the room open.
+    await this.notifyMentions(user, message.id, text);
     return shaped;
+  }
+
+  /**
+   * "@Full Name" in a message pings that person via the notification bell.
+   * Matched against real staff names (longest first, so "@Priya Kumar" wins
+   * over a hypothetical "@Priya") — free-typed @words that match nobody are
+   * just text. In-app only: chat is live conversation, not email material.
+   */
+  private async notifyMentions(author: AuthUser, messageId: string, text: string): Promise<void> {
+    if (!text.includes('@')) return;
+    const lower = text.toLowerCase();
+    const staff = await this.prisma.user.findMany({
+      where: { status: 'ACTIVE', role: { not: 'CLIENT' }, id: { not: author.id } },
+      select: { id: true, name: true },
+    });
+    const mentioned = staff
+      .filter((u) => u.name.trim().length > 1 && lower.includes(`@${u.name.toLowerCase()}`))
+      .map((u) => u.id);
+    if (mentioned.length === 0) return;
+
+    const authorRow = await this.prisma.user.findUnique({
+      where: { id: author.id },
+      select: { name: true },
+    });
+    const excerpt = text.length > 120 ? `${text.slice(0, 117)}…` : text;
+    await this.notifications.notifyMany(mentioned, {
+      type: 'CHAT_MENTION',
+      eventGroup: 'chat',
+      title: `${authorRow?.name ?? 'Someone'} mentioned you in the company chat`,
+      body: excerpt,
+      entityType: 'ChatMessage',
+      entityId: messageId,
+      channel: 'IN_APP',
+    });
   }
 
   /** Cheap, per-user check — a handful of quick messages is normal conversation;
@@ -246,6 +342,128 @@ export class ChatService {
 
     this.presence.emitToAll('chat:messageDeleted', { id: messageId });
     return { id: messageId, deleted: true };
+  }
+
+  /**
+   * Edit your own message within the edit window. The "(edited)" flag travels
+   * with the message so nothing in the room changes silently.
+   */
+  async edit(user: AuthUser, messageId: string, body: string, meta: Meta) {
+    this.assertStaff(user);
+    const text = body.trim();
+    if (!text) throw new BadRequestException('A message cannot be edited to nothing — delete it instead');
+
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, body: true, authorId: true, deletedAt: true, createdAt: true },
+    });
+    if (!message || message.deletedAt) throw new NotFoundException('Message not found');
+    if (message.authorId !== user.id) throw new ForbiddenException('You can only edit your own messages');
+    if (Date.now() - message.createdAt.getTime() > EDIT_WINDOW_MS) {
+      throw new BadRequestException('The edit window has passed — post a follow-up instead');
+    }
+
+    const updated = await this.prisma.chatMessage.update({
+      where: { id: messageId },
+      data: { body: text, editedAt: new Date() },
+      select: MESSAGE_SELECT,
+    });
+
+    await this.audit.record({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: 'CHAT_MESSAGE_EDITED',
+      entityType: 'ChatMessage',
+      entityId: messageId,
+      before: { body: message.body },
+      after: { body: text },
+      ...meta,
+    });
+
+    const shaped = shapeMessage(updated);
+    this.presence.emitToAll('chat:messageEdited', shaped);
+    return shaped;
+  }
+
+  // ── Reactions ──
+
+  /** Toggle one emoji for the caller: on if absent, off if present. */
+  async react(user: AuthUser, messageId: string, emoji: string) {
+    this.assertStaff(user);
+    if (!REACTION_EMOJI.includes(emoji)) {
+      throw new BadRequestException('That reaction is not available');
+    }
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!message || message.deletedAt) throw new NotFoundException('Message not found');
+
+    const existing = await this.prisma.chatReaction.findUnique({
+      where: { messageId_userId_emoji: { messageId, userId: user.id, emoji } },
+      select: { id: true },
+    });
+    if (existing) {
+      await this.prisma.chatReaction.delete({ where: { id: existing.id } });
+    } else {
+      await this.prisma.chatReaction.create({ data: { messageId, userId: user.id, emoji } });
+    }
+
+    const reactions = await this.prisma.chatReaction.findMany({
+      where: { messageId },
+      orderBy: { createdAt: 'asc' },
+      select: { emoji: true, userId: true, user: { select: { name: true } } },
+    });
+    const shaped = { id: messageId, reactions: shapeReactions(reactions) };
+    this.presence.emitToAll('chat:reactions', shaped);
+    return shaped;
+  }
+
+  // ── Pinned announcements (HR / Super Admin) ──
+
+  /** Currently pinned, newest pin first — the room banner shows the top one. */
+  async pinned(user: AuthUser) {
+    this.assertStaff(user);
+    const rows = await this.prisma.chatMessage.findMany({
+      where: { pinnedAt: { not: null }, deletedAt: null },
+      orderBy: { pinnedAt: 'desc' },
+      take: 5,
+      select: MESSAGE_SELECT,
+    });
+    return rows.map(shapeMessage);
+  }
+
+  async setPinned(user: AuthUser, messageId: string, pin: boolean, meta: Meta) {
+    this.assertStaff(user);
+    if (!CAN_MODERATE.includes(user.role)) {
+      throw new ForbiddenException('Only HR or an admin can pin announcements');
+    }
+    const message = await this.prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: { id: true, deletedAt: true, pinnedAt: true },
+    });
+    if (!message || message.deletedAt) throw new NotFoundException('Message not found');
+
+    const updated = await this.prisma.chatMessage.update({
+      where: { id: messageId },
+      data: pin
+        ? { pinnedAt: new Date(), pinnedById: user.id }
+        : { pinnedAt: null, pinnedById: null },
+      select: MESSAGE_SELECT,
+    });
+
+    await this.audit.record({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: pin ? 'CHAT_MESSAGE_PINNED' : 'CHAT_MESSAGE_UNPINNED',
+      entityType: 'ChatMessage',
+      entityId: messageId,
+      ...meta,
+    });
+
+    const shaped = shapeMessage(updated);
+    this.presence.emitToAll(pin ? 'chat:pinned' : 'chat:unpinned', pin ? shaped : { id: messageId });
+    return shaped;
   }
 
   // ── Attachments ──

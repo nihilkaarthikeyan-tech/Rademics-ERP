@@ -6,13 +6,12 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Put,
   Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { EmployeesService } from './employees.service';
-import { CreateEmployeeDto, ListEmployeesQuery, SetSalaryDto, UpdateEmployeeDto } from './dto';
+import { CreateEmployeeDto, ListEmployeesQuery, SetRoleDto, UpdateEmployeeDto } from './dto';
 import { RequireCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { reqMeta } from '../common/req-meta';
@@ -51,20 +50,22 @@ export class EmployeesController {
     return this.employees.update(id, dto, actor, reqMeta(req));
   }
 
+  /** Role assignment — its own endpoint + capability, never part of the general edit. */
+  @Patch(':id/role')
+  @RequireCapability('people.roles.assign')
+  setRole(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetRoleDto,
+    @CurrentUser() actor: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.employees.setRole(id, dto.role, actor, reqMeta(req));
+  }
+
   @Post(':id/deactivate')
   @RequireCapability('people.employee.deactivate')
   deactivate(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthUser, @Req() req: Request) {
     return this.employees.deactivate(id, actor, reqMeta(req));
   }
 
-  @Put(':id/salary')
-  @RequireCapability('people.salary.view_edit')
-  setSalary(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: SetSalaryDto,
-    @CurrentUser() actor: AuthUser,
-    @Req() req: Request,
-  ) {
-    return this.employees.setSalary(id, dto.salary, actor, reqMeta(req));
-  }
 }

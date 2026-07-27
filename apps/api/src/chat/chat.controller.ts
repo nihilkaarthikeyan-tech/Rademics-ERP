@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import type { Request } from 'express';
 import {
@@ -6,6 +6,7 @@ import {
   IsArray,
   IsISO8601,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -36,6 +37,21 @@ class ListQueryDto {
   @IsOptional()
   @IsISO8601()
   before?: string;
+}
+
+class EditMessageDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000)
+  body!: string;
+}
+
+class ReactDto {
+  // The service whitelists the palette; this only bounds the payload.
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(16)
+  emoji!: string;
 }
 
 class DownloadQueryDto {
@@ -85,6 +101,45 @@ export class ChatController {
   @Delete('messages/:id')
   removeMessage(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
     return this.chat.remove(user, id, reqMeta(req));
+  }
+
+  /** Author edits their own message within the edit window. */
+  @Patch('messages/:id')
+  editMessage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: EditMessageDto,
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.chat.edit(user, id, dto.body, reqMeta(req));
+  }
+
+  /** Toggle an emoji reaction on/off for the caller. */
+  @Post('messages/:id/reactions')
+  react(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReactDto, @CurrentUser() user: AuthUser) {
+    return this.chat.react(user, id, dto.emoji);
+  }
+
+  /** Pin / unpin an announcement — HR & Super Admin only (service-enforced). */
+  @Post('messages/:id/pin')
+  pin(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.chat.setPinned(user, id, true, reqMeta(req));
+  }
+
+  @Delete('messages/:id/pin')
+  unpin(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.chat.setPinned(user, id, false, reqMeta(req));
+  }
+
+  @Get('pinned')
+  pinned(@CurrentUser() user: AuthUser) {
+    return this.chat.pinned(user);
+  }
+
+  /** Staff names for @mention autocomplete. */
+  @Get('members')
+  members(@CurrentUser() user: AuthUser) {
+    return this.chat.members(user);
   }
 
   @Get('unread-count')

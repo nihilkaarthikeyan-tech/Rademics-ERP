@@ -93,7 +93,7 @@ export function PayrollPanel() {
                 </>
               )}
             </div>
-            {!locked ? <p className="text-xs text-slate-400">Lock the month before running the export (§5.8).</p> : null}
+            {!locked ? <p className="text-xs text-slate-400">Lock the month before running the export.</p> : null}
             {error ? <p className="text-xs text-slate-900">{error}</p> : null}
 
             <div>

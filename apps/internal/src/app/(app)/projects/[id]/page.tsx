@@ -3,7 +3,7 @@
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, TriangleAlert } from 'lucide-react';
 import { Badge, Button, Card, CardContent, EmptyState, Input, Label, LoadingState } from '@rademics/ui';
 import { formatProjectCode } from '@rademics/types';
 import { apiFetch, ApiError } from '@/lib/api';
@@ -54,17 +54,33 @@ interface ProjectDetail {
   modules: { id: string; name: string }[];
 }
 
-const COLUMNS: { key: string; label: string }[] = [
-  { key: 'DRAFT', label: 'Draft' },
-  { key: 'ASSIGNED', label: 'Assigned' },
-  { key: 'ACKNOWLEDGED', label: 'Acknowledged' },
-  { key: 'IN_PROGRESS', label: 'In progress' },
-  { key: 'SUBMITTED_FOR_REVIEW', label: 'In review' },
-  { key: 'COMPLETED', label: 'Completed' },
-  { key: 'CLOSED', label: 'Closed' },
-  { key: 'CANCELLED', label: 'Cancelled' },
+/**
+ * Each pipeline stage carries its own colour so the board reads left-to-right
+ * as a temperature map: cool neutrals while work is parked, the accent violets
+ * while it moves, amber while it waits on review, green when it lands.
+ */
+const COLUMNS: { key: string; label: string; rail: string; dot: string }[] = [
+  { key: 'DRAFT', label: 'Draft', rail: 'from-slate-300 to-slate-200', dot: 'bg-slate-400' },
+  { key: 'ASSIGNED', label: 'Assigned', rail: 'from-[#7C6CF6] to-[#A78BFA]', dot: 'bg-[#7C6CF6]' },
+  { key: 'ACKNOWLEDGED', label: 'Acknowledged', rail: 'from-sky-400 to-cyan-300', dot: 'bg-sky-500' },
+  { key: 'IN_PROGRESS', label: 'In progress', rail: 'from-indigo-500 to-[#7C6CF6]', dot: 'bg-indigo-500' },
+  { key: 'SUBMITTED_FOR_REVIEW', label: 'In review', rail: 'from-amber-400 to-orange-300', dot: 'bg-amber-500' },
+  { key: 'COMPLETED', label: 'Completed', rail: 'from-emerald-400 to-teal-300', dot: 'bg-emerald-500' },
+  { key: 'CLOSED', label: 'Closed', rail: 'from-slate-400 to-slate-300', dot: 'bg-slate-500' },
+  { key: 'CANCELLED', label: 'Cancelled', rail: 'from-rose-400 to-pink-300', dot: 'bg-rose-500' },
 ];
 const PRIORITY_TONE: Record<string, 'red' | 'amber' | 'slate'> = { HIGH: 'red', MEDIUM: 'amber', LOW: 'slate' };
+/** Priority as a quiet colour spine on the card's left edge, not a shouting badge. */
+const PRIORITY_SPINE: Record<string, string> = {
+  HIGH: 'bg-rose-400',
+  MEDIUM: 'bg-amber-300',
+  LOW: 'bg-slate-200',
+};
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '·';
+}
 const DONE_STATUSES = ['COMPLETED', 'CLOSED', 'CANCELLED'];
 /**
  * Columns always shown, because they are where work actively moves. The rest
@@ -210,7 +226,7 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
             ) : (
               // An unassigned project is a gap someone should close, not a neutral
               // fact — so it reads as a prompt rather than grey filler.
-              <span className="rounded-md bg-amber-50 px-2 py-0.5 text-amber-800">
+              <span className="rounded-full border border-amber-200/70 bg-amber-50/70 px-2.5 py-0.5 text-xs font-medium text-amber-800 backdrop-blur">
                 No project manager{CAN_CREATE_TASK.includes(me.role) ? ' — you and HR are running it' : ''}
               </span>
             )}
@@ -225,15 +241,16 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
               checkboxes are separate — one marks a task, the other makes the
               project client work — and ticking only the first is an easy mistake. */}
           {!project.clientOrg && tasks.some((t) => t.clientFacing) && CAN_CREATE_TASK.includes(me.role) ? (
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <span>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-amber-200/70 bg-amber-50/70 px-3.5 py-2.5 text-sm text-amber-900 shadow-glass backdrop-blur-xl">
+              <TriangleAlert className="h-4 w-4 shrink-0 text-amber-500" />
+              <span className="min-w-0 flex-1">
                 Tasks here are marked for a client, but this isn&apos;t a client project — so no
                 client can see them.
               </span>
               <button
                 onClick={() => void makeClientProject()}
                 disabled={reserving}
-                className="rounded-md bg-amber-800 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-900 disabled:opacity-60"
+                className="rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-[0_8px_18px_-8px_rgba(245,158,11,0.7)] transition-colors hover:bg-amber-600 disabled:opacity-60"
               >
                 {reserving ? 'Reserving…' : 'Make it a client project'}
               </button>
@@ -245,39 +262,51 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Progress at a glance — the question anyone opening a project asks first. */}
       {stats.total > 0 ? (
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-white/70 bg-white/60 px-4 py-3 shadow-glass backdrop-blur-xl">
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-white/70 bg-white/60 px-4 py-3 shadow-glass backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-200">
+            <div className="h-2 w-36 overflow-hidden rounded-full bg-slate-200/70">
               <div
-                className="h-full rounded-full bg-emerald-500 transition-all"
-                style={{ width: `${stats.pct}%` }}
+                className="h-full rounded-full bg-gradient-to-r from-[#7C6CF6] to-emerald-400 transition-all duration-500"
+                style={{ width: `${Math.max(stats.pct, stats.pct > 0 ? 4 : 0)}%` }}
               />
             </div>
-            <span className="text-sm font-medium text-slate-700">{stats.pct}% done</span>
+            <span className="text-sm font-semibold text-slate-800">{stats.pct}% done</span>
           </div>
           <span className="text-sm text-slate-500">
             {stats.done} of {stats.total} finished
           </span>
           {stats.inFlight > 0 ? (
-            <span className="text-sm text-slate-500">{stats.inFlight} in progress</span>
+            <span className="inline-flex items-center gap-1.5 text-sm text-slate-500">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+              {stats.inFlight} in progress
+            </span>
           ) : null}
           {stats.unassigned > 0 ? (
-            <span className="text-sm text-slate-500">{stats.unassigned} unassigned</span>
+            <span className="inline-flex items-center gap-1.5 text-sm text-slate-500">
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+              {stats.unassigned} unassigned
+            </span>
           ) : null}
           {stats.overdue > 0 ? (
-            <span className="text-sm font-medium text-red-600">{stats.overdue} overdue</span>
+            <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-sm font-medium text-rose-600">
+              {stats.overdue} overdue
+            </span>
           ) : null}
         </div>
       ) : null}
 
       {/* View toggle + filters — pointless before any work exists */}
       <div className={`mt-4 flex flex-wrap items-center gap-2 ${tasks.length === 0 ? 'hidden' : ''}`}>
-        <div className="inline-flex rounded-md border border-slate-200 p-0.5">
+        <div className="inline-flex rounded-full border border-white/70 bg-white/60 p-1 shadow-glass backdrop-blur-xl">
           {(['board', 'list', 'calendar'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`rounded px-3 py-1 text-sm capitalize ${view === v ? 'bg-primary text-primary-foreground' : 'text-slate-600 hover:bg-slate-100'}`}
+              className={`rounded-full px-3.5 py-1 text-sm capitalize transition-colors ${
+                view === v
+                  ? 'bg-gradient-to-r from-[#4F46E5] to-[#7C6CF6] font-medium text-white shadow-[0_8px_18px_-8px_rgba(79,70,229,0.6)]'
+                  : 'text-slate-600 hover:bg-white/70 hover:text-slate-900'
+              }`}
             >
               {v}
             </button>
@@ -286,14 +315,16 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
         <select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}
-          className="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm"
+          className="h-8 rounded-full border border-white/70 bg-white/60 px-3 text-sm text-slate-700 shadow-glass backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <option value="">All priorities</option>
           <option value="HIGH">High</option>
           <option value="MEDIUM">Medium</option>
           <option value="LOW">Low</option>
         </select>
-        <span className="text-xs text-slate-400">{filtered.length} tasks</span>
+        <span className="text-xs text-slate-400">
+          {filtered.length} task{filtered.length === 1 ? '' : 's'}
+        </span>
       </div>
 
       <div className="mt-4">
@@ -357,29 +388,48 @@ function TaskCard({ task, onOpen }: { task: TaskRow; onOpen: (id: string) => voi
   return (
     <button
       onClick={() => onOpen(task.id)}
-      className="w-full rounded-md border border-white/70 bg-white/65 p-2.5 text-left shadow-glass backdrop-blur-xl hover:border-white/90"
+      className="group relative w-full overflow-hidden rounded-xl border border-white/80 bg-white/80 p-3 pl-4 text-left shadow-glass backdrop-blur-xl transition-all duration-150 hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-[0_14px_30px_-14px_rgba(124,108,246,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <div className="text-sm font-medium text-slate-800">{task.title}</div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-        <Badge tone={PRIORITY_TONE[task.priority] ?? 'slate'}>{task.priority}</Badge>
+      {/* Priority spine — colour says HIGH/MEDIUM/LOW without a badge shouting it. */}
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 w-1 ${PRIORITY_SPINE[task.priority] ?? 'bg-slate-200'}`}
+      />
+      <div className="text-sm font-semibold leading-snug text-slate-800 group-hover:text-slate-900">
+        {task.title}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {task.clientFacing ? <Badge tone="blue">Client</Badge> : null}
         {task.overdue ? <Badge tone="red">Overdue</Badge> : null}
       </div>
-      <div className="mt-1.5 text-xs text-slate-400">
-        {task.assignee ? task.assignee.name : 'Unassigned'}
-        {task.deadline ? ` · ${new Date(task.deadline).toLocaleDateString()}` : ''}
+      <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+        {task.assignee ? (
+          <>
+            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/10 text-[9px] font-bold text-accent">
+              {initialsOf(task.assignee.name)}
+            </span>
+            <span className="truncate">{task.assignee.name}</span>
+          </>
+        ) : (
+          <span className="italic text-slate-400">Unassigned</span>
+        )}
+        {task.deadline ? (
+          <span className={`ml-auto shrink-0 ${task.overdue ? 'font-medium text-rose-500' : 'text-slate-400'}`}>
+            {new Date(task.deadline).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+          </span>
+        ) : null}
       </div>
       {/* A handoff nobody picked up is the silent stall this board exists to
           prevent — say it on the card, not only inside the panel. */}
       {waiting !== null ? (
-        <div className="mt-1.5 rounded bg-warning-soft px-1.5 py-0.5 text-[11px] font-medium text-warning">
+        <div className="mt-2 rounded-md bg-warning-soft px-2 py-1 text-[11px] font-medium text-warning">
           Not accepted yet · {waiting} day{waiting === 1 ? '' : 's'}
         </div>
       ) : null}
       {/* The client can't see movement on this one — same silent-stall idea,
           just measured by what the client has been shown, not internal status. */}
       {clientStale !== null ? (
-        <div className="mt-1.5 rounded bg-warning-soft px-1.5 py-0.5 text-[11px] font-medium text-warning">
+        <div className="mt-2 rounded-md bg-warning-soft px-2 py-1 text-[11px] font-medium text-warning">
           Client waiting for update · {clientStale} day{clientStale === 1 ? '' : 's'}
         </div>
       ) : null}
@@ -393,19 +443,37 @@ function BoardView({ tasks, onOpen }: { tasks: TaskRow[]; onOpen: (id: string) =
     (c) => CORE_COLUMNS.includes(c.key) || tasks.some((t) => t.status === c.key),
   );
   return (
-    <div className="flex gap-3 overflow-x-auto pb-3">
+    <div className="scrollbar-slim flex gap-3 overflow-x-auto pb-3">
       {columns.map((col) => {
         const colTasks = tasks.filter((t) => t.status === col.key);
         return (
-          <div key={col.key} className="w-64 shrink-0">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{col.label}</span>
-              <span className="text-xs text-slate-400">{colTasks.length}</span>
+          <div
+            key={col.key}
+            className="flex w-64 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/40 shadow-glass backdrop-blur-xl"
+          >
+            {/* Stage-coloured rail: the board reads by colour before any label. */}
+            <div className={`h-1 w-full bg-gradient-to-r ${col.rail}`} />
+            <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
+              <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <span className={`h-1.5 w-1.5 rounded-full ${col.dot}`} />
+                {col.label}
+              </span>
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                  colTasks.length > 0 ? 'bg-white/80 text-slate-600' : 'text-slate-300'
+                }`}
+              >
+                {colTasks.length}
+              </span>
             </div>
-            <div className="flex min-h-16 flex-col gap-2 rounded-lg bg-slate-50 p-2">
-              {colTasks.map((t) => (
-                <TaskCard key={t.id} task={t} onOpen={onOpen} />
-              ))}
+            <div className="flex min-h-24 flex-1 flex-col gap-2 p-2">
+              {colTasks.length === 0 ? (
+                <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200/80 py-4 text-[11px] text-slate-300">
+                  Nothing here
+                </div>
+              ) : (
+                colTasks.map((t) => <TaskCard key={t.id} task={t} onOpen={onOpen} />)
+              )}
             </div>
           </div>
         );
@@ -596,7 +664,7 @@ function NewTaskModal({
                   : 'You can assign it later from the task itself.'}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="t-priority">Priority</Label>
                 <select id="t-priority" value={priority} onChange={(e) => setPriority(e.target.value)} className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm">
@@ -619,7 +687,7 @@ function NewTaskModal({
               reachable here rather than being dropped, just out of the main path.
             */}
             {modules.length > 0 || showMore ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {modules.length > 0 ? (
                   <div>
                     <Label htmlFor="t-module">Module</Label>

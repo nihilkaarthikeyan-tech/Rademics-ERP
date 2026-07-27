@@ -215,7 +215,11 @@ function Avatar({ name, className = 'h-7 w-7 text-[11px]' }: { name: string; cla
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</div>
+      <div className="mb-2 flex items-center gap-2">
+        {/* Same gradient tick the sidebar uses for the active page — one visual language. */}
+        <span className="h-3 w-[3px] rounded-full bg-gradient-to-b from-[#7C6CF6] to-[#A855F7]" />
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</span>
+      </div>
       {children}
     </div>
   );

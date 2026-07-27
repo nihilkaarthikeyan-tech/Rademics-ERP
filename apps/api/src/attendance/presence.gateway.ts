@@ -2,8 +2,11 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
+  ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayInit,
+  SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
@@ -59,5 +62,21 @@ export class PresenceGateway implements OnGatewayInit, OnGatewayConnection {
     } catch {
       client.disconnect(true); // fail closed — invalid/expired token gets no stream
     }
+  }
+
+  /**
+   * Chat typing relay (2026-07-27): ephemeral fan-out, nothing stored. The
+   * sender's identity comes from the authenticated socket, never the payload —
+   * only the display name is client-supplied (cosmetic, length-capped).
+   */
+  @SubscribeMessage('chat:typing')
+  handleTyping(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { name?: unknown } | undefined,
+  ): void {
+    const userId = client.data.userId as string | undefined;
+    if (!userId) return;
+    const name = typeof payload?.name === 'string' ? payload.name.slice(0, 80) : '';
+    client.broadcast.emit('chat:typing', { userId, name });
   }
 }

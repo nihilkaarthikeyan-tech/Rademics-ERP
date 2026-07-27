@@ -82,8 +82,8 @@ export default function LoginPage() {
             <span className="text-client-teal">up to date.</span>
           </h1>
           <p className="mt-5 max-w-md text-sm leading-relaxed text-slate-500">
-            Track progress, review and approve deliverables, download shared files, and
-            view your invoices — all in one secure place.
+            Track progress on your projects, download shared files, and view your
+            invoices — all in one secure place.
           </p>
         </div>
 

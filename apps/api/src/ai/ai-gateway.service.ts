@@ -22,7 +22,7 @@ export class AiUnavailableError extends Error {
   }
 }
 
-const DEFAULT_FEATURE: AiFeatureConfig = { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' };
+const DEFAULT_FEATURE: AiFeatureConfig = { provider: 'openai', model: 'gpt-5-mini' };
 const AI_CONFIG_KEY = 'ai_config';
 
 /**
@@ -98,10 +98,19 @@ export class AiGatewayService {
   }
 
   private async openaiCompatible(url: string, key: string, model: string, system: string, prompt: string, maxTokens: number): Promise<string> {
+    // GPT-5-era models reject `max_tokens` (want `max_completion_tokens`) and spend
+    // budget on reasoning unless told not to — these are short factual rewrites.
+    const isReasoningModel = /^(gpt-5|o\d)/.test(model);
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }] }),
+      body: JSON.stringify({
+        model,
+        ...(isReasoningModel
+          ? { max_completion_tokens: maxTokens, reasoning_effort: 'minimal' }
+          : { max_tokens: maxTokens }),
+        messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
+      }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };

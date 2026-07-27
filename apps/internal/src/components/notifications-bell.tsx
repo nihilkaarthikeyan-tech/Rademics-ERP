@@ -115,7 +115,7 @@ export function NotificationsBell() {
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-80 rounded-2xl border border-white/70 bg-white/85 shadow-glass backdrop-blur-xl">
+        <div className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/70 bg-white/85 shadow-glass backdrop-blur-xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
             <span className="text-sm font-semibold text-slate-700">Notifications</span>
             {unread > 0 ? (

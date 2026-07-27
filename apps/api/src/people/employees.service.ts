@@ -5,12 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { Grant } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthService } from '../auth/auth.service';
-import { EncryptionService } from '../crypto/encryption.service';
-import { CapabilityService } from '../rbac/capability.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { AuthUser } from '../auth/auth-user';
 import type { CreateEmployeeDto, ListEmployeesQuery, UpdateEmployeeDto } from './dto';
@@ -44,8 +41,6 @@ export class EmployeesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly auth: AuthService,
-    private readonly encryption: EncryptionService,
-    private readonly capabilities: CapabilityService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -93,11 +88,12 @@ export class EmployeesService {
     };
   }
 
-  // ── Single employee, salary gated per matrix (Spec §3) ──
+  // ── Single employee (Spec §3). Salary feature removed 2026-07-27 (user decision):
+  //    the column stays in the schema but is never read or written from the app. ──
   async get(id: string, requester: AuthUser) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { ...DIRECTORY_SELECT, salaryCiphertext: true },
+      select: DIRECTORY_SELECT,
     });
     if (!user) throw new NotFoundException('Employee not found');
     // Same boundary as the list: knowing a client's id must not be a way around
@@ -106,13 +102,7 @@ export class EmployeesService {
       throw new NotFoundException('Employee not found');
     }
 
-    const canViewSalary = await this.canViewSalary(requester);
-    const { salaryCiphertext, ...rest } = user;
-    return {
-      ...flattenSkills(rest),
-      salary: canViewSalary ? this.encryption.decryptNullable(salaryCiphertext) : undefined,
-      salaryVisible: canViewSalary,
-    };
+    return flattenSkills(user);
   }
 
   // ── Create + invite (Spec §5.2) ──
@@ -274,37 +264,39 @@ export class EmployeesService {
     return open.length;
   }
 
-  // ── Salary (encrypted at rest; audited without the value) ──
-  async setSalary(id: string, salary: string, actor: AuthUser, meta: Meta) {
-    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
-    if (!user) throw new NotFoundException('Employee not found');
-
-    await this.prisma.user.update({
+  /**
+   * Role change (people.roles.assign — Super Admin only per the matrix).
+   * Guards: never your own role (no self-escalation, no locking yourself out),
+   * never to/from CLIENT (client accounts are org-bound, made by onboarding).
+   * Sessions are revoked so the new role applies at next login, not in 15 min.
+   */
+  async setRole(id: string, role: string, actor: AuthUser, meta: Meta) {
+    if (id === actor.id) throw new BadRequestException('You cannot change your own role');
+    const user = await this.prisma.user.findUnique({
       where: { id },
-      data: { salaryCiphertext: this.encryption.encrypt(salary) },
+      select: { id: true, role: true, status: true },
     });
+    if (!user) throw new NotFoundException('Employee not found');
+    if (user.role === 'CLIENT') throw new BadRequestException('Client accounts cannot be converted to staff');
+    if (user.role === role) return { id, role, changed: false };
+
+    await this.prisma.user.update({ where: { id }, data: { role: role as never } });
+    await this.auth.revokeAllForUser(id);
+
     await this.audit.record({
       actorId: actor.id,
       actorEmail: actor.email,
-      action: 'SALARY_EDIT',
+      action: 'ROLE_CHANGED',
       entityType: 'User',
       entityId: id,
-      after: { changed: true }, // never log the salary value itself
+      before: { role: user.role },
+      after: { role },
       ...meta,
     });
-    return { id, updated: true };
+    return { id, role, changed: true };
   }
 
   // ── helpers ──
-  private async canViewSalary(user: AuthUser): Promise<boolean> {
-    const grant = await this.capabilities.resolveGrant(
-      user.role,
-      user.resourceType,
-      'people.salary.view_edit',
-    );
-    return grant !== Grant.DENY;
-  }
-
   private async assertRefsExist(
     departmentId?: string,
     teamId?: string,

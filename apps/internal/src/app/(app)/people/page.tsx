@@ -104,8 +104,12 @@ export default function PeoplePage() {
                 {data.items.map((e) => (
                   <tr key={e.id} className="hover:bg-slate-50">
                     <td className="px-4 py-2.5">
-                      <div className="font-medium text-slate-800">{e.name}</div>
-                      <div className="text-xs text-slate-400">{e.email}</div>
+                      <Link href={`/people/${e.id}`} className="group block">
+                        <div className="font-medium text-slate-800 group-hover:text-accent group-hover:underline">
+                          {e.name}
+                        </div>
+                        <div className="text-xs text-slate-400">{e.email}</div>
+                      </Link>
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">
                       {e.role}

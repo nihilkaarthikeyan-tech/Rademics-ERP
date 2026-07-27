@@ -6,8 +6,10 @@ import {
   QUEUE_TASKS,
   TASK_ACCEPT_SWEEP_REPEAT_ID,
   TASK_CLIENT_UPDATE_SWEEP_REPEAT_ID,
+  TASK_DEADLINE_SWEEP_REPEAT_ID,
   TASK_JOB_ACCEPT_SWEEP,
   TASK_JOB_CLIENT_UPDATE_SWEEP,
+  TASK_JOB_DEADLINE_SWEEP,
 } from './tasks.constants';
 
 /**
@@ -50,12 +52,25 @@ export class TasksProcessor extends WorkerHost implements OnModuleInit {
         removeOnFail: 14,
       },
     );
-    this.logger.log('Task jobs scheduled (acceptance sweep 09:00, client-update sweep 09:15)');
+    await this.queue.add(
+      TASK_JOB_DEADLINE_SWEEP,
+      {},
+      {
+        repeat: { pattern: '30 * * * *' }, // hourly — a 24h warning can't wait for tomorrow 09:00
+        jobId: TASK_DEADLINE_SWEEP_REPEAT_ID,
+        removeOnComplete: 48,
+        removeOnFail: 48,
+      },
+    );
+    this.logger.log(
+      'Task jobs scheduled (acceptance sweep 09:00, client-update sweep 09:15, deadline sweep hourly)',
+    );
   }
 
   async process(job: Job): Promise<unknown> {
     if (job.name === TASK_JOB_ACCEPT_SWEEP) return this.tasks.runAcceptanceSweep();
     if (job.name === TASK_JOB_CLIENT_UPDATE_SWEEP) return this.tasks.runClientUpdateSweep();
+    if (job.name === TASK_JOB_DEADLINE_SWEEP) return this.tasks.runDeadlineSweep();
     return undefined;
   }
 }
