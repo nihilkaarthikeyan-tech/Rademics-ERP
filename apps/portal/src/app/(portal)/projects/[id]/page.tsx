@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Badge, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 interface Milestone { id: string; name: string; percentComplete: number }
 interface Item { id: string; title: string; status: string; deadline: string | null }
@@ -66,6 +67,8 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useAutoRefresh(load);
 
   if (state === 'loading') return <LoadingState />;
   if (state === 'notfound') return <p className="text-sm text-slate-500">This project isn&apos;t available.</p>;

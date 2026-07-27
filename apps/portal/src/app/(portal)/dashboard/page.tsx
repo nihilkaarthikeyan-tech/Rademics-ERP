@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CheckCircle2, FolderKanban, TrendingUp } from 'lucide-react';
 import { Card, CardContent, EmptyState, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { AccessEnded } from '@/components/access-ended';
 
 interface PortalProject {
@@ -66,6 +67,8 @@ export default function PortalDashboard() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useAutoRefresh(load);
 
   const avgComplete = projects?.length
     ? Math.round(projects.reduce((n, p) => n + p.percentComplete, 0) / projects.length)

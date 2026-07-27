@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Badge, Card, CardContent, EmptyState, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { TaskDetailDrawer, type AssignableUser } from '@/components/projects/task-detail-drawer';
 
 interface MyTask {
@@ -48,6 +49,9 @@ export default function MyWorkPage() {
     // Only roles with tasks.assign can fetch this; everyone else keeps [] (drawer hides the picker input anyway).
     apiFetch<AssignableUser[]>('/projects/assignable-users').then(setMembers).catch(() => setMembers([]));
   }, [load]);
+
+  // A task assigned to you while this page is open should simply appear.
+  useAutoRefresh(load, { events: ['task:changed'] });
 
   const open = useMemo(() => tasks.filter((t) => t.status !== 'COMPLETED'), [tasks]);
 

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { AttendanceModule } from '../attendance/attendance.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ProjectsService } from './projects.service';
 import { ProjectsController } from './projects.controller';
@@ -12,6 +13,7 @@ import { QUEUE_TASKS } from './tasks.constants';
 @Module({
   imports: [
     NotificationsModule, // task events fire notifications (§5.12)
+    AttendanceModule, // PresenceService — broadcasts task changes so open boards refresh themselves
     BullModule.registerQueue({ name: QUEUE_TASKS }), // daily acceptance sweep
   ],
   controllers: [ProjectsController, TasksController],

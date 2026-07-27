@@ -8,6 +8,7 @@ import { Badge, Button, Card, CardContent, EmptyState, Input, Label, LoadingStat
 import { formatProjectCode } from '@rademics/types';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { TaskDetailDrawer, type AssignableUser } from '@/components/projects/task-detail-drawer';
 
 interface TaskRow {
@@ -119,6 +120,10 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Only the task list needs to follow along — the project header rarely moves,
+  // and refetching it on every task event would flicker the page for nothing.
+  useAutoRefresh(loadTasks, { events: ['task:changed'] });
 
   // Deep link from a notification: /projects/<id>?task=<taskId> opens the panel.
   // Subscribed (not read-once): clicking a notification while ALREADY on this

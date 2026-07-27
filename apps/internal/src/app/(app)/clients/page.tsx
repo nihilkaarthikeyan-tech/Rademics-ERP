@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 interface ClientOrgRow {
   id: string;
@@ -43,6 +44,8 @@ export default function ClientsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useAutoRefresh(load, {});
 
   async function deactivate(org: ClientOrgRow) {
     if (!confirm(`Deactivate "${org.name ?? org.code}"? All ${org._count.users} client login(s) will be signed out and lose access.`)) {

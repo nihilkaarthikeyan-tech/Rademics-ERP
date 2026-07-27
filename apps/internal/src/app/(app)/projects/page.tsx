@@ -6,6 +6,7 @@ import { Badge, Button, Card, CardContent, EmptyState, ErrorState, Input, Label,
 import { formatProjectCode } from '@rademics/types';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 interface ProjectRow {
   id: string;
@@ -47,6 +48,8 @@ export default function ProjectsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useAutoRefresh(load, { events: ['task:changed'] });
 
   return (
     <div className="mx-auto max-w-6xl">

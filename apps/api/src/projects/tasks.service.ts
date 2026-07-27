@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CapabilityService } from '../rbac/capability.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PresenceService } from '../attendance/presence.service';
 import type { AuthUser } from '../auth/auth-user';
 import type {
   CreateCommentDto,
@@ -63,7 +64,22 @@ export class TasksService {
     private readonly audit: AuditService,
     private readonly capabilities: CapabilityService,
     private readonly notifications: NotificationsService,
+    private readonly presence: PresenceService,
   ) {}
+
+  /**
+   * Tell every open staff window that a task moved, so boards and lists refresh
+   * themselves instead of showing yesterday's column until someone hits reload.
+   *
+   * Broadcast rather than targeted: a task is visible to its assignee, the
+   * project's manager, team leads and HR, and working out that set per event
+   * costs more than it saves. The payload carries only ids — a client of this
+   * event refetches through the normal authorised endpoint, so the broadcast
+   * itself can never leak a task to someone who may not see it.
+   */
+  private announceTaskChange(taskId: string, projectId: string): void {
+    this.presence.emitToAll('task:changed', { taskId, projectId });
+  }
 
   /**
    * Project authority (2026-07-25 decision, replaces the PM role).
@@ -163,6 +179,7 @@ export class TasksService {
     if (dto.assigneeId) {
       return this.assign(task.id, dto.assigneeId, actor, meta);
     }
+    this.announceTaskChange(task.id, dto.projectId);
     return task;
   }
 
@@ -501,6 +518,7 @@ export class TasksService {
       entityType: 'Task',
       entityId: taskId,
     });
+    this.announceTaskChange(taskId, task.projectId);
     return updated;
   }
 
@@ -564,6 +582,7 @@ export class TasksService {
       ...meta,
     });
     await this.notifyOnTransition(task, action);
+    this.announceTaskChange(taskId, task.projectId);
     return updated;
   }
 
