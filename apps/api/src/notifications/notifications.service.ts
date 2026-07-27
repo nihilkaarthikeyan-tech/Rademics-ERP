@@ -81,6 +81,42 @@ export class NotificationsService {
     await Promise.all(unique.map((userId) => this.notify({ ...base, userId })));
   }
 
+  /**
+   * Like notifyMany, but never delivers to nobody.
+   *
+   * For client-triggered events the natural recipients are the task's assignee
+   * and the project's appointed manager — either of which can legitimately be
+   * unset. Dropping the event then is the worst outcome available: the client
+   * is told "the team has been notified" while nothing reached anyone, and the
+   * silence looks identical to being ignored. Falling back to whoever can run
+   * any project (Super Admin / HR) keeps the promise true.
+   *
+   * Returns how many people were actually reached, so callers can log or
+   * surface a genuinely undeliverable event rather than assume success.
+   */
+  async notifyManyOrEscalate(
+    userIds: (string | null | undefined)[],
+    base: Omit<NotifyInput, 'userId'>,
+  ): Promise<{ delivered: number; escalated: boolean }> {
+    const unique = [...new Set(userIds.filter((id): id is string => Boolean(id)))];
+    if (unique.length > 0) {
+      await this.notifyMany(unique, base);
+      return { delivered: unique.length, escalated: false };
+    }
+
+    const fallback = await this.prisma.user.findMany({
+      where: { role: { in: ['SUPER_ADMIN', 'HR'] }, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    await this.notifyMany(
+      fallback.map((u) => u.id),
+      // Say why they are seeing it — an unrouted request is itself the signal
+      // that the project needs an owner.
+      { ...base, body: `${base.body ?? base.title} · nobody is assigned to this yet` },
+    );
+    return { delivered: fallback.length, escalated: true };
+  }
+
   // ── Read API (§5.12) ──
   list(userId: string, unreadOnly = false) {
     return this.prisma.notification.findMany({

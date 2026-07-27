@@ -400,7 +400,7 @@ export class TasksService {
       const since = t.lastClientUpdateAt ?? t.createdAt;
       const days = Math.floor((now.getTime() - since.getTime()) / 86_400_000);
       const recipients = [...new Set([t.assigneeId, t.project.pmId].filter((x): x is string => Boolean(x)))];
-      await this.notifications.notifyMany(recipients, {
+      await this.notifications.notifyManyOrEscalate(recipients, {
         type: 'CLIENT_UPDATE_DUE',
         eventGroup: 'tasks',
         title: 'A client is waiting for an update',

@@ -51,13 +51,20 @@ export default function NewClientUserPage() {
           <form onSubmit={submit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="name">Full name</Label>
-              <Input id="name" value={form.name} onChange={(e) => set('name', e.target.value)} required />
+              <Input
+                id="name"
+                placeholder="Enter their full name"
+                value={form.name}
+                onChange={(e) => set('name', e.target.value)}
+                required
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
+                placeholder="Enter their email address"
                 value={form.email}
                 onChange={(e) => set('email', e.target.value)}
                 required

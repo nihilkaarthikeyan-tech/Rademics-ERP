@@ -163,9 +163,13 @@ export class PortalService {
 
     await this.prisma.task.update({ where: { id: taskId }, data: { lastStatusRequestAt: new Date() } });
 
+    // The person the work is allocated to, plus the project's appointed manager
+    // if there is one. Escalates to Super Admin / HR rather than vanishing when
+    // the task has neither — the client is told the team was notified, so
+    // somebody has to actually receive it.
     const recipients = [...new Set([task.assigneeId, task.project.pmId].filter((x): x is string => Boolean(x)))];
     const client = await this.prisma.user.findUnique({ where: { id: user.id }, select: { name: true } });
-    await this.notifications.notifyMany(recipients, {
+    await this.notifications.notifyManyOrEscalate(recipients, {
       type: 'CLIENT_STATUS_REQUESTED',
       eventGroup: 'tasks',
       title: 'The client is asking for a status update',

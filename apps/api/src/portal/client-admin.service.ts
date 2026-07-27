@@ -65,11 +65,25 @@ export class ClientAdminService {
   }
 
   /**
-   * Resolve project numbers to projects, for the confirmation step in the
-   * onboarding form: the Super Admin types codes and sees the project NAMES
-   * back before saving. Typing 12 instead of 13 is the one mistake that hands a
-   * client someone else's work, and a number carries nothing a human can
-   * sanity-check — so the name is shown, always, before anything is written.
+   * Projects that can still be given to a client: not yet bound to one, and not
+   * closed. The onboarding form picks from this rather than asking anyone to
+   * type a code — nobody remembers RAD-007, and a typo there is the one mistake
+   * that hands a client another client's work. Presenting only the free
+   * projects makes the wrong answer unreachable instead of merely validated.
+   */
+  async assignableProjects() {
+    const projects = await this.prisma.project.findMany({
+      where: { clientOrgId: null, status: { not: 'CLOSED' } },
+      select: { id: true, number: true, name: true, status: true },
+      orderBy: { number: 'asc' },
+    });
+    return projects.map((p) => ({ ...p, code: formatProjectCode(p.number) }));
+  }
+
+  /**
+   * Resolve project numbers to projects. Still used to re-check a selection
+   * server-side, and kept forgiving so a code pasted from an email resolves
+   * the same way the picker would.
    */
   async lookupProjects(numbers: number[]) {
     const unique = [...new Set(numbers)];

@@ -1,13 +1,14 @@
 'use client';
 
-import { use, useCallback, useEffect, useRef, useState } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
+  BellRing,
+  Check,
   Download,
   ListChecks,
   Milestone as MilestoneIcon,
-  MoreVertical,
   MessageSquareText,
 } from 'lucide-react';
 import { Badge, LoadingState } from '@rademics/ui';
@@ -135,11 +136,10 @@ export default function PortalProjectDetail({ params }: { params: Promise<{ id: 
                     <Badge tone={['COMPLETED', 'CLOSED'].includes(t.status) ? 'green' : 'slate'}>
                       {STATUS_LABEL[t.status] ?? t.status}
                     </Badge>
-                    <TaskActionsMenu taskId={t.id} />
                   </div>
                 </div>
                 <TaskFiles taskId={t.id} />
-                <TaskUpdatesFeed taskId={t.id} />
+                <TaskUpdatesFeed taskId={t.id} trailing={<RequestStatusButton taskId={t.id} />} />
               </li>
             ))}
           </ul>
@@ -181,64 +181,66 @@ function TaskFiles({ taskId }: { taskId: string }) {
   );
 }
 
-/** Small "⋯" menu — today just "Ask for a status update", room to grow later. */
-function TaskActionsMenu({ taskId }: { taskId: string }) {
-  const [open, setOpen] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
+/**
+ * "Ask for a status update" — a labelled button, not a "⋯" menu.
+ *
+ * A client visits rarely and will not go hunting behind an icon for the one
+ * thing they are allowed to do, so the affordance says what it is. The
+ * confirmation is deliberately permanent rather than a toast that vanishes:
+ * this is a request into a silence the client cannot otherwise see into, and
+ * "did that go through?" is the question a disappearing message leaves behind.
+ * The server enforces a one-hour cooldown, so the sent state also stops a
+ * confused client from asking five times.
+ */
+function RequestStatusButton({ taskId }: { taskId: string }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [error, setError] = useState<string | null>(null);
 
   async function requestStatus() {
-    setOpen(false);
+    setState('sending');
+    setError(null);
     try {
       await apiFetch(`/portal/tasks/${taskId}/request-status`, { method: 'POST', body: '{}' });
-      setNote('Request sent — the team has been notified.');
+      setState('sent');
     } catch (e) {
-      setNote(e instanceof ApiError ? e.message : 'Could not send the request.');
+      // The cooldown message is itself the useful answer ("you already asked"),
+      // so it is shown as-is rather than flattened into a generic failure.
+      setError(e instanceof ApiError ? e.message : 'Could not send the request.');
+      setState('idle');
     }
-    setTimeout(() => setNote(null), 5000);
+  }
+
+  if (state === 'sent') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+        <Check className="h-3 w-3" />
+        Update requested — the team has been notified
+      </span>
+    );
   }
 
   return (
-    <div ref={ref} className="relative">
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
       <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Task actions"
-        aria-haspopup="true"
-        aria-expanded={open}
-        className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        onClick={() => void requestStatus()}
+        disabled={state === 'sending'}
+        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
       >
-        <MoreVertical className="h-4 w-4" />
+        <BellRing className="h-3 w-3" />
+        {state === 'sending' ? 'Sending…' : 'Ask for a status update'}
       </button>
-      {open ? (
-        <div className="absolute right-0 z-10 mt-1 w-52 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-          <button
-            onClick={() => void requestStatus()}
-            className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-          >
-            Ask for a status update
-          </button>
-        </div>
-      ) : null}
-      {note ? (
-        <div className="absolute right-0 z-10 mt-1 w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-lg">
-          {note}
-        </div>
-      ) : null}
-    </div>
+      {error ? <span className="text-xs text-slate-500">{error}</span> : null}
+    </span>
   );
 }
 
 /** Read-only progress notes staff shared on this task — collapsed by default,
- *  fetched only once the client actually wants to see them. */
-function TaskUpdatesFeed({ taskId }: { taskId: string }) {
+ *  fetched only once the client actually wants to see them.
+ *
+ *  `trailing` sits beside the toggle rather than inside this component so the
+ *  expanded panel still renders below the whole row instead of being trapped
+ *  inside it. */
+function TaskUpdatesFeed({ taskId, trailing }: { taskId: string; trailing?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [updates, setUpdates] = useState<
     { id: string; body: string; createdAt: string; authorName: string | null }[] | null
@@ -257,13 +259,16 @@ function TaskUpdatesFeed({ taskId }: { taskId: string }) {
 
   return (
     <div className="mt-1.5">
-      <button
-        onClick={() => void toggle()}
-        className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
-      >
-        <MessageSquareText className="h-3 w-3" />
-        {open ? 'Hide updates' : updates ? `Updates (${updates.length})` : 'Show updates'}
-      </button>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button
+          onClick={() => void toggle()}
+          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+        >
+          <MessageSquareText className="h-3 w-3" />
+          {open ? 'Hide updates' : updates ? `Updates (${updates.length})` : 'Show updates'}
+        </button>
+        {trailing}
+      </div>
       {open ? (
         <div className="mt-1.5 flex flex-col gap-1.5 rounded-md bg-slate-50 p-2.5">
           {updates === null ? (

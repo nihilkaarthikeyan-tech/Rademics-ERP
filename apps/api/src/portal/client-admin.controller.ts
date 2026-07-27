@@ -24,9 +24,16 @@ export class ClientAdminController {
     return this.admin.listOrgs();
   }
 
+  /** Projects still free to hand to a client — what the onboarding form lists. */
+  @Get('assignable-projects')
+  @RequireCapability('portal.users.manage')
+  assignableProjects() {
+    return this.admin.assignableProjects();
+  }
+
   /**
-   * Resolve typed project codes to names for the onboarding form's confirmation
-   * step. Read-only and behind the same capability as the write it precedes.
+   * Resolve typed project codes to names. Read-only and behind the same
+   * capability as the write it precedes.
    */
   @Get('lookup-projects')
   @RequireCapability('portal.users.manage')
