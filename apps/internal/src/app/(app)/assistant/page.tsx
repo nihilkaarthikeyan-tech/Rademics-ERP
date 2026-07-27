@@ -1,11 +1,11 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Badge, Button, Card, CardContent, Input } from '@rademics/ui';
+import { Button, Card, CardContent, Input } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 
-interface ChatResponse { text: string; aiGenerated: boolean; disclaimer: string; citations?: string[] }
-interface Turn { role: 'user' | 'assistant'; text: string; aiGenerated?: boolean; citations?: string[] }
+interface ChatResponse { text: string; citations?: string[] }
+interface Turn { role: 'user' | 'assistant'; text: string; citations?: string[] }
 
 const SUGGESTIONS = ['What is overdue?', 'Who is free this week?', 'How many open tasks do I have?'];
 
@@ -26,7 +26,7 @@ export default function AssistantPage() {
     setQ('');
     try {
       const res = await apiFetch<ChatResponse>('/ai/chat', { method: 'POST', body: JSON.stringify({ question }) });
-      setTurns((t) => [...t, { role: 'assistant', text: res.text, aiGenerated: res.aiGenerated, citations: res.citations }]);
+      setTurns((t) => [...t, { role: 'assistant', text: res.text, citations: res.citations }]);
     } catch (err) {
       // Raw server/validation messages read like errors in a chat — keep it human.
       const msg =
@@ -65,10 +65,11 @@ export default function AssistantPage() {
                   <div className={`max-w-md rounded-lg px-3 py-2 text-sm ${t.role === 'user' ? 'bg-accent text-white' : 'bg-slate-100 text-slate-700'}`}>
                     {t.text}
                   </div>
-                  {t.role === 'assistant' ? (
+                  {/* How the answer was produced is our concern, not the reader's —
+                      only the records it drew on are shown. */}
+                  {t.role === 'assistant' && t.citations?.length ? (
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <Badge tone={t.aiGenerated ? 'blue' : 'slate'}>{t.aiGenerated ? 'AI-generated' : 'Rule-based'}</Badge>
-                      {t.citations?.map((c, j) => <span key={j} className="text-[11px] text-slate-400">· {c}</span>)}
+                      {t.citations.map((c, j) => <span key={j} className="text-[11px] text-slate-400">· {c}</span>)}
                     </div>
                   ) : null}
                 </div>
