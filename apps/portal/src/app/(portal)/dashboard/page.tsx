@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, FolderKanban, MessageSquareText, TrendingUp } from 'lucide-react';
+import { CheckCircle2, ChevronRight, FolderKanban, MessageSquareText, TrendingUp } from 'lucide-react';
 import { Card, CardContent, EmptyState, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
@@ -10,10 +10,20 @@ import { AccessEnded } from '@/components/access-ended';
 
 interface PortalNotification {
   id: string;
+  type: string;
   title: string;
   body: string | null;
+  entityType: string | null;
+  entityId: string | null;
   createdAt: string;
   readAt: string | null;
+}
+
+/** Where clicking an update takes the client — the thing itself, not a dead end. */
+function updateHref(n: PortalNotification): string {
+  if (n.type === 'INVOICE_SENT') return '/invoices';
+  if (n.entityType === 'Project' && n.entityId) return `/projects/${n.entityId}`;
+  return '/dashboard';
 }
 
 function relTime(iso: string): string {
@@ -68,21 +78,36 @@ function UpdatesFeed() {
       ) : (
         <ul className="flex flex-col divide-y divide-slate-100">
           {items.slice(0, 5).map((n) => (
-            <li key={n.id} className="py-2.5 first:pt-0 last:pb-0">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="flex min-w-0 items-baseline gap-2">
-                  {!n.readAt ? (
-                    <span className="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full bg-[#7C6CF6]" aria-label="New" />
+            <li key={n.id}>
+              {/* A whole-row link with a hover wash and a chevron — the three cues
+                  people already know mean "this opens". It lands on the thing
+                  itself (the project's feed, the invoice list), so the truncated
+                  preview here never has to carry the full story. */}
+              <Link
+                href={updateHref(n)}
+                className="group -mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-white/80"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      {!n.readAt ? (
+                        <span className="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full bg-[#7C6CF6]" aria-label="New" />
+                      ) : null}
+                      <span className="truncate text-sm font-medium text-slate-800">{n.title}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-slate-400">{relTime(n.createdAt)}</span>
+                  </div>
+                  {n.body ? (
+                    <p className="mt-1 line-clamp-2 whitespace-pre-line text-sm leading-relaxed text-slate-600">
+                      {n.body}
+                    </p>
                   ) : null}
-                  <span className="truncate text-sm font-medium text-slate-800">{n.title}</span>
-                </span>
-                <span className="shrink-0 text-xs text-slate-400">{relTime(n.createdAt)}</span>
-              </div>
-              {n.body ? (
-                <p className="mt-1 line-clamp-2 whitespace-pre-line text-sm leading-relaxed text-slate-600">
-                  {n.body}
-                </p>
-              ) : null}
+                  <span className="mt-1 inline-block text-xs font-medium text-accent">
+                    {n.type === 'INVOICE_SENT' ? 'View invoice' : 'Read the full update'}
+                  </span>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-500" />
+              </Link>
             </li>
           ))}
         </ul>
