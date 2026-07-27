@@ -49,6 +49,7 @@ interface ProjectDetail {
   budgetAmount: string | null;
   pm: { id: string; name: string } | null;
   client: { id: string; name: string } | null;
+  clientOrg: { id: string; code: string | null; name?: string } | null;
   modules: { id: string; name: string }[];
 }
 

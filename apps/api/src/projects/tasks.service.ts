@@ -9,6 +9,7 @@ import { Grant } from '@rademics/permissions';
 import {
   TASK_TRANSITIONS,
   TaskAction,
+  formatClientCode,
   nextTaskStatus,
   type TaskStatus as SharedTaskStatus,
   type TaskTransition,
@@ -393,7 +394,7 @@ export class TasksService {
         createdAt: true,
         lastClientUpdateAt: true,
         assigneeId: true,
-        project: { select: { pmId: true, client: { select: { name: true } } } },
+        project: { select: { pmId: true, clientOrg: { select: { number: true } } } },
       },
     });
     for (const t of stale) {
@@ -404,7 +405,8 @@ export class TasksService {
         type: 'CLIENT_UPDATE_DUE',
         eventGroup: 'tasks',
         title: 'A client is waiting for an update',
-        body: `${t.title}${t.project.client ? ` (${t.project.client.name})` : ''} — no update in ${days} day${days === 1 ? '' : 's'}`,
+        // Client identified by code — this nudge goes to the assignee.
+        body: `${t.title}${t.project.clientOrg ? ` (${formatClientCode(t.project.clientOrg.number)})` : ''} — no update in ${days} day${days === 1 ? '' : 's'}`,
         entityType: 'Task',
         entityId: t.id,
       });

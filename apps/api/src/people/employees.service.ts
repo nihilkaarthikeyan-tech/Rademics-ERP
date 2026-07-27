@@ -50,13 +50,22 @@ export class EmployeesService {
   ) {}
 
   // ── Directory list (Spec §19 table standards) ──
-  async list(query: ListEmployeesQuery) {
+  async list(query: ListEmployeesQuery, viewer?: AuthUser) {
     const where: Prisma.UserWhereInput = {
       role: query.role,
       resourceType: query.resourceType,
       departmentId: query.departmentId,
       teamId: query.teamId,
     };
+    // This is the STAFF directory. Client users are people too, so without this
+    // `?role=CLIENT` returned every client's name and email to any employee —
+    // the whole client list, enumerable in one request. Only Super Admin, who
+    // administers clients, may see them here.
+    // (A `?role=CLIENT` request then contradicts itself and returns nothing,
+    // which is the right answer rather than an error that confirms they exist.)
+    if (viewer?.role !== 'SUPER_ADMIN') {
+      where.NOT = { role: 'CLIENT' };
+    }
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
@@ -91,6 +100,11 @@ export class EmployeesService {
       select: { ...DIRECTORY_SELECT, salaryCiphertext: true },
     });
     if (!user) throw new NotFoundException('Employee not found');
+    // Same boundary as the list: knowing a client's id must not be a way around
+    // it. 404 rather than 403 — a 403 would confirm the client exists.
+    if (user.role === 'CLIENT' && requester.role !== 'SUPER_ADMIN') {
+      throw new NotFoundException('Employee not found');
+    }
 
     const canViewSalary = await this.canViewSalary(requester);
     const { salaryCiphertext, ...rest } = user;

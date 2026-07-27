@@ -1136,7 +1136,13 @@ model AiUsage {
 /// A client organization with many individual users (Spec §2). One login per org
 /// is explicitly NOT acceptable — each user has their own login and scope.
 model ClientOrg {
-  id     String          @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
+  // Human-facing reference, rendered as CL-001 (formatClientCode in
+  // @rademics/types). This is what staff see INSTEAD of the client's identity —
+  // only Super Admin sees `name`. Sequence-backed for the same reason project
+  // numbers are: a duplicate would make two clients indistinguishable to
+  // everyone who only ever sees the code.
+  number Int             @unique @default(autoincrement())
   name   String          @unique
   status ClientOrgStatus @default(ACTIVE)
 

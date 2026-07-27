@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { formatClientCode } from '@rademics/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { FilesService } from '../files/files.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -129,9 +130,13 @@ export class PortalService {
     const updates = await this.prisma.comment.findMany({
       where: { taskId, visibility: 'CLIENT_VISIBLE' },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, body: true, createdAt: true, author: { select: { name: true } } },
+      select: { id: true, body: true, createdAt: true },
     });
-    return updates.map((u) => ({ id: u.id, body: u.body, createdAt: u.createdAt, authorName: u.author?.name ?? null }));
+    // Attribution removed (2026-07-27): the client is not told which individual
+    // works on their project, in either direction. Updates speak as the company.
+    // The author is NOT selected above rather than dropped afterwards, so it
+    // cannot leak through a future change to this mapping.
+    return updates.map((u) => ({ id: u.id, body: u.body, createdAt: u.createdAt, authorName: null }));
   }
 
   /**
@@ -168,12 +173,18 @@ export class PortalService {
     // the task has neither — the client is told the team was notified, so
     // somebody has to actually receive it.
     const recipients = [...new Set([task.assigneeId, task.project.pmId].filter((x): x is string => Boolean(x)))];
-    const client = await this.prisma.user.findUnique({ where: { id: user.id }, select: { name: true } });
+    // The alert names the client by CODE, not by name — it lands with the
+    // assignee, who is exactly the person not meant to know who the client is.
+    const client = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { clientOrg: { select: { number: true } } },
+    });
+    const clientLabel = client?.clientOrg ? formatClientCode(client.clientOrg.number) : 'A client';
     await this.notifications.notifyManyOrEscalate(recipients, {
       type: 'CLIENT_STATUS_REQUESTED',
       eventGroup: 'tasks',
       title: 'The client is asking for a status update',
-      body: `${client?.name ?? 'A client'} asked about "${task.title}"`,
+      body: `${clientLabel} asked about "${task.title}"`,
       entityType: 'Task',
       entityId: task.id,
     });

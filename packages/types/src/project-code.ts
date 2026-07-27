@@ -13,6 +13,21 @@
 
 export const PROJECT_CODE_PREFIX = 'RAD';
 
+/**
+ * Client reference code — CL-001.
+ *
+ * Unlike the project code, this one exists for confidentiality rather than
+ * convenience: staff below Super Admin never see a client's name or email, only
+ * this. It is therefore the ONLY handle most of the company has for a client,
+ * which is why it is sequence-backed and permanent.
+ */
+export const CLIENT_CODE_PREFIX = 'CL';
+
+/** 3 → "CL-003". */
+export function formatClientCode(clientNumber: number): string {
+  return `${CLIENT_CODE_PREFIX}-${String(clientNumber).padStart(3, '0')}`;
+}
+
 /** Minimum digits; numbers past 999 simply get longer (RAD-1000), never truncated. */
 const PAD = 3;
 

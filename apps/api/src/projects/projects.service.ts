@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Grant } from '@rademics/permissions';
+import { formatClientCode } from '@rademics/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CapabilityService } from '../rbac/capability.service';
@@ -34,6 +35,9 @@ const PROJECT_SELECT = {
   budgetAmount: true,
   pm: { select: { id: true, name: true, email: true } },
   client: { select: { id: true, name: true, email: true } },
+  // The client's CODE (CL-003) — what everyone below Super Admin sees instead
+  // of who the client actually is. See stripClientIdentity.
+  clientOrg: { select: { id: true, number: true, name: true } },
   _count: { select: { tasks: true, modules: true } },
 } satisfies Prisma.ProjectSelect;
 
@@ -44,6 +48,35 @@ export class ProjectsService {
     private readonly audit: AuditService,
     private readonly capabilities: CapabilityService,
   ) {}
+
+  /**
+   * Replace who the client IS with their code, for everyone but Super Admin.
+   *
+   * Staff coordinate around a client without needing to know them: the project
+   * carries CL-003 and that is enough to talk about, search for and route work.
+   * The primary-contact user is dropped entirely rather than masked, because a
+   * name and email are exactly what must not travel.
+   *
+   * Invoices are the deliberate exception and are NOT covered here — a bill is
+   * a legal document and carries the real name to the client by necessity.
+   */
+  private stripClientIdentity<
+    T extends {
+      client?: { id: string; name: string; email: string } | null;
+      clientOrg?: { id: string; number: number; name: string } | null;
+    },
+  >(project: T, user: AuthUser) {
+    const { client, clientOrg, ...rest } = project;
+    const code = clientOrg ? formatClientCode(clientOrg.number) : null;
+    if (user.role === 'SUPER_ADMIN') {
+      return { ...rest, client, clientOrg: clientOrg ? { ...clientOrg, code } : null };
+    }
+    return {
+      ...rest,
+      client: null,
+      clientOrg: clientOrg ? { id: clientOrg.id, code } : null,
+    };
+  }
 
   private stripBudget<T extends { budgetAmount: unknown; pm?: { id: string } | null }>(
     project: T,
@@ -88,7 +121,7 @@ export class ProjectsService {
       select: PROJECT_SELECT,
       orderBy: { createdAt: 'desc' },
     });
-    return items.map((p) => this.stripBudget(p, user));
+    return items.map((p) => this.stripClientIdentity(this.stripBudget(p, user), user));
   }
 
   async get(id: string, user: AuthUser) {
@@ -101,7 +134,7 @@ export class ProjectsService {
       },
     });
     if (!project) throw new NotFoundException('Project not found');
-    return this.stripBudget(project, user);
+    return this.stripClientIdentity(this.stripBudget(project, user), user);
   }
 
   async create(dto: CreateProjectDto, actor: AuthUser, meta: Meta) {
@@ -135,7 +168,7 @@ export class ProjectsService {
       after: { name: project.name },
       ...meta,
     });
-    return this.stripBudget(project, actor);
+    return this.stripClientIdentity(this.stripBudget(project, actor), actor);
   }
 
   async update(id: string, dto: UpdateProjectDto, actor: AuthUser, meta: Meta) {
@@ -190,7 +223,7 @@ export class ProjectsService {
       after: { fields: Object.keys(dto) },
       ...meta,
     });
-    return this.stripBudget(project, actor);
+    return this.stripClientIdentity(this.stripBudget(project, actor), actor);
   }
 
   /** Active internal users who can hold tasks (Spec §5.9 assignment screens, §24). */

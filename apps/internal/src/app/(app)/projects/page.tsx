@@ -13,7 +13,9 @@ interface ProjectRow {
   name: string;
   status: string;
   pm: { id: string; name: string } | null;
+  // Super Admin alone gets `client`; everyone else gets only the code.
   client: { id: string; name: string } | null;
+  clientOrg: { id: string; code: string | null; name?: string } | null;
   _count: { tasks: number; modules: number };
 }
 
@@ -91,7 +93,9 @@ export default function ProjectsPage() {
                     </div>
                     <div className="mt-3 text-xs text-slate-500">
                       {p._count.tasks} {p._count.tasks === 1 ? 'task' : 'tasks'} · {p._count.modules} modules
-                      {p.client ? ` · client: ${p.client.name}` : ''}
+                      {p.clientOrg?.code
+                        ? ` · client: ${p.clientOrg.name ?? p.clientOrg.code}`
+                        : ''}
                     </div>
                   </CardContent>
                 </Card>

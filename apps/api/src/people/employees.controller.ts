@@ -24,8 +24,8 @@ export class EmployeesController {
 
   @Get()
   @RequireCapability('people.directory.view')
-  list(@Query() query: ListEmployeesQuery) {
-    return this.employees.list(query);
+  list(@Query() query: ListEmployeesQuery, @CurrentUser() user: AuthUser) {
+    return this.employees.list(query, user);
   }
 
   @Get(':id')
