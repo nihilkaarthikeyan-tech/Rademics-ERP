@@ -158,7 +158,15 @@ export class FilesService {
       },
     });
     // A client sees an asset only if it has at least one visible+clean version.
-    return assets.filter((a) => !isClient || a.versions.length > 0);
+    const visible = assets.filter((a) => !isClient || a.versions.length > 0);
+    if (!isClient) return visible;
+    // Who uploaded it is internal identity (2026-07-27): a client is not told
+    // which individual works on their project. The portal UI never rendered it,
+    // but it was in the response body and therefore readable.
+    return visible.map((a) => ({
+      ...a,
+      versions: a.versions.map(({ uploadedBy: _hidden, ...v }) => v),
+    }));
   }
 
   // ── Presigned download — only AVAILABLE versions; clients need CLIENT_VISIBLE (§5.6) ──

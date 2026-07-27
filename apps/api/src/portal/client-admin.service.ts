@@ -38,11 +38,28 @@ export class ClientAdminService {
     }
   }
 
-  listOrgs() {
-    return this.prisma.clientOrg.findMany({
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, status: true, _count: { select: { users: true, projects: true } } },
+  async listOrgs() {
+    // Ordered by number, not name: a reserved client ID has no name yet, and
+    // sorting by it would scatter the reservations unpredictably. The code is
+    // also the stable thing — a client can be renamed, CL-008 cannot.
+    const orgs = await this.prisma.clientOrg.findMany({
+      orderBy: { number: 'asc' },
+      select: {
+        id: true,
+        number: true,
+        name: true,
+        status: true,
+        _count: { select: { users: true, projects: true } },
+      },
     });
+    return orgs.map((o) => ({
+      ...o,
+      code: formatClientCode(o.number),
+      // No name means the ID was reserved when a project was marked as client
+      // work, and nobody has created the account yet. Surfaced so outstanding
+      // reservations are visible rather than silently accumulating.
+      awaitingAccount: o.name === null,
+    }));
   }
 
   /** Invite a client user into an org (individual login + scope — §2). */

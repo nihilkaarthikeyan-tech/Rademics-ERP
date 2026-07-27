@@ -7,13 +7,20 @@ import { apiFetch, ApiError } from '@/lib/api';
 
 interface ClientOrgRow {
   id: string;
-  name: string;
+  code: string;
+  /** Null while the client ID is only reserved — no account created yet. */
+  name: string | null;
+  awaitingAccount: boolean;
   status: 'ACTIVE' | 'DEACTIVATED';
   _count: { users: number; projects: number };
 }
 
 /**
- * Client organization admin (Spec §2, §5.5) — SUPER_ADMIN only (portal.users.manage).
+ * Client admin (Spec §2, §5.5) — SUPER_ADMIN only (portal.users.manage).
+ *
+ * "Organization" is gone from the wording: it is a real record underneath (the
+ * portal, invoices and the deactivate kill switch all hang off it) but it was
+ * never a thing a Super Admin should have to think about. A client is a client.
  * Creates/lists the ClientOrg records that the client portal's login and per-project
  * access grants are scoped to. See apps/api/src/portal/client-admin.controller.ts.
  */
@@ -38,7 +45,7 @@ export default function ClientsPage() {
   }, [load]);
 
   async function deactivate(org: ClientOrgRow) {
-    if (!confirm(`Deactivate "${org.name}"? All ${org._count.users} client user(s) will be signed out and lose access.`)) {
+    if (!confirm(`Deactivate "${org.name ?? org.code}"? All ${org._count.users} client login(s) will be signed out and lose access.`)) {
       return;
     }
     setBusyId(org.id);
@@ -46,7 +53,7 @@ export default function ClientsPage() {
       await apiFetch(`/client-orgs/${org.id}/deactivate`, { method: 'POST', body: '{}' });
       await load();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : 'Could not deactivate the organization');
+      alert(err instanceof ApiError ? err.message : 'Could not deactivate the client');
     } finally {
       setBusyId(null);
     }
@@ -58,7 +65,7 @@ export default function ClientsPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-800">Clients</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Client organizations — each has its own login and project scope in the client portal.
+            Each client has their own portal login and sees only the projects you give them.
           </p>
         </div>
         <Link href="/clients/new">
@@ -74,7 +81,7 @@ export default function ClientsPage() {
         ) : !data || data.length === 0 ? (
           <EmptyState
             title="No clients yet"
-            description="Create your first client organization to get started."
+            description="Create your first client to get started."
             action={
               <Link href="/clients/new">
                 <Button size="sm">New client</Button>
@@ -86,8 +93,9 @@ export default function ClientsPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-2.5 font-medium">Organization</th>
-                  <th className="px-4 py-2.5 font-medium">Client users</th>
+                  <th className="px-4 py-2.5 font-medium">Client ID</th>
+                  <th className="px-4 py-2.5 font-medium">Client</th>
+                  <th className="px-4 py-2.5 font-medium">Logins</th>
                   <th className="px-4 py-2.5 font-medium">Projects</th>
                   <th className="px-4 py-2.5 font-medium">Status</th>
                   <th className="px-4 py-2.5 font-medium" />
@@ -96,7 +104,12 @@ export default function ClientsPage() {
               <tbody className="divide-y divide-slate-100">
                 {data.map((org) => (
                   <tr key={org.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-2.5 font-medium text-slate-800">{org.name}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-slate-500">{org.code}</td>
+                    <td className="px-4 py-2.5 font-medium text-slate-800">
+                      {org.name ?? (
+                        <span className="font-normal text-amber-700">Reserved — no account yet</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-slate-600">{org._count.users}</td>
                     <td className="px-4 py-2.5 text-slate-600">{org._count.projects}</td>
                     <td className="px-4 py-2.5">
@@ -104,11 +117,22 @@ export default function ClientsPage() {
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-2">
-                        <Link href={`/clients/${org.id}/new-user`}>
-                          <Button size="sm" variant="outline" disabled={org.status !== 'ACTIVE'}>
-                            Add user
-                          </Button>
-                        </Link>
+                        {/* A reservation has no account to add a second person to —
+                            the first one is created on the New client form, which is
+                            where its code has to be typed. */}
+                        {org.awaitingAccount ? (
+                          <Link href="/clients/new">
+                            <Button size="sm" variant="outline" disabled={org.status !== 'ACTIVE'}>
+                              Create account
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Link href={`/clients/${org.id}/new-user`}>
+                            <Button size="sm" variant="outline" disabled={org.status !== 'ACTIVE'}>
+                              Add person
+                            </Button>
+                          </Link>
+                        )}
                         {org.status === 'ACTIVE' ? (
                           <Button
                             size="sm"
