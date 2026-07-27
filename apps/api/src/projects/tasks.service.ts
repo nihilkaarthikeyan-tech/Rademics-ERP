@@ -421,6 +421,7 @@ export class TasksService {
       await this.notifications.notifyManyOrEscalate(recipients, {
         type: 'CLIENT_UPDATE_DUE',
         eventGroup: 'tasks',
+        channel: 'IN_APP',
         title: 'A client is waiting for an update',
         // Client identified by code — this nudge goes to the assignee.
         body: `${t.title}${t.project.clientOrg ? ` (${formatClientCode(t.project.clientOrg.number)})` : ''} — no update in ${days} day${days === 1 ? '' : 's'}`,
@@ -633,6 +634,7 @@ export class TasksService {
       await this.notifications.notifyMany(recipients, {
         type: 'CLIENT_PROGRESS_UPDATE',
         eventGroup: 'tasks',
+        channel: 'IN_APP', // read in the portal, never mailed
         title: `Update on ${task.project.name}`,
         body: `${task.title}\n\n${body}${fileLine}`,
         entityType: 'Project',

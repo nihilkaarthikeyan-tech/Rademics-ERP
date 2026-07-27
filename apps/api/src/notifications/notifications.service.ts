@@ -12,6 +12,15 @@ export interface NotifyInput {
   entityType?: string;
   entityId?: string;
   emailHtml?: string; // when omitted, title/body are used for the email
+  /**
+   * Force in-app only, ignoring the recipient's preference (2026-07-27).
+   *
+   * Client/staff correspondence lives in the portals by design — an update, a
+   * status request and the 3-day nudge are all read where the work is, not in
+   * an inbox. This does NOT apply to account mail (invites, password resets),
+   * which is not correspondence and has nowhere else to go.
+   */
+  channel?: 'IN_APP';
 }
 
 /**
@@ -34,7 +43,9 @@ export class NotificationsService {
       where: { userId_eventGroup: { userId: input.userId, eventGroup: input.eventGroup } },
       select: { pref: true },
     });
-    const channel = pref?.pref ?? 'IN_APP_EMAIL'; // default: in-app + email (§5.12)
+    // An explicit IN_APP request wins over the stored preference: these events
+    // are meant to be read in the portal, not mailed out.
+    const channel = input.channel ?? pref?.pref ?? 'IN_APP_EMAIL'; // default: in-app + email (§5.12)
     if (channel === 'MUTE') return;
 
     const notification = await this.prisma.notification.create({

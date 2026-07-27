@@ -183,6 +183,7 @@ export class PortalService {
     await this.notifications.notifyManyOrEscalate(recipients, {
       type: 'CLIENT_STATUS_REQUESTED',
       eventGroup: 'tasks',
+      channel: 'IN_APP',
       title: 'The client is asking for a status update',
       body: `${clientLabel} asked about "${task.title}"`,
       entityType: 'Task',

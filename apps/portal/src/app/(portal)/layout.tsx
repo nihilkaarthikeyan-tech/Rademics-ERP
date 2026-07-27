@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { LogOut } from 'lucide-react';
 import { cn, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError, type Me } from '@/lib/api';
+import { UpdatesBell } from '@/components/updates-bell';
 import { clearToken } from '@/lib/session';
 
 // Portal top-nav only, no sidebar (Spec §16.2).
@@ -96,6 +97,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             </nav>
           </div>
           <div className="flex items-center gap-3">
+            <UpdatesBell />
             <div className="hidden items-center gap-2 sm:flex">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-xs font-semibold text-white">
                 {me.email.slice(0, 1).toUpperCase()}
