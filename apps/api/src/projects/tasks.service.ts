@@ -586,6 +586,63 @@ export class TasksService {
     return updated;
   }
 
+  /**
+   * Push a staff-written update out to the client (2026-07-27).
+   *
+   * Until now a client-visible comment only landed in the portal feed, so the
+   * client learned of it if and only if they happened to log in. The whole
+   * point of the 3-day cadence is that they hear something without having to
+   * come looking, so the update has to leave the building.
+   *
+   * Any files already released on the task are listed by name, which is what
+   * makes "here is the draft" a complete message rather than a note about a
+   * file the client has to go hunting for.
+   *
+   * Deliberately unattributed: the client is not told which individual wrote
+   * it, matching the portal feed and every other client-facing surface.
+   * Failures are swallowed — a mail outage must not roll back the comment the
+   * staff member just wrote.
+   */
+  private async emailClientUpdate(taskId: string, body: string): Promise<void> {
+    try {
+      const task = await this.prisma.task.findUnique({
+        where: { id: taskId },
+        select: {
+          title: true,
+          project: {
+            select: {
+              id: true,
+              name: true,
+              clientAccess: { select: { clientUserId: true } },
+            },
+          },
+          files: {
+            where: { versions: { some: { visibility: 'CLIENT_VISIBLE', scanStatus: 'AVAILABLE', deletedAt: null } } },
+            select: { displayName: true },
+          },
+        },
+      });
+      const recipients = task?.project.clientAccess.map((a) => a.clientUserId) ?? [];
+      if (!task || recipients.length === 0) return;
+
+      const files = task.files.map((f) => f.displayName);
+      const fileLine = files.length
+        ? `\n\nShared with this update: ${files.join(', ')}`
+        : '';
+
+      await this.notifications.notifyMany(recipients, {
+        type: 'CLIENT_PROGRESS_UPDATE',
+        eventGroup: 'tasks',
+        title: `Update on ${task.project.name}`,
+        body: `${task.title}\n\n${body}${fileLine}`,
+        entityType: 'Project',
+        entityId: task.project.id,
+      });
+    } catch {
+      // Never fail the comment because notifying failed.
+    }
+  }
+
   // ── Comments (Spec §5.4) ──
   async addComment(taskId: string, dto: CreateCommentDto, actor: AuthUser) {
     const task = await this.prisma.task.findUnique({
@@ -614,6 +671,7 @@ export class TasksService {
     // A client-visible comment IS a progress update — resets the staleness clock.
     if (dto.clientVisible) {
       await this.prisma.task.update({ where: { id: taskId }, data: { lastClientUpdateAt: new Date() } });
+      await this.emailClientUpdate(taskId, dto.body.trim());
     }
 
     if (dto.mentionUserIds?.length) {
