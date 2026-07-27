@@ -2,11 +2,94 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, FolderKanban, TrendingUp } from 'lucide-react';
+import { CheckCircle2, FolderKanban, MessageSquareText, TrendingUp } from 'lucide-react';
 import { Card, CardContent, EmptyState, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { AccessEnded } from '@/components/access-ended';
+
+interface PortalNotification {
+  id: string;
+  title: string;
+  body: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+function relTime(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/**
+ * The team's messages, on the landing page itself.
+ *
+ * The bell in the header holds the same items, but a bell is something you have
+ * to know to click — and a client who logs in once a week should not need to
+ * discover anything to find out what happened. The first screen answers the
+ * question they came with.
+ */
+function UpdatesFeed() {
+  const [items, setItems] = useState<PortalNotification[] | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setItems(await apiFetch<PortalNotification[]>('/notifications'));
+    } catch {
+      setItems([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useAutoRefresh(load, { intervalMs: 20_000 });
+
+  if (items === null) return null;
+
+  return (
+    <div className="rounded-2xl border border-white/70 bg-white/65 backdrop-blur-xl p-5 shadow-glass">
+      <div className="mb-3 flex items-center gap-2">
+        <MessageSquareText className="h-4 w-4 text-slate-500" />
+        <h3 className="text-sm font-semibold text-slate-800">Updates from your team</h3>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-sm text-slate-400">
+          Nothing yet — when your team posts an update or sends an invoice, it appears here.
+        </p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-slate-100">
+          {items.slice(0, 5).map((n) => (
+            <li key={n.id} className="py-2.5 first:pt-0 last:pb-0">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="flex min-w-0 items-baseline gap-2">
+                  {!n.readAt ? (
+                    <span className="h-2 w-2 shrink-0 translate-y-[-1px] rounded-full bg-[#7C6CF6]" aria-label="New" />
+                  ) : null}
+                  <span className="truncate text-sm font-medium text-slate-800">{n.title}</span>
+                </span>
+                <span className="shrink-0 text-xs text-slate-400">{relTime(n.createdAt)}</span>
+              </div>
+              {n.body ? (
+                <p className="mt-1 line-clamp-2 whitespace-pre-line text-sm leading-relaxed text-slate-600">
+                  {n.body}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 interface PortalProject {
   id: string;
@@ -95,6 +178,9 @@ export default function PortalDashboard() {
               <Kpi icon={FolderKanban} label="Total projects" value={String(projects.length)} sub={`${activeCount} in progress`} />
               <Kpi icon={TrendingUp} label="Avg. completion" value={`${avgComplete}%`} sub="across all projects" />
             </div>
+
+            {/* What the team has said — before the numbers, this is why they log in. */}
+            <UpdatesFeed />
 
             <div className="grid gap-4 sm:grid-cols-2">
               {projects.map((p) => (
