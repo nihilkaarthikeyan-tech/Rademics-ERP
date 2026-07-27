@@ -185,7 +185,7 @@ export class ProjectsService {
   async update(id: string, dto: UpdateProjectDto, actor: AuthUser, meta: Meta) {
     const existing = await this.prisma.project.findUnique({
       where: { id },
-      select: { id: true, pmId: true },
+      select: { id: true, pmId: true, clientOrgId: true },
     });
     if (!existing) throw new NotFoundException('Project not found');
 
@@ -210,6 +210,19 @@ export class ProjectsService {
 
     await this.assertRefs(dto.pmId, dto.clientId);
 
+    // Reserving a client ID after the fact, for a project that was created
+    // without one. Idempotent: a project that already has one keeps it, since
+    // re-reserving would strand any account already created against the old
+    // code. Only HR/SA, same bar as creating client work in the first place.
+    let reservedOrgId: string | undefined;
+    if (dto.forClient && !existing.clientOrgId) {
+      if (grant !== Grant.ALLOW) {
+        throw new ForbiddenException('Only HR or a Super Admin can make this a client project');
+      }
+      const org = await this.prisma.clientOrg.create({ data: { name: null }, select: { id: true } });
+      reservedOrgId = org.id;
+    }
+
     const project = await this.prisma.project.update({
       where: { id },
       data: {
@@ -218,6 +231,7 @@ export class ProjectsService {
         description: dto.description,
         pmId: dto.pmId,
         clientId: dto.clientId,
+        clientOrgId: reservedOrgId,
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         budgetAmount: dto.budgetAmount,

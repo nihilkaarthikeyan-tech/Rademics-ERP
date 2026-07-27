@@ -69,6 +69,15 @@ export class UpdateProjectDto {
   @MaxLength(200)
   name?: string;
 
+  /**
+   * Turn an existing project into client work, reserving its client ID. Only
+   * ever true: a project already bound to a client cannot be un-bound here,
+   * because that would orphan a live portal login from the work it can see.
+   */
+  @IsOptional()
+  @IsBoolean()
+  forClient?: boolean;
+
   @IsOptional()
   @IsEnum(ProjectStatus)
   status?: ProjectStatus;

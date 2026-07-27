@@ -97,6 +97,7 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState('');
+  const [reserving, setReserving] = useState(false);
 
   const loadTasks = useCallback(async () => {
     const r = await apiFetch<{ items: TaskRow[] }>(`/tasks?projectId=${id}&pageSize=200`);
@@ -135,6 +136,22 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
     router.replace(`/projects/${id}`, { scroll: false });
   }
 
+  /** Reserve a client ID for a project created without one. */
+  async function makeClientProject() {
+    setReserving(true);
+    try {
+      const updated = await apiFetch<ProjectDetail>(`/projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ forClient: true }),
+      });
+      setProject(updated);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Could not reserve a client ID');
+    } finally {
+      setReserving(false);
+    }
+  }
+
   const filtered = useMemo(
     () => (priorityFilter ? tasks.filter((t) => t.priority === priorityFilter) : tasks),
     [tasks, priorityFilter],
@@ -168,8 +185,12 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
       <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            {/* The reference a Super Admin types when giving a client this project. */}
+            {/* Both codes needed to create the client's account live here, together,
+                because this page is where anyone comes looking for them. */}
             <span className="font-mono text-sm text-slate-400">{formatProjectCode(project.number)}</span>
+            {project.clientOrg?.code ? (
+              <span className="font-mono text-sm font-medium text-accent">{project.clientOrg.code}</span>
+            ) : null}
             <h1 className="text-xl font-semibold text-slate-800">{project.name}</h1>
             <Badge tone="green">{project.status}</Badge>
           </div>
@@ -193,6 +214,26 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
               <span>Budget: ₹{Number(project.budgetAmount).toLocaleString()}</span>
             ) : null}
           </div>
+
+          {/* Client-facing tasks with no client ID: the work is marked for a client
+              who has no way to log in and see it. Reachable because the two
+              checkboxes are separate — one marks a task, the other makes the
+              project client work — and ticking only the first is an easy mistake. */}
+          {!project.clientOrg && tasks.some((t) => t.clientFacing) && CAN_CREATE_TASK.includes(me.role) ? (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <span>
+                Tasks here are marked for a client, but this isn&apos;t a client project — so no
+                client can see them.
+              </span>
+              <button
+                onClick={() => void makeClientProject()}
+                disabled={reserving}
+                className="rounded-md bg-amber-800 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-900 disabled:opacity-60"
+              >
+                {reserving ? 'Reserving…' : 'Make it a client project'}
+              </button>
+            </div>
+          ) : null}
         </div>
         {runsThisProject ? <Button onClick={() => setCreating(true)}>New task</Button> : null}
       </div>
