@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { ApiError } from './api-client';
+import { ApiError } from './api-error';
 import { errorMessage } from './error-message';
 
 /**

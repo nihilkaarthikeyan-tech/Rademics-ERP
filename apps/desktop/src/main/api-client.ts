@@ -1,16 +1,11 @@
 import { app, net } from 'electron';
 import type { Session } from 'electron';
 import type { AuthUserPayload, TodayStatus } from '../shared/ipc';
+import { ApiError } from './api-error';
 
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+// Re-exported so existing importers keep working; the class itself lives in an
+// electron-free module (see api-error.ts).
+export { ApiError };
 
 export interface AttendanceSessionPayload {
   id: string;

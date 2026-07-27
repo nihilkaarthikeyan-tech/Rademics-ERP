@@ -1,4 +1,4 @@
-import { ApiError } from './api-client';
+import { ApiError } from './api-error';
 
 /**
  * Chromium's network failure codes, which reach us verbatim when a request never
