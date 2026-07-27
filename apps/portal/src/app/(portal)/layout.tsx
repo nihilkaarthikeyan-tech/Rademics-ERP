@@ -105,12 +105,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-xs font-semibold text-white">
                 {me.email.slice(0, 1).toUpperCase()}
               </span>
-              <span className="flex flex-col leading-tight">
-                <span className="text-sm text-slate-500">{me.email}</span>
-                {me.clientCode ? (
-                  <span className="font-mono text-[11px] text-slate-400">{me.clientCode}</span>
-                ) : null}
-              </span>
+              <span className="text-sm text-slate-500">{me.email}</span>
             </div>
             <button
               onClick={logout}

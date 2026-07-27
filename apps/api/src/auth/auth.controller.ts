@@ -94,17 +94,15 @@ export class AuthController {
   }
 
   /**
-   * A client also gets their own client ID (CL-008) — it is how they and the
-   * company refer to each other, and it is the ONLY code they see. The project
-   * number is deliberately not here and not anywhere in the portal: it is an
-   * internal reference used to pair a client with their work, and knowing it
-   * would let a client reason about how many projects the company runs.
+   * No reference codes here at all (2026-07-27): the client sees neither the
+   * project number nor their own client ID. Both are internal handles — the
+   * project number pairs a client with their work at onboarding, the client ID
+   * is how STAFF refer to a client without knowing who they are. The client
+   * needs neither; they know their projects by name.
    */
   @Get('me')
-  async me(@CurrentUser() user: AuthUser): Promise<AuthUser & { clientCode?: string }> {
-    if (user.role !== 'CLIENT') return user;
-    const clientCode = await this.auth.clientCodeFor(user.id);
-    return clientCode ? { ...user, clientCode } : user;
+  me(@CurrentUser() user: AuthUser): AuthUser {
+    return user;
   }
 
   /** Inviting a user is "Create / edit employee" (Spec §3). */
