@@ -422,8 +422,15 @@ export default function ChatPage() {
                     }`}
                   >
                     {grouped ? (
-                      // Keeps the text aligned, and reveals the time on hover.
-                      <span className="w-7 shrink-0 pt-0.5 text-right text-[10px] leading-5 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100">
+                      // Keeps the text aligned with the avatar column and carries
+                      // the time. Always visible, never hover-only: there is no
+                      // hover on a touch screen, and a time you can only reveal
+                      // by pointing at it cannot be scanned down the column —
+                      // which is the whole reason a timestamp is on every line.
+                      <span
+                        className="w-7 shrink-0 pt-0.5 text-right text-[10px] leading-5 text-slate-300"
+                        title={new Date(m.createdAt).toLocaleString()}
+                      >
                         {clockTime(m.createdAt)}
                       </span>
                     ) : (
