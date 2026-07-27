@@ -25,9 +25,21 @@ export default function ProfilePage() {
           </div>
         </div>
         <dl className="mt-6 flex flex-col gap-3 border-t border-slate-100 pt-4 text-sm">
+          {/* Their reference when contacting us — quote this, not a project name. */}
+          {me?.clientCode ? (
+            <div className="flex justify-between">
+              <dt className="text-slate-400">Client ID</dt>
+              <dd className="font-mono font-semibold text-slate-900">{me.clientCode}</dd>
+            </div>
+          ) : null}
           <div className="flex justify-between"><dt className="text-slate-400">Email</dt><dd className="font-medium text-slate-700">{me?.email ?? '—'}</dd></div>
           <div className="flex justify-between"><dt className="text-slate-400">Role</dt><dd className="font-medium text-slate-700">Client</dd></div>
         </dl>
+        {me?.clientCode ? (
+          <p className="mt-4 border-t border-slate-100 pt-4 text-xs text-slate-400">
+            Quote your Client ID when you get in touch — it tells us who you are straight away.
+          </p>
+        ) : null}
       </div>
     </div>
   );

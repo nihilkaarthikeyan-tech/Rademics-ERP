@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
-import { DEFAULT_BUSINESS_RULES } from '@rademics/types';
+import { DEFAULT_BUSINESS_RULES, formatClientCode } from '@rademics/types';
 import { Role, ResourceType } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -206,6 +206,19 @@ export class AuthService {
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /**
+   * The client's own code (CL-008), or null if they aren't attached to one.
+   * Their single visible identifier — see the note on the /auth/me route about
+   * why the project number is not exposed alongside it.
+   */
+  async clientCodeFor(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { clientOrg: { select: { number: true } } },
+    });
+    return user?.clientOrg ? formatClientCode(user.clientOrg.number) : null;
   }
 
   // ─── Invite / set-password / reset (Spec §5.1) ─────────────────────────────

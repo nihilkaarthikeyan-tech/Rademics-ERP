@@ -71,4 +71,7 @@ export interface Me {
   email: string;
   role: string;
   resourceType: string;
+  /** The client's own reference, CL-008. The only code shown in the portal —
+   *  project numbers are internal and never reach here. */
+  clientCode?: string;
 }
