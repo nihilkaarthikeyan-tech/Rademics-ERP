@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, Megaphone, Pin } from 'lucide-react';
-import { Badge, Button, EmptyState, Input, Label, LoadingState } from '@rademics/ui';
+import { Badge, Button, EmptyState, Input, Label, LoadingState, PageGuide } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
 import { connectPresence } from '@/lib/socket';
@@ -171,6 +171,20 @@ export default function NoticesPage() {
       <p className="mt-1 text-sm text-slate-500">
         Company announcements. Pin the ones you want kept on top — pins are yours alone.
       </p>
+
+      {/* The genuine question here is "why isn't this just chat?" */}
+      <PageGuide
+        id="notices"
+        title="Notices or Chat?"
+        className="mt-4"
+        notes={[
+          canPost
+            ? 'Use a Notice for anything people must still be able to find next week — policy, holidays, process changes. It stays put and you can see who has acknowledged reading it. Use Chat for conversation, which scrolls away.'
+            : 'Notices are the things worth keeping: policy, holidays, process changes. They stay here rather than scrolling away like chat. Acknowledge one to confirm you have read it.',
+        ]}
+      />
+
+
 
       {canPost ? (
         <form

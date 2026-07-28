@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, ChevronRight, FolderKanban, MessageSquareText, TrendingUp } from 'lucide-react';
-import { Card, CardContent, EmptyState, LoadingState } from '@rademics/ui';
+import { Card, CardContent, EmptyState, LoadingState, PageGuide } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { AccessEnded } from '@/components/access-ended';
@@ -187,6 +187,20 @@ export default function PortalDashboard() {
     <div>
       <h1 className="text-xl font-semibold text-slate-900">My Projects</h1>
       <p className="mt-1 text-sm text-slate-500">Progress for your projects.</p>
+
+      {/* A client has nobody internal to ask. Say plainly what this place is for
+          and what they are allowed to do, rather than leaving them to guess. */}
+      <PageGuide
+        id="portal-dashboard"
+        title="What you can do here"
+        className="mt-4"
+        notes={[
+          'Open a project to follow its progress and read updates from the team as work is completed.',
+          'Need to know where something stands? Open the piece of work and press “Ask for an update” — the person responsible is notified directly.',
+          'Files shared with you can be downloaded from the project, and your invoices are under Invoices with a PDF for each.',
+          'This page refreshes on its own, so you can leave it open.',
+        ]}
+      />
 
       <div className="mt-6">
         {state === 'loading' ? (

@@ -1,5 +1,6 @@
 'use client';
 
+import { PageGuide } from '@rademics/ui';
 import { useMe } from '@/lib/me-context';
 import { MyLeave } from '@/components/leave/my-leave';
 import { LeaveApprovals } from '@/components/leave/leave-approvals';
@@ -25,8 +26,36 @@ export default function LeavePage() {
         </p>
       </div>
 
+      <PageGuide
+        id="leave"
+        title="How leave works"
+        className="mt-4"
+        steps={[
+          {
+            label: 'Apply with dates and a reason',
+            detail:
+              'only working days count — Sundays and holidays inside your dates do not use up your balance.',
+          },
+          {
+            label: 'Your team lead approves (HR if you have no lead)',
+            detail: 'nobody can approve their own leave, and you are notified either way.',
+          },
+          {
+            label: 'Approved leave appears on the team calendar',
+            detail: 'so everyone can see who is away before planning work.',
+          },
+        ]}
+        notes={[
+          'Casual and Earned leave are credited automatically each month — you do not need to ask for them. Sick leave is given for the year up front.',
+          'Asking for more days than you have is allowed: the extra days simply become unpaid leave, and the request tells you before you send it.',
+          isApprover
+            ? 'If you do not action a request within 48 hours it escalates automatically to the next level, and both you and the requester are told. You will also see a warning when a teammate is already off on the same dates.'
+            : 'If your approver does not respond within 48 hours the request escalates on its own — you do not need to chase anyone.',
+        ]}
+      />
+
       {isApprover ? (
-        <div className="mt-4">
+        <div className="mt-6">
           <LeaveApprovals />
         </div>
       ) : null}

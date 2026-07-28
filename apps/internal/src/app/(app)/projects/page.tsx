@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Badge, Button, Card, CardContent, EmptyState, ErrorState, Input, Label, LoadingState } from '@rademics/ui';
+import { Badge, Button, Card, CardContent, EmptyState, ErrorState, Input, Label, LoadingState, PageGuide } from '@rademics/ui';
 import { formatProjectCode } from '@rademics/types';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
@@ -64,6 +64,18 @@ export default function ProjectsPage() {
       </div>
 
       {creating ? <NewProjectModal onClose={() => setCreating(false)} onCreated={load} /> : null}
+
+      {CAN_CREATE.includes(me.role) ? (
+        <PageGuide
+          id="projects"
+          title="Before you create a project"
+          className="mt-4"
+          notes={[
+            'Tick “This is for a client” if the client should ever see progress. It reserves a client ID you will need to create their portal login — and it cannot be added as an afterthought without extra steps.',
+            'Appointing a manager is optional. Whoever you appoint can create, assign and review tasks for that project only. Leave it empty and you and HR run it.',
+          ]}
+        />
+      ) : null}
 
       <div className="mt-4">
         {state === 'loading' ? (

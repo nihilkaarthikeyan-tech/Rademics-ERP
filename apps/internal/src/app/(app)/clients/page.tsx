@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Badge, Button, Card, EmptyState, ErrorState, LoadingState } from '@rademics/ui';
+import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageGuide } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
@@ -75,6 +75,35 @@ export default function ClientsPage() {
           <Button>New client</Button>
         </Link>
       </div>
+
+      {/* The pairing of two codes is the step people get wrong: the client ID is
+          reserved back on the PROJECT, not here, so arriving at this page first
+          leaves you hunting for a code you have not created yet. */}
+      <PageGuide
+        id="clients"
+        title="How to give a client access"
+        className="mt-4"
+        steps={[
+          {
+            label: 'Create the project first, ticking “This is for a client”',
+            detail:
+              'that reserves a client ID (like CL-004) and gives the project a number (like RAD-007). Write both down.',
+          },
+          {
+            label: 'Add the client here using BOTH codes',
+            detail:
+              'pairing them is what stops an account being attached to the wrong company’s work. The system checks the pair before creating anything.',
+          },
+          {
+            label: 'They receive an email invite',
+            detail: 'they set their own password and log in to the client portal. You never see or set it.',
+          },
+        ]}
+        notes={[
+          'Clients only ever see tasks marked “client-facing”, comments shared with them, files you release, and their invoices. Internal notes, other clients, prices and staff pages stay invisible.',
+          'Deactivating a client ends their portal access immediately for everyone at that company. Their history and invoices stay on your side.',
+        ]}
+      />
 
       <Card className="mt-4 overflow-hidden">
         {state === 'loading' ? (

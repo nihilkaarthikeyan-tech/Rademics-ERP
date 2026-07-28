@@ -4,3 +4,4 @@ export { Card, CardHeader, CardTitle, CardContent } from './components/card';
 export { Input, Label } from './components/input';
 export { Badge } from './components/badge';
 export { Spinner, LoadingState, EmptyState, ErrorState } from './components/states';
+export { PageGuide } from './components/page-guide';

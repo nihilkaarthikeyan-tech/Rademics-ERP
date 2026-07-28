@@ -4,7 +4,7 @@ import { Suspense, use, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, TriangleAlert } from 'lucide-react';
-import { Badge, Button, Card, CardContent, EmptyState, Input, Label, LoadingState } from '@rademics/ui';
+import { Badge, Button, Card, CardContent, EmptyState, Input, Label, LoadingState, PageGuide } from '@rademics/ui';
 import { formatProjectCode } from '@rademics/types';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
@@ -293,6 +293,19 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
             </span>
           ) : null}
         </div>
+      ) : null}
+
+      {runsThisProject && tasks.length > 0 ? (
+        <PageGuide
+          id="project-board"
+          title="How the board works"
+          className="mt-4"
+          notes={[
+            'Work moves left to right: Draft → Assigned → Acknowledged → In progress → In review → Completed. Cards are not dragged — the person responsible presses the button for their step, so every move is recorded with who did it and when.',
+            'Assigning a task notifies that person immediately and puts it in their My Work. If nobody accepts it within a day the system reminds them, and after two days it tells you.',
+            'Tick “The client will see this” on a task to show it in the client’s portal. Everything else stays internal.',
+          ]}
+        />
       ) : null}
 
       {/* View toggle + filters — pointless before any work exists */}
