@@ -17,6 +17,35 @@
 # ─────────────────────────────────────────────────────────────────────────────
 name: rademics-erp
 
+# ONE build definition, shared by all three app services below.
+#
+# It used to live only under `api`, so `docker compose build internal` (or
+# `portal`) had nothing to build: it silently succeeded, did nothing, and the
+# following `up -d` restarted the container on the STALE image — a deploy that
+# reports success while shipping nothing. Anchoring it here means every app
+# service can be named in a build command and actually rebuild.
+x-app-build: &app-build
+  context: .
+  dockerfile: Dockerfile
+  args:
+    NEXT_PUBLIC_API_URL: "https://api.52digit.com/api"
+    # Public nginx vhost for MinIO (see the minio service's port comment below).
+    NEXT_PUBLIC_STORAGE_URL: "https://storage.52digit.com"
+    PUBLIC_HTTPS: "true"
+    # Real values come from .env.production via --env-file (see header note) —
+    # nothing secret-shaped is typed directly into this tracked file.
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: "${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}"
+    NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
+    NEXT_PUBLIC_PORTAL_SENTRY_DSN: "${NEXT_PUBLIC_PORTAL_SENTRY_DSN:-}"
+    # Release + source map upload (Spec §11). SENTRY_RELEASE should be the git SHA
+    # being deployed — the runbook exports it from `git rev-parse` before building.
+    # Unset => no release tag and no upload; the build still succeeds.
+    SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+    SENTRY_ORG: "${SENTRY_ORG:-}"
+    SENTRY_PROJECT: "${SENTRY_PROJECT:-}"
+    SENTRY_PORTAL_PROJECT: "${SENTRY_PORTAL_PROJECT:-}"
+    SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN:-}"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -95,27 +124,7 @@ services:
 
   api:
     image: rademics-erp:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: "https://api.52digit.com/api"
-        # Public nginx vhost for MinIO (see the minio service's port comment above).
-        NEXT_PUBLIC_STORAGE_URL: "https://storage.52digit.com"
-        PUBLIC_HTTPS: "true"
-        # Real values come from .env.production via --env-file (see header note) —
-        # nothing secret-shaped is typed directly into this tracked file.
-        NEXT_PUBLIC_TURNSTILE_SITE_KEY: "${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}"
-        NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
-        NEXT_PUBLIC_PORTAL_SENTRY_DSN: "${NEXT_PUBLIC_PORTAL_SENTRY_DSN:-}"
-        # Release + source map upload (Spec §11). SENTRY_RELEASE should be the git SHA
-        # being deployed — the runbook exports it from `git rev-parse` before building.
-        # Unset => no release tag and no upload; the build still succeeds.
-        SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
-        SENTRY_ORG: "${SENTRY_ORG:-}"
-        SENTRY_PROJECT: "${SENTRY_PROJECT:-}"
-        SENTRY_PORTAL_PROJECT: "${SENTRY_PORTAL_PROJECT:-}"
-        SENTRY_AUTH_TOKEN: "${SENTRY_AUTH_TOKEN:-}"
+    build: *app-build
     restart: unless-stopped
     env_file: .env.production
     environment:
@@ -139,6 +148,7 @@ services:
 
   internal:
     image: rademics-erp:latest
+    build: *app-build
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -157,6 +167,7 @@ services:
 
   portal:
     image: rademics-erp:latest
+    build: *app-build
     restart: unless-stopped
     environment:
       NODE_ENV: production
