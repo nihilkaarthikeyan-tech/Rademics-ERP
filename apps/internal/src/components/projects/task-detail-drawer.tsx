@@ -27,6 +27,7 @@ import {
 } from '@rademics/types';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { TaskFiles } from './task-files';
 
 export interface AssignableUser {
@@ -269,6 +270,21 @@ export function TaskDetailDrawer({
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Follow the task while the panel is open.
+   *
+   * The board behind this panel already refreshed itself on 'task:changed', but
+   * the panel did not — so a manager watching a task sat on the snapshot taken
+   * when they opened it. The assignee accepted, started, submitted; this pane
+   * still read "Waiting for Karthi to accept the task" until it was closed and
+   * reopened. Worse than merely stale: it is the one screen a manager watches
+   * precisely BECAUSE they are waiting for the other side to move.
+   *
+   * Paused while a sub-panel is open (a reason being typed, an assignee being
+   * picked) — a refetch mid-sentence would swap the state under the cursor.
+   */
+  useAutoRefresh(load, { events: ['task:changed'], enabled: !anyPanelOpen });
 
   // Escape closes the open inline panel first; with none open it closes the drawer.
   const closePanels = useCallback(() => {
