@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/node';
 import type { Request } from 'express';
 import { IS_PUBLIC_META } from './decorators';
+import { SessionStateService } from './session-state.service';
 import type { AuthUser } from './auth-user';
 
 export interface AccessTokenPayload {
@@ -18,6 +19,8 @@ export interface AccessTokenPayload {
   role: AuthUser['role'];
   resourceType: AuthUser['resourceType'];
   desktopCheckInRequired: AuthUser['desktopCheckInRequired'];
+  /** Issued-at, seconds. Added by jsonwebtoken; used to date the token against revocation. */
+  iat?: number;
 }
 
 /**
@@ -30,6 +33,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly sessions: SessionStateService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -43,22 +47,32 @@ export class JwtAuthGuard implements CanActivate {
     const token = this.extractToken(req);
     if (!token) throw new UnauthorizedException('Missing access token');
 
+    let payload: AccessTokenPayload;
     try {
-      const payload = await this.jwt.verifyAsync<AccessTokenPayload>(token, {
+      payload = await this.jwt.verifyAsync<AccessTokenPayload>(token, {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
       });
-      req.user = {
-        id: payload.sub,
-        email: payload.email,
-        role: payload.role,
-        resourceType: payload.resourceType,
-        desktopCheckInRequired: payload.desktopCheckInRequired,
-      };
-      this.tagSentry(req.user);
-      return true;
     } catch {
       throw new UnauthorizedException('Invalid or expired access token');
     }
+
+    // A signature only proves the token was ours when minted. Deactivation and
+    // role changes happen after that, and this token could have up to its full
+    // lifetime left — so ask whether the account is still entitled to it.
+    // Thrown outside the try above deliberately: this must surface as itself,
+    // not be swallowed and relabelled "invalid token".
+    const reason = await this.sessions.rejectionReason(payload.sub, payload.iat);
+    if (reason) throw new UnauthorizedException(reason);
+
+    req.user = {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      resourceType: payload.resourceType,
+      desktopCheckInRequired: payload.desktopCheckInRequired,
+    };
+    this.tagSentry(req.user);
+    return true;
   }
 
   /**

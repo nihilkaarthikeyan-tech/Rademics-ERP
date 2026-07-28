@@ -8,6 +8,10 @@ export const FILE_CLEANUP_REPEAT_ID = 'file-cleanup';
 export const DEFAULT_BLOCKED_EXTENSIONS = [
   'exe', 'msi', 'bat', 'cmd', 'com', 'scr', 'pif', 'cpl', 'jar', 'js', 'vbs',
   'ps1', 'sh', 'app', 'dll', 'deb', 'rpm',
+  // Markup renders rather than downloads. Downloads honour a caller-supplied
+  // `inline` flag, so an uploaded page would run on the storage subdomain —
+  // a convincing place to host an internal phishing form.
+  'html', 'htm', 'xhtml', 'svg', 'xml', 'mhtml', 'shtml',
 ];
 export const DEFAULT_PRESIGNED_MINUTES = 10; // presigned URL lifetime (§24)
 export const DEFAULT_UPLOAD_LIMIT_MB = 100; // matches DEFAULT_BUSINESS_RULES.fileUploadLimitMb

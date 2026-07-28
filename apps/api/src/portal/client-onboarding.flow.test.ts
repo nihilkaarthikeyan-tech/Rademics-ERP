@@ -200,7 +200,10 @@ function build() {
         ? Grant.ALLOW
         : Grant.DENY,
   } as any;
-  const auth = new AuthService(prisma, jwt, config, audit, email, capabilities);
+  // Session revocation now also stamps the user and drops the cached state, so
+  // an access token issued before a deactivation stops working immediately.
+  const sessions = { invalidate: () => undefined, rejectionReason: async () => null } as any;
+  const auth = new AuthService(prisma, jwt, config, audit, email, capabilities, sessions);
   const clientAdmin = new ClientAdminService(prisma, audit, auth);
   return { db, emails, audits, auth, clientAdmin };
 }

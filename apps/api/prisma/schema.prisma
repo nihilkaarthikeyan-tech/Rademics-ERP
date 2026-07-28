@@ -289,6 +289,13 @@ model User {
   announcements       Announcement[]     @relation("AnnouncementAuthor")
   announcementPins    AnnouncementPin[]
   announcementReads   AnnouncementRead[]
+  /// Set whenever every session for this user must stop being trusted —
+  /// deactivation, a role change, a password change. Access tokens are stateless
+  /// and live ~15 minutes, so revoking only refresh tokens left a fired employee
+  /// (or a demoted one) working with their old rights until the token expired.
+  /// The guard rejects any access token issued before this moment.
+  sessionsRevokedAt DateTime?
+
   chatMessages        ChatMessage[]      @relation("ChatAuthor")
   deletedChatMessages ChatMessage[]      @relation("ChatMessageDeleter")
   pinnedChatMessages  ChatMessage[]      @relation("ChatMessagePinner")

@@ -14,6 +14,7 @@ import { Role, ResourceType, Grant } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CapabilityService } from '../rbac/capability.service';
+import { SessionStateService } from './session-state.service';
 import { EmailProducer } from '../queue/email.producer';
 import { randomUUID } from 'node:crypto';
 import { generateOpaqueToken, hashToken } from './tokens';
@@ -33,6 +34,14 @@ export interface IssuedTokens {
 const RULES = DEFAULT_BUSINESS_RULES;
 const INVITE_TTL_DAYS = 7;
 
+/**
+ * Verified against when the account does not exist, so a miss costs the same as
+ * a hit. A real Argon2 hash of a value nobody can log in with — it is never
+ * compared to anything but a doomed attempt.
+ */
+const DUMMY_PASSWORD_HASH =
+  '$argon2id$v=19$m=19456,t=2,p=1$DwBvVE8Zc09RHWY8WAsc5w$zZOmWrw1VdScRV/9ZhTu0LPDY9L+Idv+/zN08Jbn56c';
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -44,6 +53,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly email: EmailProducer,
     private readonly capabilities: CapabilityService,
+    private readonly sessions: SessionStateService,
   ) {}
 
   // ─── Login ────────────────────────────────────────────────────────────────
@@ -55,6 +65,11 @@ export class AuthService {
     const invalid = () => new UnauthorizedException('Invalid email or password');
 
     if (!user || !user.passwordHash || user.status !== 'ACTIVE') {
+      // Spend the same time as a real check before failing. The message above is
+      // deliberately generic to avoid confirming which addresses exist — but
+      // skipping the hash made a miss return in milliseconds while a hit paid
+      // the full Argon2 cost, so the answer was readable from the clock alone.
+      await argonVerify(DUMMY_PASSWORD_HASH, password).catch(() => false);
       await this.audit.record({
         actorEmail: email,
         action: 'LOGIN_FAILED',
@@ -204,11 +219,25 @@ export class AuthService {
     }
   }
 
+  /**
+   * End every session for a user — including access tokens already issued.
+   *
+   * Revoking refresh tokens alone was not enough: the access token sitting in
+   * their browser stays valid until it expires, so a deactivated employee kept
+   * working and a demoted one kept their old rights for that window. Stamping
+   * the user makes the guard refuse anything minted before now.
+   */
   async revokeAllForUser(userId: string): Promise<void> {
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { sessionsRevokedAt: new Date() },
+    });
+    // Don't wait for the cache to age out — this is the request that revoked them.
+    this.sessions.invalidate(userId);
   }
 
   // ─── Invite / set-password / reset (Spec §5.1) ─────────────────────────────

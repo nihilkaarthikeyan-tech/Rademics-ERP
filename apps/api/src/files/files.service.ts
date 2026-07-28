@@ -114,6 +114,23 @@ export class FilesService {
     const stat = await this.storage.stat(version.storageKey);
     if (!stat) throw new BadRequestException('Upload not found in storage — did the PUT complete?');
 
+    // The size limit was only checked at init, against a number the client
+    // supplied — and `sizeBytes` is optional, so omitting it skipped the check
+    // entirely. This is the first point where the REAL size is known. Storage
+    // shares a host with the database, so an unbounded upload is a disk-space
+    // attack on the whole system.
+    const rules = await this.fileRules();
+    if (stat.size > rules.maxBytes) {
+      await this.storage.remove(version.storageKey).catch(() => undefined);
+      await this.prisma.fileVersion.update({
+        where: { id: versionId },
+        data: { scanStatus: 'ERROR', sizeBytes: stat.size },
+      });
+      throw new BadRequestException(
+        `That file is ${Math.round(stat.size / 1_048_576)} MB — the limit is ${Math.round(rules.maxBytes / 1_048_576)} MB.`,
+      );
+    }
+
     await this.prisma.fileVersion.update({
       where: { id: versionId },
       data: { scanStatus: 'SCANNING', sizeBytes: stat.size },
