@@ -25,4 +25,15 @@ export class ChatDto {
   @MinLength(1)
   @MaxLength(500)
   question!: string;
+
+  /**
+   * Prior turns, so "what about employees?" knows what it is following on from.
+   * Sent by the client rather than stored server-side: the conversation lives in
+   * the open tab, and nothing here is worth persisting beyond it. Trimmed hard —
+   * this is context, not an archive.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  history?: { role: 'user' | 'assistant'; content: string }[];
 }

@@ -7,7 +7,13 @@ import { apiFetch, ApiError } from '@/lib/api';
 interface ChatResponse { text: string; citations?: string[] }
 interface Turn { role: 'user' | 'assistant'; text: string; citations?: string[] }
 
-const SUGGESTIONS = ['What is overdue?', 'Who is free this week?', 'How many open tasks do I have?'];
+const SUGGESTIONS = [
+  'What is overdue?',
+  'Who came late today?',
+  'Who is free this week?',
+  'What needs my approval?',
+  'How are our projects going?',
+];
 
 /** Scoped AI assistant (Spec §7): read-only, cited, refuses out-of-scope. Degrades to
  *  rule-based retrieval when no provider key is configured. */
@@ -25,7 +31,15 @@ export default function AssistantPage() {
     setTurns((t) => [...t, { role: 'user', text: question }]);
     setQ('');
     try {
-      const res = await apiFetch<ChatResponse>('/ai/chat', { method: 'POST', body: JSON.stringify({ question }) });
+      // Send the conversation so far, so follow-ups like "what about the
+      // others?" resolve against what was just asked.
+      const res = await apiFetch<ChatResponse>('/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          question,
+          history: turns.slice(-8).map((t) => ({ role: t.role, content: t.text })),
+        }),
+      });
       setTurns((t) => [...t, { role: 'assistant', text: res.text, citations: res.citations }]);
     } catch (err) {
       // Raw server/validation messages read like errors in a chat — keep it human.

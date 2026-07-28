@@ -34,6 +34,11 @@ export class AiController {
   @Post('chat')
   @RequireCapability('ai.assistant.use')
   chat(@Body() dto: ChatDto, @CurrentUser() user: AuthUser, @Req() req: Request) {
-    return this.ai.chat(dto.question, user, reqMeta(req));
+    // Only the two shapes the model understands survive; anything else a caller
+    // invents is dropped rather than forwarded into the prompt.
+    const history = (dto.history ?? [])
+      .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string')
+      .slice(-8);
+    return this.ai.chat(dto.question, user, reqMeta(req), history);
   }
 }

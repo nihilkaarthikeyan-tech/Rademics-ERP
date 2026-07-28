@@ -5,10 +5,27 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SettingsService } from '../settings/settings.service';
 import { AttendanceService } from '../attendance/attendance.service';
+import { CapabilityService } from '../rbac/capability.service';
 import { AiGatewayService, AiUnavailableError } from './ai-gateway.service';
+import { AiToolRunner } from './ai-tool-runner';
+import { AI_SYSTEM_PROMPT, AI_TOOLS } from './ai-tools';
 import type { AuthUser } from '../auth/auth-user';
 
 interface Meta { ip?: string | null; userAgent?: string | null }
+
+/** Human-readable source labels shown under an answer. */
+const TOOL_LABELS: Record<string, string> = {
+  get_overdue_tasks: 'Overdue tasks',
+  get_my_tasks: 'Your tasks',
+  get_team_capacity: 'Team capacity',
+  get_my_attendance_today: 'Your attendance',
+  get_team_attendance_today: 'Team attendance',
+  get_my_leave: 'Your leave',
+  get_pending_approvals: 'Your approvals',
+  get_projects: 'Projects',
+  find_people: 'Staff directory',
+  get_finance_summary: 'Invoices',
+};
 
 const ALL_PROJECTS = 'ALL' as const;
 const OPEN_STATUSES: TaskStatus[] = ['ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW'];
@@ -28,7 +45,13 @@ export class AiService {
     private readonly settings: SettingsService,
     private readonly attendance: AttendanceService,
     private readonly gateway: AiGatewayService,
-  ) {}
+    private readonly capabilities: CapabilityService,
+  ) {
+    this.tools = new AiToolRunner(this.prisma, this.capabilities, this.attendance);
+  }
+
+  /** Executes what the model asks for, under the asker's own permissions. */
+  private readonly tools: AiToolRunner;
 
   // ── Rate limit (Spec §7, §10): per-user daily counter ──
   private async enforceRateLimit(user: AuthUser): Promise<void> {
@@ -276,9 +299,69 @@ export class AiService {
     return { suggestions: ranked.slice(0, 5), note: 'AI-assisted suggestion — the assigner makes the final call.' };
   }
 
-  // ── Feature 4: Scoped chat assistant — read-only, cited, refuses out-of-scope (Spec §7) ──
-  async chat(question: string, user: AuthUser, meta: Meta) {
+  /**
+   * Feature 4 — the assistant (Spec §7).
+   *
+   * Primary path: hand the model a menu of read-only tools and let it choose.
+   * The old approach guessed from keywords which single query to run, so it
+   * could only answer the handful of questions someone had thought to hardcode
+   * — "who came late today?" matched the attendance branch and came back with
+   * the ASKER's own record, and a follow-up like "what about employees?" had no
+   * idea what had just been asked.
+   *
+   * `history` carries the conversation so follow-ups resolve. Tool execution
+   * re-derives permissions from `user` on every call (see AiToolRunner), so the
+   * model choosing a tool is never the model choosing an audience.
+   *
+   * Fallback: with no provider key — or if the call fails — we drop to the
+   * deterministic keyword path below, which still answers the common questions
+   * (§25 graceful degradation).
+   */
+  async chat(
+    question: string,
+    user: AuthUser,
+    meta: Meta,
+    history: { role: 'user' | 'assistant'; content: string }[] = [],
+  ) {
     await this.enforceRateLimit(user);
+
+    try {
+      const messages = [
+        ...history.slice(-8).map((m) => ({ role: m.role, content: m.content.slice(0, 2000) })),
+        { role: 'user' as const, content: question },
+      ];
+      const { text, toolsUsed } = await this.gateway.converse(
+        'chat',
+        `${AI_SYSTEM_PROMPT}\n\nThe person asking is ${user.email} (role: ${user.role}). Today is ${new Date().toISOString().slice(0, 10)}.`,
+        messages,
+        AI_TOOLS,
+        (name, args) => this.tools.run(name, args, user),
+      );
+      if (text.trim()) {
+        await this.audit.record({
+          actorId: user.id,
+          actorEmail: user.email,
+          action: 'AI_CHAT',
+          entityType: 'AiChat',
+          after: { tools: [...new Set(toolsUsed)] },
+          ...meta,
+        });
+        return {
+          ...this.label(text.trim(), true),
+          citations: [...new Set(toolsUsed)].map((t) => TOOL_LABELS[t] ?? t),
+        };
+      }
+      // Empty answer: fall through to the deterministic path rather than
+      // returning a blank bubble.
+    } catch (err) {
+      if (!(err instanceof AiUnavailableError)) throw err;
+    }
+
+    return this.chatFallback(question, user, meta);
+  }
+
+  /** Deterministic keyword answers — used when no AI provider is reachable. */
+  private async chatFallback(question: string, user: AuthUser, meta: Meta) {
     const q = question.toLowerCase().trim();
 
     // Greetings/small-talk get a friendly orientation, not a refusal (or worse,

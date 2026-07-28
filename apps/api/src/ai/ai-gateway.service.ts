@@ -86,6 +86,105 @@ export class AiGatewayService {
     }
   }
 
+  /**
+   * A conversation in which the model may CALL BACK for data.
+   *
+   * The alternative — guessing from the question which single query to run, then
+   * asking the model to phrase the result — is what the assistant used to do,
+   * and it could only ever answer the handful of questions someone had thought
+   * to hardcode. "Who came late today?" fell through to the caller's own record.
+   *
+   * Here the model is handed a menu of read-only tools and picks. We execute
+   * each pick through `runTool`, which applies the SAME permission checks as the
+   * REST API, so what comes back is already filtered to what this person may
+   * see. The model never touches the database and cannot widen its own access.
+   *
+   * Rounds are capped: a model that keeps calling tools is looping, not working.
+   */
+  async converse(
+    feature: AiFeature,
+    system: string,
+    messages: { role: 'user' | 'assistant'; content: string }[],
+    tools: { name: string; description: string; parameters: Record<string, unknown> }[],
+    runTool: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+    maxRounds = 4,
+  ): Promise<{ text: string; toolsUsed: string[] }> {
+    const { provider, model } = (await this.getConfig()).features[feature];
+    const key = this.keyFor(provider);
+    // Tool calling is wired for the OpenAI-shaped API only. Anything else falls
+    // back to the deterministic path rather than pretending to support it.
+    if (!key || provider !== 'openai') throw new AiUnavailableError();
+
+    const isReasoningModel = /^(gpt-5|o\d)/.test(model);
+    const convo: Record<string, unknown>[] = [
+      { role: 'system', content: system },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+    const toolDefs = tools.map((t) => ({
+      type: 'function',
+      function: { name: t.name, description: t.description, parameters: t.parameters },
+    }));
+    const toolsUsed: string[] = [];
+
+    try {
+      for (let round = 0; round < maxRounds; round++) {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            model,
+            ...(isReasoningModel
+              ? { max_completion_tokens: 1200, reasoning_effort: 'minimal' }
+              : { max_tokens: 1200 }),
+            messages: convo,
+            tools: toolDefs,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        const json = (await res.json()) as {
+          choices?: { message?: { content?: string; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
+        };
+        const msg = json.choices?.[0]?.message;
+        if (!msg) throw new Error('empty response');
+
+        const calls = msg.tool_calls ?? [];
+        if (calls.length === 0) {
+          return { text: msg.content ?? '', toolsUsed };
+        }
+
+        convo.push(msg as unknown as Record<string, unknown>);
+        for (const call of calls) {
+          let args: Record<string, unknown> = {};
+          try {
+            args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>;
+          } catch {
+            /* a malformed argument blob is the model's error to recover from */
+          }
+          let result: unknown;
+          try {
+            result = await runTool(call.function.name, args);
+            toolsUsed.push(call.function.name);
+          } catch (err) {
+            // Hand refusals back as data. A tool the caller may not use is a
+            // fact the model should relay, not a crash.
+            result = { error: (err as Error).message };
+          }
+          convo.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify(result ?? null).slice(0, 12_000),
+          });
+        }
+      }
+      // Out of rounds: answer from whatever was gathered rather than silently
+      // returning nothing.
+      return { text: '', toolsUsed };
+    } catch (err) {
+      this.logger.warn(`AI converse failed: ${(err as Error).message}`);
+      throw new AiUnavailableError((err as Error).message);
+    }
+  }
+
   private async anthropic(key: string, model: string, system: string, prompt: string, maxTokens: number): Promise<string> {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
