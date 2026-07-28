@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -9,9 +10,10 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
 import { DEFAULT_BUSINESS_RULES } from '@rademics/types';
-import { Role, ResourceType } from '@rademics/permissions';
+import { Role, ResourceType, Grant } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { CapabilityService } from '../rbac/capability.service';
 import { EmailProducer } from '../queue/email.producer';
 import { randomUUID } from 'node:crypto';
 import { generateOpaqueToken, hashToken } from './tokens';
@@ -41,6 +43,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly audit: AuditService,
     private readonly email: EmailProducer,
+    private readonly capabilities: CapabilityService,
   ) {}
 
   // ─── Login ────────────────────────────────────────────────────────────────
@@ -219,6 +222,16 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException('A user with this email already exists');
 
+    // Creating an account is NOT the same right as choosing its power.
+    //
+    // people.employee.create_edit is held by HR; people.roles.assign is Super
+    // Admin only, and EmployeesService.setRole guards it carefully. But both
+    // entry points into this method (POST /employees and POST /auth/invite)
+    // accepted any role in the enum — so HR could invite `SUPER_ADMIN` at an
+    // address they control, follow the emailed link, and hold the whole system.
+    // The dedicated role endpoint was simply routed around.
+    await this.assertMayGrantRole(actor, input.role);
+
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -248,6 +261,39 @@ export class AuthService {
     });
 
     return { id: user.id };
+  }
+
+  /**
+   * May `actor` create an account holding `role`?
+   *
+   * Whoever can hand out roles (people.roles.assign — Super Admin) may create
+   * any of them. Everyone else who can add staff is limited to roles that
+   * cannot escalate: an ordinary hire, or a team lead. CLIENT is never created
+   * this way — client accounts are org-bound and made by the onboarding flow.
+   */
+  private async assertMayGrantRole(actor: AuthUser, role: Role): Promise<void> {
+    // A CLIENT account is portal administration, not hiring — and it is a real
+    // path (client onboarding creates them through here), so gate it on the
+    // capability that owns clients rather than refusing outright. HR holds
+    // people.employee.create_edit but NOT portal.users.manage, so this still
+    // stops the staff-creation endpoints from minting client logins.
+    if (role === Role.CLIENT) {
+      const portal = await this.capabilities.resolveGrant(actor.role, actor.resourceType, 'portal.users.manage');
+      if (portal !== Grant.ALLOW) {
+        throw new ForbiddenException('Only a Super Admin can create client portal accounts.');
+      }
+      return;
+    }
+
+    const grant = await this.capabilities.resolveGrant(actor.role, actor.resourceType, 'people.roles.assign');
+    if (grant === Grant.ALLOW) return;
+
+    const SAFE_TO_CREATE: Role[] = [Role.EMPLOYEE, Role.TEAM_LEAD];
+    if (!SAFE_TO_CREATE.includes(role)) {
+      throw new ForbiddenException(
+        `You can create Employee and Team Lead accounts. Only a Super Admin can create a ${role.replace('_', ' ')} account.`,
+      );
+    }
   }
 
   async setPasswordFromToken(rawToken: string, password: string, meta: RequestMeta): Promise<void> {

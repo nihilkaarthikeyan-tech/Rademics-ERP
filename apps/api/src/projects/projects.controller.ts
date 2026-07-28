@@ -26,8 +26,8 @@ export class ProjectsController {
   // just active staff names — the same directory they can already see — and the
   // assignment itself is authorised per project in TasksService.
   @Get('assignable-users')
-  assignableUsers() {
-    return this.projects.listAssignableUsers();
+  assignableUsers(@CurrentUser() user: AuthUser) {
+    return this.projects.listAssignableUsers(user);
   }
 
   /** Candidates for a project's manager field — HR/Super Admin appoint from here. */

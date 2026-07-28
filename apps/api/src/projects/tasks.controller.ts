@@ -130,15 +130,22 @@ export class TasksController {
   toggleChecklistItem(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.tasks.toggleChecklistItem(id, itemId);
+    return this.tasks.toggleChecklistItem(id, itemId, user);
   }
 
   // ── Watchers ──
+  // These take the caller now: without it, anyone could add themselves as a
+  // watcher on any task, and watchership was accepted as proof of access.
   @Post(':id/watchers')
   @RequireCapability('tasks.comment')
-  addWatcher(@Param('id', ParseUUIDPipe) id: string, @Body('userId', ParseUUIDPipe) userId: string) {
-    return this.tasks.addWatcher(id, userId);
+  addWatcher(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tasks.addWatcher(id, userId, user);
   }
 
   @Delete(':id/watchers/:userId')
@@ -146,7 +153,8 @@ export class TasksController {
   removeWatcher(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.tasks.removeWatcher(id, userId);
+    return this.tasks.removeWatcher(id, userId, user);
   }
 }

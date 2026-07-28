@@ -13,7 +13,7 @@ import {
 import type { Server, Socket } from 'socket.io';
 import type { AccessTokenPayload } from '../auth/jwt-auth.guard';
 import { PresenceService } from './presence.service';
-import { PRESENCE_ROOM } from './attendance.constants';
+import { PRESENCE_ROOM, STAFF_ROOM } from './attendance.constants';
 
 /**
  * Socket.IO real-time layer (Spec §12). Authenticates the handshake with the same
@@ -42,9 +42,9 @@ export class PresenceGateway implements OnGatewayInit, OnGatewayConnection {
   }
 
   async handleConnection(client: Socket): Promise<void> {
-    const token =
-      (client.handshake.auth?.token as string | undefined) ??
-      (typeof client.handshake.query.token === 'string' ? client.handshake.query.token : undefined);
+    // Handshake auth only. The query-string fallback put a live bearer token
+    // into nginx and Cloudflare access logs on every connection.
+    const token = client.handshake.auth?.token as string | undefined;
 
     if (!token) {
       client.disconnect(true);
@@ -55,9 +55,20 @@ export class PresenceGateway implements OnGatewayInit, OnGatewayConnection {
       const payload = await this.jwt.verifyAsync<AccessTokenPayload>(token, {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
       });
+
+      // A valid token is not the same as belonging here. The portal has no
+      // socket layer, so a CLIENT presenting one took their token out of the
+      // page deliberately — and every broadcast on this namespace is internal.
+      if (payload.role === 'CLIENT') {
+        this.logger.warn(`Rejected socket from CLIENT account ${payload.sub}`);
+        client.disconnect(true);
+        return;
+      }
+
       client.data.userId = payload.sub;
       client.data.role = payload.role;
       await client.join(PRESENCE_ROOM);
+      await client.join(STAFF_ROOM);
       await client.join(`user:${payload.sub}`);
     } catch {
       client.disconnect(true); // fail closed — invalid/expired token gets no stream
@@ -77,6 +88,7 @@ export class PresenceGateway implements OnGatewayInit, OnGatewayConnection {
     const userId = client.data.userId as string | undefined;
     if (!userId) return;
     const name = typeof payload?.name === 'string' ? payload.name.slice(0, 80) : '';
-    client.broadcast.emit('chat:typing', { userId, name });
+    // Staff room, not the whole namespace — chat is internal.
+    client.broadcast.to(STAFF_ROOM).emit('chat:typing', { userId, name });
   }
 }

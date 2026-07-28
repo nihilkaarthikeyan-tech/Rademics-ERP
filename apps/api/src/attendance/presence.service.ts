@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Server } from 'socket.io';
-import { PRESENCE_ROOM } from './attendance.constants';
+import { PRESENCE_ROOM, STAFF_ROOM } from './attendance.constants';
 
 /**
  * In-memory presence cache + broadcast helper for the "who's online now" layer
@@ -45,14 +45,22 @@ export class PresenceService {
   }
 
   /**
-   * Push to every connected socket on this namespace — the company chat's one
-   * general room (2026-07-26). Safe as a broadcast: only the staff app connects
-   * to this namespace (the client portal has no socket layer).
+   * Push to every STAFF socket — company chat, announcements, and the
+   * task/leave/attendance/invoice change nudges.
+   *
+   * Deliberately the staff room and not `server.emit`. This used to broadcast to
+   * the whole namespace on the reasoning that only the staff app connects to
+   * it; that was an assumption about well-behaved clients, not a control. A
+   * client who lifted their own token out of the portal page could open a
+   * socket and receive every internal chat message, every announcement, and a
+   * change feed covering every project in the company. The gateway now refuses
+   * CLIENT handshakes, and this keeps the blast radius correct even if one ever
+   * gets through.
    */
   emitToAll(event: string, payload: unknown): void {
     if (!this.server) return;
     try {
-      this.server.emit(event, payload);
+      this.server.to(STAFF_ROOM).emit(event, payload);
     } catch (err) {
       this.logger.warn(`emitToAll failed: ${(err as Error).message}`);
     }

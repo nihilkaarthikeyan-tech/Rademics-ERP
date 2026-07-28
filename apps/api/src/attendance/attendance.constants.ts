@@ -15,3 +15,12 @@ export const ATTENDANCE_IDLE_SWEEP_REPEAT_ID = 'attendance-idle-sweep';
 
 /** Socket.IO room every presence subscriber joins (Spec §5.3 who's-online). */
 export const PRESENCE_ROOM = 'presence';
+
+/**
+ * Every non-CLIENT socket joins this. Broadcasts go here rather than to the
+ * whole namespace: a client account that reached the socket would otherwise
+ * receive the internal chat, announcements, and a task:changed feed covering
+ * every project in the company. "Only the staff app connects" was an assumption
+ * about well-behaved clients, not a control.
+ */
+export const STAFF_ROOM = 'staff';

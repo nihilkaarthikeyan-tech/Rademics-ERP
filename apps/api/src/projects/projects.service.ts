@@ -252,7 +252,15 @@ export class ProjectsService {
   }
 
   /** Active internal users who can hold tasks (Spec §5.9 assignment screens, §24). */
-  async listAssignableUsers() {
+  async listAssignableUsers(user: AuthUser) {
+    // Carries no capability on purpose — an employee appointed to run a project
+    // needs the picker, and no capability expresses that. But "no capability"
+    // was read as "no floor", so a CLIENT token reached it and got the whole
+    // staff roster WITH email addresses — flatly contradicting the effort the
+    // portal spends never revealing which individual works on their project.
+    if (user.role === 'CLIENT') {
+      throw new ForbiddenException('Clients access their work through the portal');
+    }
     // openTasks = live workload, so whoever assigns can pick the free person,
     // not just a familiar name. "Open" mirrors My Work: work not yet finished.
     const users = await this.prisma.user.findMany({
@@ -260,7 +268,8 @@ export class ProjectsService {
       select: {
         id: true,
         name: true,
-        email: true,
+        // Email is deliberately NOT selected: an assignment picker needs a name
+        // and a workload, and every address returned is one more thing to leak.
         role: true,
         resourceType: true,
         _count: {

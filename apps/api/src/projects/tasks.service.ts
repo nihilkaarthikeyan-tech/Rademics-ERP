@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -76,7 +76,7 @@ export class TasksService {
    *
    * Broadcast rather than targeted: a task is visible to its assignee, the
    * project's manager, team leads and HR, and working out that set per event
-   * costs more than it saves. The payload carries only ids — a client of this
+   * costs more than it saves. The payload carries only ids â€” a client of this
    * event refetches through the normal authorised endpoint, so the broadcast
    * itself can never leak a task to someone who may not see it.
    */
@@ -89,7 +89,7 @@ export class TasksService {
    *
    * A capability passes either because the caller's ROLE holds it outright
    * (HR / Super Admin), or because the caller is the person APPOINTED to this
-   * project — and then only for this project. Anyone can be appointed
+   * project â€” and then only for this project. Anyone can be appointed
    * regardless of role, so this is deliberately not expressible in the
    * role matrix; the guard cannot answer it and the service must.
    *
@@ -116,7 +116,7 @@ export class TasksService {
     return (await this.prisma.project.count({ where: { id: projectId, pmId: userId } })) > 0;
   }
 
-  // ── Create (Spec §5.4, §24) ──
+  // â”€â”€ Create (Spec Â§5.4, Â§24) â”€â”€
   async create(dto: CreateTaskDto, actor: AuthUser, meta: Meta) {
     const project = await this.prisma.project.findUnique({
       where: { id: dto.projectId },
@@ -126,10 +126,10 @@ export class TasksService {
     await this.assertProjectAuthority(actor, dto.projectId, 'tasks.create');
 
     if (dto.estimatedHours !== undefined && !isQuarterHour(dto.estimatedHours)) {
-      throw new BadRequestException('Estimated hours must be in quarter-hour steps (§24)');
+      throw new BadRequestException('Estimated hours must be in quarter-hour steps (Â§24)');
     }
     if (dto.clientFacing && !dto.deadline) {
-      throw new BadRequestException('Client-facing tasks require a deadline (§24)');
+      throw new BadRequestException('Client-facing tasks require a deadline (Â§24)');
     }
     if (dto.parentTaskId) {
       const parent = await this.prisma.task.findUnique({
@@ -137,7 +137,7 @@ export class TasksService {
         select: { id: true, parentTaskId: true, projectId: true },
       });
       if (!parent) throw new NotFoundException('Parent task not found');
-      if (parent.parentTaskId) throw new BadRequestException('Subtasks are one level deep only (§24)');
+      if (parent.parentTaskId) throw new BadRequestException('Subtasks are one level deep only (Â§24)');
       if (parent.projectId !== dto.projectId) {
         throw new BadRequestException('Subtask must belong to the same project as its parent');
       }
@@ -177,7 +177,7 @@ export class TasksService {
 
     // One-step create-and-assign (2026-07-25): the DTO has always carried an
     // optional assigneeId but create() dropped it, forcing a second trip through
-    // the assign screen. Delegating keeps every §24 rule (can-hold, freelancer,
+    // the assign screen. Delegating keeps every Â§24 rule (can-hold, freelancer,
     // watcher, history, notification) in exactly one place.
     if (dto.assigneeId) {
       return this.assign(task.id, dto.assigneeId, actor, meta);
@@ -187,11 +187,11 @@ export class TasksService {
   }
 
   /**
-   * §3 scope resolution for read access: ALLOW = see everything;
+   * Â§3 scope resolution for read access: ALLOW = see everything;
    * SCOPED (TL/EMP via projects.view_own_team) = own projects only; else 403.
    */
   private async resolveViewScope(user: AuthUser): Promise<'ALL' | 'OWN'> {
-    // Clients never use the internal task surface — they have the portal (§5.5).
+    // Clients never use the internal task surface â€” they have the portal (Â§5.5).
     // Their projects.view_own_team=SCOPED grant is for portal scoping, not here;
     // without this, the list endpoint would answer them with an empty 200 instead
     // of a clean 403.
@@ -205,7 +205,7 @@ export class TasksService {
     throw new ForbiddenException('Missing capability: projects.view_all');
   }
 
-  /** "Own project" (§3 view_own_team): the caller is its PM or holds a task in it. */
+  /** "Own project" (Â§3 view_own_team): the caller is its PM or holds a task in it. */
   private ownProjectFilter(userId: string): Prisma.ProjectWhereInput {
     return { OR: [{ pmId: userId }, { tasks: { some: { assigneeId: userId } } }] };
   }
@@ -231,14 +231,17 @@ export class TasksService {
 
     if ((await this.resolveViewScope(user)) === 'OWN') {
       // The board (list endpoint) already shows every task in a project you are
-      // part of — opening one of those cards must not 403. Project membership
+      // part of â€” opening one of those cards must not 403. Project membership
       // (you hold a task in it) grants READ here; acting on the task stays
       // gated per-action by assertActor, so a teammate can look but not touch.
+      // Watchership is deliberately NOT accepted as involvement. Anyone could
+      // add themselves as a watcher, so treating it as proof of access made the
+      // access check self-service. Being watched is a notification preference,
+      // not an entitlement.
       const involved =
         task.assignee?.id === user.id ||
         task.createdById === user.id ||
         task.project.pmId === user.id ||
-        task.watchers.some((w) => w.user.id === user.id) ||
         (await this.prisma.task.count({
           where: { projectId: task.project.id, assigneeId: user.id },
         })) > 0;
@@ -258,12 +261,12 @@ export class TasksService {
     await this.assertProjectAuthority(actor, existing.projectId, 'tasks.create');
 
     if (dto.estimatedHours !== undefined && !isQuarterHour(dto.estimatedHours)) {
-      throw new BadRequestException('Estimated hours must be in quarter-hour steps (§24)');
+      throw new BadRequestException('Estimated hours must be in quarter-hour steps (Â§24)');
     }
     const willBeClientFacing = dto.clientFacing ?? existing.clientFacing;
     const willHaveDeadline = dto.deadline !== undefined ? dto.deadline : existing.deadline;
     if (willBeClientFacing && !willHaveDeadline) {
-      throw new BadRequestException('Client-facing tasks require a deadline (§24)');
+      throw new BadRequestException('Client-facing tasks require a deadline (Â§24)');
     }
 
     const task = await this.prisma.task.update({
@@ -343,7 +346,7 @@ export class TasksService {
   /**
    * Daily sweep for handoffs nobody picked up: tasks sitting in ASSIGNED for
    * 24h+ remind their assignee each morning; at 48h+ the project's manager is
-   * told too. An unaccepted task blocks the whole §6 chain silently — this is
+   * told too. An unaccepted task blocks the whole Â§6 chain silently â€” this is
    * the chase. Runs from the tasks queue (see tasks.processor.ts).
    */
   async runAcceptanceSweep(now = new Date()): Promise<{ reminded: number; escalated: number }> {
@@ -371,7 +374,7 @@ export class TasksService {
         type: 'TASK_ACCEPT_REMINDER',
         eventGroup: 'tasks',
         title: 'Reminder: a task is waiting for you to accept it',
-        body: `${t.title} — assigned ${days} day${days === 1 ? '' : 's'} ago`,
+        body: `${t.title} â€” assigned ${days} day${days === 1 ? '' : 's'} ago`,
         entityType: 'Task',
         entityId: t.id,
       });
@@ -393,11 +396,11 @@ export class TasksService {
 
   /**
    * Daily chase for client-facing tasks the client hasn't seen movement on in
-   * 3+ days — a status change or a client-visible comment both reset the
+   * 3+ days â€” a status change or a client-visible comment both reset the
    * clock (see lastClientUpdateAt stamping in transition()/assign()/addComment()).
    * Staff-only nudge: the client never sees a countdown or a "you were
    * ignored" message, matching how the acceptance sweep stays internal too.
-   * Skipped once the task is finished — nothing to update at that point.
+   * Skipped once the task is finished â€” nothing to update at that point.
    */
   async runClientUpdateSweep(now = new Date()): Promise<{ reminded: number }> {
     const THREE_DAYS = 3 * 86_400_000;
@@ -426,8 +429,8 @@ export class TasksService {
         eventGroup: 'tasks',
         channel: 'IN_APP',
         title: 'A client is waiting for an update',
-        // Client identified by code — this nudge goes to the assignee.
-        body: `${t.title}${t.project.clientOrg ? ` (${formatClientCode(t.project.clientOrg.number)})` : ''} — no update in ${days} day${days === 1 ? '' : 's'}`,
+        // Client identified by code â€” this nudge goes to the assignee.
+        body: `${t.title}${t.project.clientOrg ? ` (${formatClientCode(t.project.clientOrg.number)})` : ''} â€” no update in ${days} day${days === 1 ? '' : 's'}`,
         entityType: 'Task',
         entityId: t.id,
       });
@@ -436,10 +439,10 @@ export class TasksService {
   }
 
   /**
-   * Hourly deadline watch (Spec §5.12). Two once-only notifications per task:
+   * Hourly deadline watch (Spec Â§5.12). Two once-only notifications per task:
    * a warning to the assignee when the deadline is within 24h, and a
    * missed-deadline alert to the assignee + project manager the hour after it
-   * passes. The *NotifiedAt stamps make both idempotent — an hourly sweep must
+   * passes. The *NotifiedAt stamps make both idempotent â€” an hourly sweep must
    * never turn into an hourly nag.
    */
   async runDeadlineSweep(now = new Date()): Promise<{ warned: number; missed: number }> {
@@ -464,14 +467,14 @@ export class TasksService {
         type: 'TASK_DEADLINE_SOON',
         eventGroup: 'tasks',
         title: 'A deadline lands within 24 hours',
-        body: `${t.title} (${t.project.name}) — due ${t.deadline!.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`,
+        body: `${t.title} (${t.project.name}) â€” due ${t.deadline!.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`,
         entityType: 'Task',
         entityId: t.id,
       });
       await this.prisma.task.update({ where: { id: t.id }, data: { deadlineSoonNotifiedAt: now } });
     }
 
-    // 2) Deadline passed, nobody told yet — assignee AND the project's manager.
+    // 2) Deadline passed, nobody told yet â€” assignee AND the project's manager.
     const missed = await this.prisma.task.findMany({
       where: { ...open, deadline: { lt: now }, deadlineMissedNotifiedAt: null },
       select: {
@@ -488,7 +491,7 @@ export class TasksService {
         type: 'TASK_DEADLINE_MISSED',
         eventGroup: 'tasks',
         title: 'A task slipped past its deadline',
-        body: `${t.title} (${t.project.name}) — was due ${t.deadline!.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' })}`,
+        body: `${t.title} (${t.project.name}) â€” was due ${t.deadline!.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' })}`,
         entityType: 'Task',
         entityId: t.id,
       });
@@ -501,14 +504,14 @@ export class TasksService {
     return { warned: soon.length, missed: missed.length };
   }
 
-  // ── Assign / Reassign (Spec §6, §24) ──
+  // â”€â”€ Assign / Reassign (Spec Â§6, Â§24) â”€â”€
   async assign(taskId: string, assigneeId: string, actor: AuthUser, meta: Meta) {
     const task = await this.loadForTransition(taskId);
     const action = task.status === 'DRAFT' ? TaskAction.ASSIGN : task.status === 'ASSIGNED' ? TaskAction.REASSIGN : null;
     if (!action) throw new BadRequestException(`A task in ${task.status} cannot be (re)assigned`);
 
     const transition = this.findTransition(task.status as SharedTaskStatus, action)!;
-    this.assertActor(transition.actors, actor, task);
+    await this.assertActor(transition.actors, actor, task);
 
     const assignee = await this.prisma.user.findUnique({
       where: { id: assigneeId },
@@ -516,14 +519,14 @@ export class TasksService {
     });
     if (!assignee || assignee.status === 'DEACTIVATED') throw new NotFoundException('Assignee not found');
 
-    // Assignee must be able to hold tasks (§24).
+    // Assignee must be able to hold tasks (Â§24).
     const canHold = await this.capabilities.resolveGrant(
       assignee.role,
       assignee.resourceType,
       'tasks.update_own_status',
     );
     if (canHold === Grant.DENY) throw new BadRequestException('That user cannot be assigned tasks');
-    // Freelancers may only be brought onto a project by whoever runs it (§24) —
+    // Freelancers may only be brought onto a project by whoever runs it (Â§24) â€”
     // the appointed project manager, HR, or a Super Admin.
     if (assignee.resourceType === 'FREELANCE') {
       const mayUseFreelancers =
@@ -545,8 +548,8 @@ export class TasksService {
           assigneeId,
           status: 'ASSIGNED',
           statusChangedAt: now,
-          // The client's status label changes too (e.g. "Not started" → "Planned")
-          // — that's visible movement, so it counts as a client update.
+          // The client's status label changes too (e.g. "Not started" â†’ "Planned")
+          // â€” that's visible movement, so it counts as a client update.
           lastClientUpdateAt: task.clientFacing ? now : undefined,
         },
         select: TASK_SELECT,
@@ -592,7 +595,7 @@ export class TasksService {
     return updated;
   }
 
-  // ── Generic §6 transition ──
+  // â”€â”€ Generic Â§6 transition â”€â”€
   async transition(taskId: string, action: TaskAction, comment: string | undefined, actor: AuthUser, meta: Meta) {
     if (action === TaskAction.ASSIGN || action === TaskAction.REASSIGN) {
       throw new BadRequestException('Use the assign endpoint to (re)assign a task');
@@ -602,16 +605,16 @@ export class TasksService {
     const transition = this.findTransition(task.status as SharedTaskStatus, action);
     const to = nextTaskStatus(task.status as SharedTaskStatus, action);
     if (!transition || !to) {
-      throw new BadRequestException(`Illegal transition: ${action} from ${task.status} (§6)`);
+      throw new BadRequestException(`Illegal transition: ${action} from ${task.status} (Â§6)`);
     }
-    this.assertActor(transition.actors, actor, task);
+    await this.assertActor(transition.actors, actor, task);
 
     if (transition.requiresComment && !comment?.trim()) {
-      throw new BadRequestException('A comment is required for this action (§6)');
+      throw new BadRequestException('A comment is required for this action (Â§6)');
     }
     if (to === 'CLOSED') {
       const openSub = task.subtasks.some((s) => s.status !== 'CLOSED' && s.status !== 'CANCELLED');
-      if (openSub) throw new BadRequestException('Cannot close a task with open subtasks (§24)');
+      if (openSub) throw new BadRequestException('Cannot close a task with open subtasks (Â§24)');
     }
 
     const now = new Date();
@@ -621,7 +624,7 @@ export class TasksService {
         data: {
           status: to as PrismaTaskStatus,
           statusChangedAt: now,
-          // A status move is visible progress to the client — resets the
+          // A status move is visible progress to the client â€” resets the
           // 3-day staleness clock the same way a client-visible comment does.
           lastClientUpdateAt: task.clientFacing ? now : undefined,
         },
@@ -670,7 +673,7 @@ export class TasksService {
    *
    * Deliberately unattributed: the client is not told which individual wrote
    * it, matching the portal feed and every other client-facing surface.
-   * Failures are swallowed — a mail outage must not roll back the comment the
+   * Failures are swallowed â€” a mail outage must not roll back the comment the
    * staff member just wrote.
    */
   private async emailClientUpdate(taskId: string, body: string): Promise<void> {
@@ -714,15 +717,37 @@ export class TasksService {
     }
   }
 
-  // ── Comments (Spec §5.4) ──
+  // â”€â”€ Comments (Spec Â§5.4) â”€â”€
   async addComment(taskId: string, dto: CreateCommentDto, actor: AuthUser) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
-      select: { id: true, title: true, clientFacing: true },
+      select: { id: true, title: true, clientFacing: true, projectId: true },
     });
     if (!task) throw new NotFoundException('Task not found');
+    // Commenting is participating in the work. Without this, anyone could post
+    // on any task in the company.
+    await this.assertTaskAccessFor(taskId, actor);
     if (dto.clientVisible && !task.clientFacing) {
-      throw new BadRequestException('Only client-facing tasks can have client-visible comments (§5.4)');
+      throw new BadRequestException('Only client-facing tasks can have client-visible comments (Â§5.4)');
+    }
+    // A client-visible comment is emailed to the client as an official update
+    // from the company â€” that is a publishing right, not a commenting one.
+    if (dto.clientVisible) {
+      await this.assertProjectAuthority(actor, task.projectId, 'tasks.review');
+    }
+    // A mention notifies with an attacker-chosen body; keep it to people who
+    // can actually see the task's project.
+    if (dto.mentionUserIds?.length) {
+      const reachable = await this.prisma.user.count({
+        where: {
+          id: { in: [...new Set(dto.mentionUserIds)] },
+          role: { not: 'CLIENT' },
+          status: 'ACTIVE',
+        },
+      });
+      if (reachable !== new Set(dto.mentionUserIds).size) {
+        throw new BadRequestException('You can only mention active staff members');
+      }
     }
 
     const comment = await this.prisma.comment.create({
@@ -739,7 +764,7 @@ export class TasksService {
       include: { author: { select: { id: true, name: true } } },
     });
 
-    // A client-visible comment IS a progress update — resets the staleness clock.
+    // A client-visible comment IS a progress update â€” resets the staleness clock.
     if (dto.clientVisible) {
       await this.prisma.task.update({ where: { id: taskId }, data: { lastClientUpdateAt: new Date() } });
       await this.emailClientUpdate(taskId, dto.body.trim());
@@ -759,10 +784,14 @@ export class TasksService {
   }
 
   async listComments(taskId: string, user: AuthUser) {
+    // Called both directly (GET /tasks/:id/comments) and from get(), which has
+    // already checked. Cheap to repeat; unguarded it exposed every internal
+    // comment on every task to any employee holding a task id.
+    if (user.role !== 'CLIENT') await this.assertTaskAccessFor(taskId, user);
     return this.prisma.comment.findMany({
       where: {
         taskId,
-        // Clients only ever see client-visible comments (§5.5).
+        // Clients only ever see client-visible comments (Â§5.5).
         visibility: user.role === 'CLIENT' ? 'CLIENT_VISIBLE' : undefined,
       },
       orderBy: { createdAt: 'asc' },
@@ -770,7 +799,7 @@ export class TasksService {
     });
   }
 
-  // ── Checklist (Spec §5.4) ──
+  // â”€â”€ Checklist (Spec Â§5.4) â”€â”€
   async addChecklistItem(taskId: string, dto: ChecklistItemDto, actor: AuthUser) {
     const task = await this.prisma.task.findUnique({
       where: { id: taskId },
@@ -785,14 +814,31 @@ export class TasksService {
     });
   }
 
-  async toggleChecklistItem(taskId: string, itemId: string) {
+  async toggleChecklistItem(taskId: string, itemId: string, actor: AuthUser) {
+    // Its sibling addChecklistItem checks authority; this one took no actor at
+    // all, so any employee could tick off another project's checklist â€” which
+    // feeds the completion signals a manager reads.
+    await this.assertTaskAccessFor(taskId, actor);
     const item = await this.prisma.checklistItem.findFirst({ where: { id: itemId, taskId } });
     if (!item) throw new NotFoundException('Checklist item not found');
     return this.prisma.checklistItem.update({ where: { id: itemId }, data: { done: !item.done } });
   }
 
-  // ── Watchers (Spec §5.4) ──
-  async addWatcher(taskId: string, userId: string) {
+  // â”€â”€ Watchers (Spec Â§5.4) â”€â”€
+  //
+  // These took no actor and no ownership check, and `get()` treated watchership
+  // as proof of access â€” so `POST /tasks/<any id>/watchers {userId: <me>}`
+  // granted the caller read access to any task in the company. The reverse call
+  // also let anyone silently drop the manager, suppressing their notifications.
+  async addWatcher(taskId: string, userId: string, actor: AuthUser) {
+    await this.assertTaskAccessFor(taskId, actor);
+    // Adding YOURSELF is fine once you already have access. Adding someone else
+    // is a change to who gets notified about this work â€” manager territory.
+    if (userId !== actor.id) {
+      const task = await this.prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+      if (!task) throw new NotFoundException('Task not found');
+      await this.assertProjectAuthority(actor, task.projectId, 'tasks.assign');
+    }
     return this.prisma.taskWatcher.upsert({
       where: { taskId_userId: { taskId, userId } },
       update: {},
@@ -800,13 +846,40 @@ export class TasksService {
     });
   }
 
-  removeWatcher(taskId: string, userId: string) {
+  async removeWatcher(taskId: string, userId: string, actor: AuthUser) {
+    await this.assertTaskAccessFor(taskId, actor);
+    if (userId !== actor.id) {
+      const task = await this.prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+      if (!task) throw new NotFoundException('Task not found');
+      await this.assertProjectAuthority(actor, task.projectId, 'tasks.assign');
+    }
     return this.prisma.taskWatcher.deleteMany({ where: { taskId, userId } });
   }
 
-  // ── helpers ──
+  /**
+   * Is this person entitled to see this task at all?
+   *
+   * The same test `get()` applies, minus watchership â€” which is exactly how
+   * watchership became a self-service access grant.
+   */
+  private async assertTaskAccessFor(taskId: string, user: AuthUser): Promise<void> {
+    if (['SUPER_ADMIN', 'HR', 'FINANCE'].includes(user.role)) return;
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { assigneeId: true, createdById: true, projectId: true, project: { select: { pmId: true } } },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    const involved =
+      task.assigneeId === user.id ||
+      task.createdById === user.id ||
+      task.project.pmId === user.id ||
+      (await this.prisma.task.count({ where: { projectId: task.projectId, assigneeId: user.id } })) > 0;
+    if (!involved) throw new ForbiddenException('You do not have access to this task');
+  }
+
+  // â”€â”€ helpers â”€â”€
   private isOverdue(task: { deadline: Date | null; status: string }): boolean {
-    // Overdue is a COMPUTED flag, never a status (§6).
+    // Overdue is a COMPUTED flag, never a status (Â§6).
     if (!task.deadline) return false;
     const terminal = ['COMPLETED', 'CLOSED', 'CANCELLED'];
     return !terminal.includes(task.status) && task.deadline < new Date();
@@ -841,30 +914,57 @@ export class TasksService {
     return TASK_TRANSITIONS.find((t) => t.from === from && t.action === action && !t.fromAny) ?? null;
   }
 
-  private assertActor(
+  private async assertActor(
     actors: readonly TransitionActor[],
     user: AuthUser,
     task: { assigneeId: string | null; project: { pmId: string | null } },
-  ): void {
-    const ok = actors.some((a) => {
+  ): Promise<void> {
+    for (const a of actors) {
       switch (a) {
         case 'ASSIGNEE':
-          return task.assigneeId === user.id;
+          if (task.assigneeId === user.id) return;
+          break;
         // Not a role: the person appointed to THIS task's project, plus the two
         // roles that run projects company-wide (2026-07-25, PM role removed).
         case 'PROJECT_MANAGER':
-          return (
+          if (
             (task.project.pmId !== null && task.project.pmId === user.id) ||
             user.role === 'SUPER_ADMIN' ||
             user.role === 'HR'
-          );
+          ) {
+            return;
+          }
+          break;
         case 'TEAM_LEAD':
-          return user.role === 'TEAM_LEAD' || user.role === 'SUPER_ADMIN';
+          if (user.role === 'SUPER_ADMIN') return;
+          // A bare role test let ANY team lead approve, reassign or cancel work
+          // in a project they have no relationship to â€” and the immutable
+          // history then recorded their name against it. The matrix intends
+          // tasks.assign / tasks.review to be SCOPED for TEAM_LEAD, so scope it:
+          // the task's assignee must be someone they actually lead.
+          if (user.role === 'TEAM_LEAD') {
+            if (!task.assigneeId) break; // nothing to lead yet â€” PM territory
+            const scope = await this.teamScopeUserIds(user.id);
+            if (scope.includes(task.assigneeId)) return;
+          }
+          break;
         default:
-          return false;
+          break;
       }
-    });
-    if (!ok) throw new ForbiddenException('You are not an eligible actor for this transition (§6)');
+    }
+    throw new ForbiddenException('You are not an eligible actor for this transition (Â§6)');
+  }
+
+  /** People a team lead leads: direct reports plus members of teams they lead. */
+  private async teamScopeUserIds(leadId: string): Promise<string[]> {
+    const [reports, ledTeams] = await Promise.all([
+      this.prisma.user.findMany({ where: { reportingManagerId: leadId }, select: { id: true } }),
+      this.prisma.team.findMany({ where: { teamLeadId: leadId }, select: { id: true } }),
+    ]);
+    const members = ledTeams.length
+      ? await this.prisma.user.findMany({ where: { teamId: { in: ledTeams.map((t) => t.id) } }, select: { id: true } })
+      : [];
+    return [...new Set([...reports, ...members].map((u) => u.id))];
   }
 
   private async notifyOnTransition(
@@ -887,7 +987,7 @@ export class TasksService {
         await this.notifications.notify({ ...base, userId: task.assigneeId ?? '', type: 'TASK_SENT_BACK', title: 'Your task was sent back' });
         break;
       case TaskAction.APPROVE_REVIEW:
-        // Always → COMPLETED now (2026-07-27) — the client no longer sits
+        // Always â†’ COMPLETED now (2026-07-27) â€” the client no longer sits
         // between internal approval and completion.
         await this.notifications.notifyMany([task.assigneeId, ...task.watchers.map((w) => w.userId)], { ...base, type: 'TASK_COMPLETED', title: 'A task was completed' });
         break;
@@ -899,3 +999,4 @@ export class TasksService {
     }
   }
 }
+

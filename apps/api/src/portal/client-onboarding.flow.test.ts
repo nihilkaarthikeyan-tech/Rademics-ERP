@@ -191,7 +191,16 @@ function build() {
     getOrThrow: (_k: string) => 'test-access-secret',
   } as any;
   const jwt = new JwtService({});
-  const auth = new AuthService(prisma, jwt, config, audit, email);
+  // invite() now checks the actor may grant the requested role — creating a
+  // CLIENT login requires portal.users.manage, which is what makes this flow
+  // Super-Admin-only and stops the staff endpoints minting client accounts.
+  const capabilities = {
+    resolveGrant: async (role: string, _rt: string, capability: string) =>
+      role === 'SUPER_ADMIN' || (role === 'HR' && capability === 'people.employee.create_edit')
+        ? Grant.ALLOW
+        : Grant.DENY,
+  } as any;
+  const auth = new AuthService(prisma, jwt, config, audit, email, capabilities);
   const clientAdmin = new ClientAdminService(prisma, audit, auth);
   return { db, emails, audits, auth, clientAdmin };
 }

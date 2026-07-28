@@ -1,9 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Queue } from 'bullmq';
+import { Grant } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { CapabilityService } from '../rbac/capability.service';
 import { SettingsService } from '../settings/settings.service';
 import { StorageService } from '../storage/storage.service';
 import {
@@ -38,6 +46,7 @@ export class FilesService {
     private readonly audit: AuditService,
     private readonly settings: SettingsService,
     private readonly storage: StorageService,
+    private readonly capabilities: CapabilityService,
     @InjectQueue(QUEUE_FILES) private readonly queue: Queue<ScanJobData>,
   ) {}
 
@@ -136,8 +145,21 @@ export class FilesService {
       });
   }
 
+  /** Only people who administer staff records may touch someone else's profile files. */
+  private async assertMayManagePeople(actor: AuthUser): Promise<void> {
+    const grant = await this.capabilities.resolveGrant(
+      actor.role,
+      actor.resourceType,
+      'people.employee.create_edit',
+    );
+    if (grant === Grant.DENY) {
+      throw new ForbiddenException('You can only attach files to your own profile.');
+    }
+  }
+
   // ── List a task's files (scoped for clients) ──
   async listForTask(taskId: string, user: AuthUser) {
+    await this.assertTaskAccess(taskId, user);
     const isClient = user.role === 'CLIENT';
     const assets = await this.prisma.fileAsset.findMany({
       where: { taskId },
@@ -174,9 +196,23 @@ export class FilesService {
     const rules = await this.fileRules();
     const v = await this.prisma.fileVersion.findUnique({
       where: { id: versionId },
-      select: { storageKey: true, originalName: true, scanStatus: true, visibility: true, deletedAt: true },
+      select: {
+        storageKey: true,
+        originalName: true,
+        scanStatus: true,
+        visibility: true,
+        deletedAt: true,
+        fileAsset: { select: { taskId: true, profileUserId: true, createdById: true } },
+      },
     });
     if (!v || v.deletedAt) throw new NotFoundException('File not found');
+    // Scope BEFORE handing out a presigned URL — that URL bypasses the API
+    // entirely, so this is the last point at which access can be refused.
+    if (v.fileAsset.taskId) {
+      await this.assertTaskAccess(v.fileAsset.taskId, user);
+    } else if (v.fileAsset.profileUserId && v.fileAsset.profileUserId !== user.id) {
+      await this.assertMayManagePeople(user);
+    }
     if (v.scanStatus !== 'AVAILABLE') {
       throw new ConflictException(
         v.scanStatus === 'INFECTED' ? 'This file was quarantined by virus scan' : 'File is not available yet',
@@ -229,10 +265,62 @@ export class FilesService {
     return { id: versionId, deleted: true };
   }
 
+  /**
+   * May this person see the files on this task?
+   *
+   * The same involvement test TasksService.get uses, deliberately duplicated
+   * rather than imported (FilesService is a dependency of the projects module,
+   * so calling back into it would be circular). Without this, `GET /files?taskId`
+   * and the download route were gated only on `files.upload` — held by every
+   * employee — so a task id from another project returned its documents and a
+   * live presigned URL, while `GET /tasks/:id` correctly refused the task
+   * itself. The app 403'd the task and handed over its attachments.
+   *
+   * Watchership is NOT accepted as involvement here: it can be self-granted.
+   */
+  private async assertTaskAccess(taskId: string, user: AuthUser): Promise<void> {
+    if (['SUPER_ADMIN', 'HR', 'FINANCE'].includes(user.role)) return;
+    const task = await this.prisma.task.findUnique({
+      where: { id: taskId },
+      select: { assigneeId: true, createdById: true, projectId: true, project: { select: { pmId: true } } },
+    });
+    if (!task) throw new NotFoundException('File not found');
+
+    if (user.role === 'CLIENT') {
+      // Clients reach files through the portal, which checks org access itself.
+      const granted = await this.prisma.clientProjectAccess.count({
+        where: { projectId: task.projectId, clientUserId: user.id },
+      });
+      if (!granted) throw new NotFoundException('File not found');
+      return;
+    }
+
+    const involved =
+      task.assigneeId === user.id ||
+      task.createdById === user.id ||
+      task.project.pmId === user.id ||
+      (await this.prisma.task.count({ where: { projectId: task.projectId, assigneeId: user.id } })) > 0;
+    if (!involved) throw new NotFoundException('File not found');
+  }
+
   private async resolveAsset(dto: InitUploadDto, actor: AuthUser) {
     if (dto.fileAssetId) {
-      const asset = await this.prisma.fileAsset.findUnique({ where: { id: dto.fileAssetId }, select: { id: true } });
+      // Uploading a NEW VERSION of an existing file is an edit of that file.
+      // Existence was the only check, so any employee could add version N+1 to
+      // anyone's asset — and the UI shows the newest version.
+      const asset = await this.prisma.fileAsset.findUnique({
+        where: { id: dto.fileAssetId },
+        select: { id: true, taskId: true, profileUserId: true, createdById: true },
+      });
       if (!asset) throw new NotFoundException('File not found');
+      if (asset.taskId) {
+        await this.assertTaskAccess(asset.taskId, actor);
+      } else if (asset.profileUserId && asset.profileUserId !== actor.id) {
+        await this.assertMayManagePeople(actor);
+      } else if (!asset.taskId && !asset.profileUserId && asset.createdById !== actor.id) {
+        // An unattached draft belongs to whoever started it (chat attachments).
+        throw new NotFoundException('File not found');
+      }
       return asset;
     }
     const targets = [dto.taskId, dto.profileUserId].filter(Boolean);
@@ -242,10 +330,14 @@ export class FilesService {
     if (dto.taskId) {
       const task = await this.prisma.task.count({ where: { id: dto.taskId } });
       if (!task) throw new NotFoundException('Task not found');
+      await this.assertTaskAccess(dto.taskId, actor);
     }
     if (dto.profileUserId) {
       const u = await this.prisma.user.count({ where: { id: dto.profileUserId } });
       if (!u) throw new NotFoundException('Profile user not found');
+      // Your own profile, or someone whose records you administer. Otherwise an
+      // employee could file documents against a colleague's HR profile.
+      if (dto.profileUserId !== actor.id) await this.assertMayManagePeople(actor);
     }
     return this.prisma.fileAsset.create({
       data: {
