@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 interface PendingRow {
   id: string;
@@ -37,6 +38,9 @@ export function LeaveApprovals() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // An approval inbox that only fills on refresh is an inbox people stop trusting.
+  useAutoRefresh(load, { events: ['leave:changed'] });
 
   async function decide(id: string, action: 'approve' | 'reject') {
     let comment = '';

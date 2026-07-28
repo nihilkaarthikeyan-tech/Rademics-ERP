@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PresenceService } from '../attendance/presence.service';
 import { EmailProducer } from '../queue/email.producer';
 import { toFinanceConfig, type FinanceConfig } from './finance-config';
 import type {
@@ -49,7 +50,13 @@ export class InvoicesService {
     private readonly settings: SettingsService,
     private readonly notifications: NotificationsService,
     private readonly email: EmailProducer,
+    private readonly presence: PresenceService,
   ) {}
+
+  /** Nudge open finance screens (and the client's portal) to refetch. */
+  private announce(): void {
+    this.presence.emitToAll('invoice:changed', {});
+  }
 
   async getConfig(): Promise<FinanceConfig> {
     const rules = { ...DEFAULT_BUSINESS_RULES, ...(await this.settings.getBusinessRules()) } as Record<
@@ -134,6 +141,7 @@ export class InvoicesService {
       after: { number: invoice.number, total },
       ...meta,
     });
+    this.announce();
     return this.decorate(invoice);
   }
 
@@ -197,6 +205,7 @@ export class InvoicesService {
       actorId: actor.id, actorEmail: actor.email, action: 'INVOICE_UPDATED',
       entityType: 'Invoice', entityId: id, after: { total }, ...meta,
     });
+    this.announce();
     return this.decorate(updated);
   }
 
@@ -215,6 +224,7 @@ export class InvoicesService {
       actorId: actor.id, actorEmail: actor.email, action: 'INVOICE_SENT',
       entityType: 'Invoice', entityId: id, before: { status: 'DRAFT' }, after: { status: 'SENT' }, ...meta,
     });
+    this.announce();
     return this.decorate(updated);
   }
 
@@ -230,6 +240,7 @@ export class InvoicesService {
       actorId: actor.id, actorEmail: actor.email, action: 'INVOICE_CANCELLED',
       entityType: 'Invoice', entityId: id, after: { reason: dto.reason }, ...meta,
     });
+    this.announce();
     return this.decorate(updated);
   }
 
@@ -275,6 +286,7 @@ export class InvoicesService {
       actorId: actor.id, actorEmail: actor.email, action: 'INVOICE_REISSUED',
       entityType: 'Invoice', entityId: fresh.id, before: { from: source.number }, after: { to: fresh.number }, ...meta,
     });
+    this.announce();
     return this.decorate(fresh);
   }
 
@@ -309,6 +321,7 @@ export class InvoicesService {
     if (updated.status === 'PAID' && updated.project?.id) {
       await this.notifyPm(updated.project.id, `Invoice ${inv.number} is fully paid`);
     }
+    this.announce();
     return this.decorate(updated);
   }
 
@@ -333,6 +346,7 @@ export class InvoicesService {
       actorId: actor.id, actorEmail: actor.email, action: 'PAYMENT_REVERSED',
       entityType: 'Payment', entityId: paymentId, after: { reason: dto.reason }, ...meta,
     });
+    this.announce();
     return this.decorate(updated);
   }
 

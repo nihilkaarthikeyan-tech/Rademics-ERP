@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 interface EmployeeRow {
   id: string;
@@ -52,6 +53,10 @@ export default function PeoplePage() {
     const t = setTimeout(() => void load(search), 250);
     return () => clearTimeout(t);
   }, [search, load]);
+
+  // Someone edited, deactivated or re-roled a colleague — reflect it here.
+  const refresh = useCallback(() => void load(search), [load, search]);
+  useAutoRefresh(refresh, { events: ['people:changed'] });
 
   return (
     <div className="mx-auto max-w-6xl">

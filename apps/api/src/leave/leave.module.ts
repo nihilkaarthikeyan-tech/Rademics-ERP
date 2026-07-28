@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { SettingsModule } from '../settings/settings.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AttendanceModule } from '../attendance/attendance.module';
 import { LeaveService } from './leave.service';
 import { LeaveController } from './leave.controller';
 import { LeaveProcessor } from './leave.processor';
@@ -13,6 +14,7 @@ import { QUEUE_LEAVE } from './leave.constants';
   imports: [
     SettingsModule, // leave quotas / working days from Admin Settings (§4)
     NotificationsModule, // request / decision / escalation notifications (§5.12)
+    AttendanceModule, // PresenceService — push 'leave:changed' so open screens follow
     BullModule.registerQueue({ name: QUEUE_LEAVE }),
   ],
   controllers: [LeaveController],

@@ -76,6 +76,7 @@ export class RegularizationService {
       ...meta,
     });
     await this.notifyApprover(user.id, dto.date);
+    this.attendance.announceChange(); // an approver with the page open should see it arrive
     return req;
   }
 
@@ -150,6 +151,7 @@ export class RegularizationService {
       ...meta,
     });
     await this.notifyRequester(req.userId, approve);
+    this.attendance.announceChange();
     return updated;
   }
 

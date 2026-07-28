@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 interface CalItem {
   id: string;
@@ -22,8 +23,8 @@ export function TeamCalendar() {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [items, setItems] = useState<CalItem[] | null>(null);
 
-  const load = useCallback(async () => {
-    setItems(null);
+  /** Fetch WITHOUT clearing — a background refresh must not blank the month. */
+  const fetchMonth = useCallback(async () => {
     const from = `${month}-01`;
     const [y, m] = month.split('-').map(Number) as [number, number];
     const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
@@ -35,9 +36,14 @@ export function TeamCalendar() {
     }
   }, [month]);
 
+  // Changing the month is the one case that SHOULD show the skeleton: the
+  // displayed data no longer belongs to the month being asked for.
   useEffect(() => {
-    void load();
-  }, [load]);
+    setItems(null);
+    void fetchMonth();
+  }, [fetchMonth]);
+
+  useAutoRefresh(fetchMonth, { events: ['leave:changed'] });
 
   return (
     <Card>

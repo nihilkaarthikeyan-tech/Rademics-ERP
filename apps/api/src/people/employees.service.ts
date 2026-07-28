@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthService } from '../auth/auth.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PresenceService } from '../attendance/presence.service';
 import type { AuthUser } from '../auth/auth-user';
 import type { CreateEmployeeDto, ListEmployeesQuery, UpdateEmployeeDto } from './dto';
 
@@ -42,7 +43,13 @@ export class EmployeesService {
     private readonly audit: AuditService,
     private readonly auth: AuthService,
     private readonly notifications: NotificationsService,
+    private readonly presence: PresenceService,
   ) {}
+
+  /** Nudge open directories/pickers to refetch after the roster changes. */
+  private announce(): void {
+    this.presence.emitToAll('people:changed', {});
+  }
 
   // ── Directory list (Spec §19 table standards) ──
   async list(query: ListEmployeesQuery, viewer?: AuthUser) {
@@ -192,6 +199,7 @@ export class EmployeesService {
       ...meta,
     });
 
+    this.announce();
     return this.get(id, actor);
   }
 
@@ -219,6 +227,7 @@ export class EmployeesService {
       after: { status: 'DEACTIVATED', tasksReassigned: reassigned },
       ...meta,
     });
+    this.announce();
     return { id, status: 'DEACTIVATED', tasksReassigned: reassigned };
   }
 
@@ -293,6 +302,7 @@ export class EmployeesService {
       after: { role },
       ...meta,
     });
+    this.announce();
     return { id, role, changed: true };
   }
 

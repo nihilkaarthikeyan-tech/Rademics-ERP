@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError, API_BASE } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { getToken } from '@/lib/session';
 
 interface Line { description: string; quantity: number; rate: number; gstPercent?: number }
@@ -63,6 +64,9 @@ export function InvoicesPanel() {
     }
   }, []);
   useEffect(() => { void load(); }, [load]);
+
+  // Payments and sends often come from a colleague at another desk.
+  useAutoRefresh(load, { events: ['invoice:changed'] });
 
   const loadDetail = useCallback(async (id: string) => {
     setDetail(null);

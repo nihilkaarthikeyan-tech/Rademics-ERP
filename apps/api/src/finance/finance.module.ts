@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { SettingsModule } from '../settings/settings.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AttendanceModule } from '../attendance/attendance.module';
 import { InvoicesService } from './invoices.service';
 import { InvoicesController } from './invoices.controller';
 import { ExpensesService } from './expenses.service';
@@ -17,6 +18,7 @@ import { QUEUE_FINANCE } from './finance.constants';
   imports: [
     SettingsModule, // finance config: GST, terms, rates, branding (§4, §23)
     NotificationsModule, // invoice paid/sent notifications (§5.12)
+    AttendanceModule, // PresenceService — push 'invoice:changed' to open finance screens
     BullModule.registerQueue({ name: QUEUE_FINANCE }),
   ],
   controllers: [InvoicesController, FinanceController],

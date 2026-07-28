@@ -96,6 +96,9 @@ export class AttendanceService {
     });
 
     this.presence.markCheckedIn(user.id);
+    // presence:update says WHO is online; this says the day's figures moved, so
+    // attendance screens and the dashboard refetch rather than sit on old hours.
+    this.presence.emitToAll('attendance:changed', {});
     await this.audit.record({
       actorId: user.id,
       actorEmail: user.email,
@@ -135,6 +138,7 @@ export class AttendanceService {
 
     // Still checked in elsewhere? (multi-session) Only clear presence if no open session remains.
     if (!(await this.findOpenSession(user.id))) this.presence.markCheckedOut(user.id);
+    this.presence.emitToAll('attendance:changed', {});
     await this.audit.record({
       actorId: user.id,
       actorEmail: user.email,
@@ -144,6 +148,11 @@ export class AttendanceService {
       ...meta,
     });
     return session;
+  }
+
+  /** Nudge every open screen to refetch attendance-derived data. */
+  announceChange(): void {
+    this.presence.emitToAll('attendance:changed', {});
   }
 
   // ── Idle heartbeat (Spec §5.3): shown to the employee immediately ──

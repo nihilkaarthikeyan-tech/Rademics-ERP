@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge, Card, CardContent, CardHeader, CardTitle, EmptyState, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { RegularizationForm } from './regularization-form';
 
 interface DayRow {
@@ -68,6 +69,14 @@ export function MyAttendance() {
     void loadDays();
     void loadRegs();
   }, [loadDays, loadRegs]);
+
+  // Your own hours move as you check in and out from the desktop app, and a
+  // regularization decision lands here — neither should need a refresh.
+  const refresh = useCallback(() => {
+    void loadDays();
+    void loadRegs();
+  }, [loadDays, loadRegs]);
+  useAutoRefresh(refresh, { events: ['attendance:changed'] });
 
   return (
     <div className="flex flex-col gap-6">

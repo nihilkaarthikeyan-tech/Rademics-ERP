@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 interface PendingRow {
   id: string;
@@ -30,6 +31,8 @@ export function PendingApprovals() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useAutoRefresh(load, { events: ['attendance:changed'] });
 
   async function decide(id: string, action: 'approve' | 'reject') {
     setBusyId(id);

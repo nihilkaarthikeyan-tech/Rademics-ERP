@@ -19,6 +19,7 @@ import { AuditService } from '../audit/audit.service';
 import { CapabilityService } from '../rbac/capability.service';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PresenceService } from '../attendance/presence.service';
 import {
   countWorkingDays,
   dateKey,
@@ -54,7 +55,19 @@ export class LeaveService {
     private readonly capabilities: CapabilityService,
     private readonly settings: SettingsService,
     private readonly notifications: NotificationsService,
+    private readonly presence: PresenceService,
   ) {}
+
+  /**
+   * Tell every open screen that leave moved, so approval inboxes, balances and
+   * the team calendar follow without anyone pressing refresh. Broadcast rather
+   * than targeted: a leave request is visible to the requester, the approver,
+   * and anyone looking at the team calendar — and the payload carries no detail,
+   * only a nudge to refetch through the caller's own permissions.
+   */
+  private announce(): void {
+    this.presence.emitToAll('leave:changed', {});
+  }
 
   // ── Config (Spec §4, never hardcoded) ──
   private async getConfig(): Promise<LeaveConfig> {
@@ -185,6 +198,7 @@ export class LeaveService {
     });
 
     await this.notifyApprover(request, `${user.email}`);
+    this.announce();
     return request;
   }
 
@@ -303,6 +317,7 @@ export class LeaveService {
       entityId: req.id,
     });
 
+    this.announce();
     return this.prisma.leaveRequest.findUnique({ where: { id } });
   }
 
@@ -531,7 +546,10 @@ export class LeaveService {
       });
       escalated++;
     }
-    if (escalated) this.logger.log(`Leave escalation sweep: ${escalated} request(s) escalated`);
+    if (escalated) {
+      this.logger.log(`Leave escalation sweep: ${escalated} request(s) escalated`);
+      this.announce(); // an inbox that just gained a request should show it
+    }
     return { escalated };
   }
 

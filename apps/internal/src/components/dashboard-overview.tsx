@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FolderKanban, Users, TrendingUp, AlertTriangle } from 'lucide-react';
 import { apiFetch, ApiError } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
 /**
  * Studio overview (Spec §17.1). Every figure is derived from the real reports
@@ -54,20 +55,27 @@ export function DashboardOverview() {
   const [projects, setProjects] = useState<ProjectRow[] | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'denied' | 'error'>('loading');
 
-  useEffect(() => {
-    Promise.all([
-      apiFetch<CapacityRow[]>('/reports/capacity'),
-      apiFetch<ReportData>('/reports/project-status'),
-    ])
-      .then(([c, p]) => {
-        setCap(c);
-        setProjects(p.rows);
-        setState('ready');
-      })
-      .catch((err) => {
-        setState(err instanceof ApiError && err.status === 403 ? 'denied' : 'error');
-      });
+  const load = useCallback(async () => {
+    try {
+      const [c, p] = await Promise.all([
+        apiFetch<CapacityRow[]>('/reports/capacity'),
+        apiFetch<ReportData>('/reports/project-status'),
+      ]);
+      setCap(c);
+      setProjects(p.rows);
+      setState('ready');
+    } catch (err) {
+      setState(err instanceof ApiError && err.status === 403 ? 'denied' : 'error');
+    }
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // The morning briefing has to be true at a glance, so it follows the things it
+  // reports on: task movement, attendance and leave all change these figures.
+  useAutoRefresh(load, { events: ['task:changed', 'attendance:changed', 'leave:changed'] });
 
   // Roles without reports access keep their personal dashboard — show nothing here.
   if (state === 'denied') return null;

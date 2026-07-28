@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { LeaveRequestForm } from './leave-request-form';
 
 interface Balance {
@@ -65,6 +66,10 @@ export function MyLeave() {
     void loadBalances();
     void loadRows();
   }, [loadBalances, loadRows]);
+
+  // Your approver acting on a request should land here without a refresh —
+  // this is the screen you sit on while waiting for a yes or no.
+  useAutoRefresh(refresh, { events: ['leave:changed'] });
 
   async function cancel(id: string) {
     setBusyId(id);
