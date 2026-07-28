@@ -89,6 +89,29 @@ export class AiService {
     return !hasTaskContext && NO_HANDLER_YET.some((t) => q.includes(t));
   }
 
+  /**
+   * A staff member OTHER than the caller named in the question, if any. Longest
+   * name first so "Nandhini Devi S" wins over a bare "Devi"; first names need a
+   * word boundary so "sid" doesn't fire on "consider".
+   */
+  private async namedOtherStaff(q: string, callerId: string): Promise<string | null> {
+    const staff = await this.prisma.user.findMany({
+      where: { status: 'ACTIVE', role: { not: 'CLIENT' }, id: { not: callerId } },
+      select: { name: true },
+    });
+    const match = staff
+      .filter((u) => u.name.trim().length > 2)
+      .sort((a, b) => b.name.length - a.name.length)
+      .find((u) => {
+        const full = u.name.trim().toLowerCase();
+        if (q.includes(full)) return true;
+        const first = full.split(/\s+/)[0] ?? '';
+        if (first.length <= 2) return false;
+        return new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(q);
+      });
+    return match?.name ?? null;
+  }
+
   private isAttendanceQuestion(q: string): boolean {
     // 'attend' (not the full word 'attendance') so common typos like "attendace"/
     // "attendence" still match — confirmed real user input, not hypothetical.
@@ -288,6 +311,10 @@ export class AiService {
       'client', 'report', 'employee', 'freelanc', 'milestone', 'review', 'submit',
       'progress', 'status', 'pending', 'hour', 'estimate', 'deliverable', 'work',
       'check', 'clock', 'overtime', 'idle',
+      // 'late' matters on its own: "am I late today?" is squarely an attendance
+      // question, but it contains none of the words above, so the on-topic guard
+      // used to refuse it before the attendance branch ever ran.
+      'late',
     ];
     const onTopic = named.length > 0 || ERP_TERMS.some((t) => q.includes(t));
     if (!onTopic) {
@@ -330,6 +357,20 @@ export class AiService {
     } else if (this.isAttendanceQuestion(q)) {
       // Personal, account-level: always the caller's own record (§7 no leakage — this
       // never accepts a target user, so it can't be used to read someone else's attendance).
+      //
+      // But retrieval being safe is not enough. Asked "what is Nandhini's attendance
+      // today?", this branch used to hand the model the CALLER's figures phrased as
+      // "You are checked out…", and the model dutifully relabelled them as Nandhini's.
+      // No data crossed a boundary, yet the reader was told something false about a
+      // colleague. So: refuse outright when the question names someone else, and name
+      // the subject in the facts so a narrator cannot silently reassign them.
+      const otherName = await this.namedOtherStaff(q, user.id);
+      if (otherName) {
+        return this.label(
+          `I can only show your own attendance, not ${otherName}'s. If you need someone else's, ask HR or your team lead — or open the Attendance page if you have access to it.`,
+          false,
+        );
+      }
       const rules = { ...DEFAULT_BUSINESS_RULES, ...(await this.settings.getBusinessRules()) } as Record<string, unknown>;
       const timezone = (rules.timezone as string) ?? 'Asia/Kolkata';
       const todayStatus = await this.attendance.today(user);
@@ -338,17 +379,26 @@ export class AiService {
         const m = Math.round((seconds % 3600) / 60);
         return h > 0 ? `${h}h ${m}m` : `${m}m`;
       };
+      const meRow = await this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { name: true },
+      });
+      const subject = meRow?.name ?? 'you';
       citations.push(`Attendance: ${user.email} — ${todayStatus.date}`);
       const parts: string[] = [
         todayStatus.checkedIn
-          ? `You're checked in since ${todayStatus.openSince!.toLocaleTimeString('en-IN', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}.`
-          : 'You are checked out right now.',
+          ? `checked in since ${todayStatus.openSince!.toLocaleTimeString('en-IN', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}.`
+          : 'checked out right now.',
         `Worked today: ${fmtHours(todayStatus.workedSeconds)}.`,
       ];
       if (todayStatus.overtimeSeconds > 0) parts.push(`Overtime: ${fmtHours(todayStatus.overtimeSeconds)}.`);
       if (todayStatus.idleSeconds > 0) parts.push(`Idle: ${fmtHours(todayStatus.idleSeconds)}.`);
-      if (todayStatus.isLate) parts.push('Marked late today.');
-      answer = parts.join(' ');
+      // State lateness BOTH ways. Mentioning it only when true leaves "am I late
+      // today?" unanswered by the facts, and a narrating model fills that silence
+      // with a confident guess — it answered "Yes" to someone who was not late.
+      parts.push(todayStatus.isLate ? 'Marked LATE today.' : 'NOT marked late today.');
+      // Subject named up front: these figures belong to the asker and nobody else.
+      answer = `This is ${subject}'s own attendance (the person asking) — ${parts.join(' ')}`;
     } else if (this.looksUnsupported(q)) {
       // ERP_TERMS accepts leave/attendance/finance/employee words as "on-topic" so the
       // assistant doesn't wrongly refuse them, but there's no real retrieval for those
