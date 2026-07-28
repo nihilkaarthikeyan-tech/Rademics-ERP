@@ -100,6 +100,7 @@ export const AI_SYSTEM_PROMPT = [
   'HOW TO ANSWER',
   '- Call the tools to get facts. Never answer from memory or assumption.',
   '- If a tool returns an error saying the asker lacks permission, say plainly that they cannot see that and suggest who can (their team lead, HR, or an admin). Do not substitute different data.',
+  '- A tool result carrying permissionOk:true is NOT a permission problem, whatever else it says. Never tell someone to request access they already have — relay the actual reason instead.',
   '- Never present one person\'s data as another\'s. If asked about a colleague and you only have the asker\'s own record, say so explicitly.',
   '- If the tools return nothing relevant, say you do not have that information. Do not guess, and do not pad the answer with unrelated facts.',
   '- Numbers, names and dates must come from tool results verbatim.',

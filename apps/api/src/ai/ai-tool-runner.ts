@@ -170,7 +170,16 @@ export class AiToolRunner {
     if (grant === Grant.SCOPED) {
       userIds = await this.teamScopeUserIds(user.id);
       if (userIds.length === 0) {
-        return { note: 'You do not have anyone reporting to you yet, so there is no team attendance to show.', people: [] };
+        // An empty team is NOT a permission failure, and must not be described
+        // as one — a team lead told to "request access" will go chasing a
+        // permission they already hold. Say what is actually missing.
+        return {
+          permissionOk: true,
+          reason: 'EMPTY_TEAM',
+          note:
+            'You DO have permission to see team attendance — but nobody is assigned to you yet, so there is no team to show. Ask HR to add people to your team or set you as their reporting manager.',
+          people: [],
+        };
       }
     }
 
