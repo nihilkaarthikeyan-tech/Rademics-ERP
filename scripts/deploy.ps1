@@ -120,7 +120,10 @@ Ok 'code synced'
 Remove-Item $tar -ErrorAction SilentlyContinue
 
 Note 'building + recreating (several minutes)...'
-$deployOut = Invoke-Vps "sh /tmp/deploy-remote.sh deploy $sha 2>&1 | tail -40"
+# Grep the status lines rather than tailing: BACKUP=ok is printed before several
+# thousand lines of build output, so `tail -40` silently dropped it and the
+# script reported a backup failure that had not happened.
+$deployOut = Invoke-Vps "sh /tmp/deploy-remote.sh deploy $sha 2>&1 | grep -E '^(BACKUP|BUILD|RECREATE|ERROR)='"
 $deployKv = ConvertTo-Kv $deployOut
 foreach ($k in @('BACKUP', 'BUILD', 'RECREATE')) {
   if ($deployKv[$k] -eq 'ok') {
