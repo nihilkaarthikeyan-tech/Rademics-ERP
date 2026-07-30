@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageGuide } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
+import { BillingEditor } from '@/components/clients/billing-editor';
 
 interface ClientOrgRow {
   id: string;
@@ -13,6 +14,10 @@ interface ClientOrgRow {
   name: string | null;
   awaitingAccount: boolean;
   status: 'ACTIVE' | 'DEACTIVATED';
+  /** Billing identity — drives CGST+SGST vs IGST on this client's invoices. */
+  gstin?: string | null;
+  stateCode?: string | null;
+  billingAddress?: string | null;
   _count: { users: number; projects: number };
 }
 
@@ -29,6 +34,7 @@ export default function ClientsPage() {
   const [data, setData] = useState<ClientOrgRow[] | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [billingId, setBillingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setState('loading');
@@ -165,6 +171,13 @@ export default function ClientsPage() {
                             </Button>
                           </Link>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setBillingId(billingId === org.id ? null : org.id)}
+                        >
+                          {billingId === org.id ? 'Close' : 'Billing'}
+                        </Button>
                         {org.status === 'ACTIVE' ? (
                           <Button
                             size="sm"
@@ -179,6 +192,30 @@ export default function ClientsPage() {
                     </td>
                   </tr>
                 ))}
+                {/* Billing lives in an expanded row rather than its own page: it is
+                    three fields, and seeing it next to the client avoids editing the
+                    GSTIN of the wrong company. */}
+                {data.map((org) =>
+                  billingId === org.id ? (
+                    <tr key={`${org.id}-billing`}>
+                      <td colSpan={6} className="px-4 pb-4">
+                        <BillingEditor
+                          orgId={org.id}
+                          initial={{
+                            gstin: org.gstin ?? null,
+                            stateCode: org.stateCode ?? null,
+                            billingAddress: org.billingAddress ?? null,
+                          }}
+                          onSaved={(b) =>
+                            setData((rows) =>
+                              rows ? rows.map((r) => (r.id === org.id ? { ...r, ...b } : r)) : rows,
+                            )
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ) : null,
+                )}
               </tbody>
             </table>
             <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">

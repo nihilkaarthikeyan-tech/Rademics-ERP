@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, ErrorState, LoadingState } from '@rademics/ui';
 import { apiFetch } from '@/lib/api';
+import { CompanySettings } from '@/components/admin/company-settings';
 
 export default function AdminSettingsPage() {
   const [rules, setRules] = useState<Record<string, any> | null>(null);
@@ -36,9 +37,11 @@ export default function AdminSettingsPage() {
     <div className="mx-auto max-w-3xl">
       <h1 className="text-xl font-semibold text-slate-800">Admin · Settings</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Company-wide defaults for attendance, leave and finance. A full editing screen is coming —
-        for now, ask your administrator to change a value.
+        Your company details are editable below. The attendance, leave and finance rules are
+        shown for reference — a full editing screen for those is still to come.
       </p>
+
+      <CompanySettings />
 
       <Card className="mt-4">
         <CardHeader>

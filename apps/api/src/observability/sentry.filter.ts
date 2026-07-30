@@ -3,6 +3,7 @@ import { BaseExceptionFilter } from '@nestjs/core';
 import * as Sentry from '@sentry/node';
 import type { Response } from 'express';
 import type { RequestWithId } from './request-id.middleware';
+import { toHttpException } from './prisma-error';
 
 /**
  * Global exception filter (Spec §11). Delegates response formatting to Nest's default
@@ -14,10 +15,22 @@ import type { RequestWithId } from './request-id.middleware';
  * (set by RequestIdMiddleware) so a user can quote it and we can find the exact Sentry
  * event. The message is deliberately generic — internal fault details never cross the
  * wire (Spec §10).
+ *
+ * Database constraint failures are translated first (see prisma-error.ts). They are
+ * caused by what the caller sent, not by a fault here, so they belong in the 4xx
+ * branch with a message that names the problem — not in the opaque 500 above. Done
+ * here rather than in a second @Catch(Prisma...) filter so there is no dependence on
+ * which global filter Nest happens to consult first.
  */
 @Catch()
 export class SentryExceptionFilter extends BaseExceptionFilter {
   override catch(exception: unknown, host: ArgumentsHost): void {
+    const translated = toHttpException(exception);
+    if (translated) {
+      super.catch(translated, host);
+      return;
+    }
+
     const status =
       exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 

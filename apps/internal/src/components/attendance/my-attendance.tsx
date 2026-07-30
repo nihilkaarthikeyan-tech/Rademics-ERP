@@ -59,7 +59,8 @@ export function MyAttendance() {
   }, []);
   const loadRegs = useCallback(async () => {
     try {
-      setRegs(await apiFetch<RegRow[]>('/attendance/regularizations/mine'));
+      // Paged API now; this panel only ever showed the recent ones anyway.
+      setRegs((await apiFetch<{ items: RegRow[] }>('/attendance/regularizations/mine')).items);
     } catch {
       setRegs([]);
     }

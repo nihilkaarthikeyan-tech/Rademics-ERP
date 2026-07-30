@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
+import { PaginationQueryDto } from '../common/pagination';
 import { RegularizationService } from './regularization.service';
 import { CreateRegularizationDto, DecideRegularizationDto } from './dto';
 import { RequireCapability, RequireScopedCapability } from '../rbac/capability.decorator';
@@ -19,14 +20,14 @@ export class RegularizationController {
 
   @Get('mine')
   @RequireCapability('attendance.own.view')
-  mine(@CurrentUser() user: AuthUser) {
-    return this.regularizations.listMine(user);
+  mine(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    return this.regularizations.listMine(user, query);
   }
 
   @Get('pending')
   @RequireScopedCapability('attendance.regularization.approve')
-  pending(@CurrentUser() user: AuthUser) {
-    return this.regularizations.listPending(user);
+  pending(@CurrentUser() user: AuthUser, @Query() query: PaginationQueryDto) {
+    return this.regularizations.listPending(user, query);
   }
 
   @Post(':id/approve')

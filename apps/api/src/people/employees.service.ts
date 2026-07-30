@@ -143,8 +143,16 @@ export class EmployeesService {
         },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ConflictException('Employee code already in use');
+      // Only claim it was the employee code when it actually was: this update also
+      // writes phone and the skill links, and blaming the code for any collision
+      // sent people hunting for a duplicate that did not exist. Anything else falls
+      // through to the global translator, which names the real field.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        String(err.meta?.target ?? '').includes('employeeCode')
+      ) {
+        throw new ConflictException('That employee code is already in use');
       }
       throw err;
     }

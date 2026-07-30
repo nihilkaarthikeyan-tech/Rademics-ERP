@@ -38,6 +38,28 @@ function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/**
+ * What to actually show the client. Nest's ValidationPipe sends `message` as an
+ * ARRAY of field complaints; handing that straight to `new Error()` stringified it
+ * as one comma-run-on line. Join it properly, and never fall back to a bare status
+ * code, which tells the user nothing they can act on.
+ */
+function errorMessage(message: string | string[] | undefined, res: Response): string {
+  if (Array.isArray(message)) {
+    const parts = message.filter((m) => typeof m === 'string' && m.trim());
+    if (parts.length === 1) return parts[0]!;
+    if (parts.length > 1) return parts.join('. ') + '.';
+  } else if (typeof message === 'string' && message.trim()) {
+    return message;
+  }
+  if (res.status === 401) return 'Your session has ended — please sign in again.';
+  if (res.status === 403) return 'You do not have access to that.';
+  if (res.status === 404) return 'That item could not be found.';
+  if (res.status === 429) return 'Too many attempts — please wait a moment and try again.';
+  if (res.status >= 500) return 'Something went wrong on our side. Please try again.';
+  return res.statusText || 'The request could not be completed.';
+}
+
 export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const doFetch = () => {
     const token = getToken();
@@ -59,8 +81,8 @@ export async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise
   }
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw new ApiError(res.status, body.message ?? res.statusText);
+    const body = (await res.json().catch(() => ({}))) as { message?: string | string[] };
+    throw new ApiError(res.status, errorMessage(body.message, res));
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

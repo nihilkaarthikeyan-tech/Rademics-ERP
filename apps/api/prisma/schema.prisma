@@ -979,8 +979,25 @@ model Invoice {
   issueDate DateTime @db.Date
   dueDate   DateTime @db.Date
 
-  subtotal   Decimal @default(0) @db.Decimal(14, 2)
-  gstAmount  Decimal @default(0) @db.Decimal(14, 2)
+  subtotal Decimal @default(0) @db.Decimal(14, 2)
+  /// Total tax on the invoice. Kept as the single source for totals and reporting;
+  /// the three columns below say how that same amount is apportioned.
+  gstAmount Decimal @default(0) @db.Decimal(14, 2)
+
+  // GST is one rate charged two different ways (Spec §5.8). Where supplier and
+  // place of supply are the same state the tax splits equally between the centre
+  // (CGST) and that state (SGST); across states it is a single IGST charge. The
+  // money is identical either way, but the invoice has to say which — the
+  // customer's input-tax-credit claim depends on it. Stored rather than derived
+  // so a reprint of an old invoice never restates history if settings change.
+  cgstAmount Decimal @default(0) @db.Decimal(14, 2)
+  sgstAmount Decimal @default(0) @db.Decimal(14, 2)
+  igstAmount Decimal @default(0) @db.Decimal(14, 2)
+  /// Two-digit GST state code of the recipient, captured at issue time.
+  placeOfSupplyStateCode String? @db.VarChar(2)
+  /// Recipient's GSTIN as it stood when the invoice was raised.
+  clientGstin String?
+
   total      Decimal @default(0) @db.Decimal(14, 2)
   amountPaid Decimal @default(0) @db.Decimal(14, 2)
 
@@ -1016,6 +1033,10 @@ model InvoiceLine {
 
   position    Int     @default(0)
   description String
+  /// HSN (goods) or SAC (services) code for this line. Optional: it is required on a
+  /// B2B invoice above the turnover thresholds, and this system cannot know whether
+  /// a given business is past them — so it is captured when supplied, never invented.
+  hsnSac      String? @db.VarChar(8)
   quantity    Decimal @db.Decimal(12, 2)
   rate        Decimal @db.Decimal(14, 2)
   gstPercent  Decimal @db.Decimal(5, 2)
@@ -1164,6 +1185,15 @@ model ClientOrg {
   // reservations can sit unnamed at once.
   name   String?         @unique
   status ClientOrgStatus @default(ACTIVE)
+
+  // Billing identity, needed to raise a correct GST invoice. The state code is the
+  // "place of supply": compared against the company's own state, it decides whether
+  // an invoice carries CGST+SGST or IGST. Nullable because a client org is created
+  // as a reservation long before anyone knows who the client is, and because a
+  // customer may be unregistered (B2C) and simply have no GSTIN.
+  gstin          String? @db.VarChar(15)
+  stateCode      String? @db.VarChar(2)
+  billingAddress String?
 
   users    User[]    @relation("OrgUsers")
   projects Project[]

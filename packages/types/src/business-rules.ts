@@ -65,10 +65,18 @@ export const DEFAULT_BUSINESS_RULES = {
   standardWorkdayHours: 8, // payable-day / overtime-day basis (§21) [ASSUMED]
   invoiceFooterText: 'Thank you for your business.', // [ASSUMED]
 
-  // Company / branding for invoices & portal (§23 Company) [ASSUMED — confirm]
-  companyName: 'Rademics',
-  companyAddress: 'Chennai, Tamil Nadu, India',
-  companyGstin: '',
+  // Company / branding for invoices & portal (§23 Company).
+  // CONFIRMED 2026-07-28 from the GST registration certificate (GSTIN 33ASGPR8663J1Z6,
+  // issued 2023-09-04, Annur jurisdiction, Tamil Nadu). Proprietorship: the registered
+  // legal name is the proprietor's, and RLK ENTERPRISES is the trade name — both are on
+  // the certificate, and a GST invoice is expected to carry the legal name, so it is
+  // printed under the trade name rather than dropped.
+  companyName: 'RLK ENTERPRISES',
+  companyLegalName: 'Ranjith Rajamanickam', // proprietor; shown on invoices for GST
+  companyAddress: '4/975-A, Sathy Road, Ganesapuram, Sarcarsamakulam, Coimbatore, Tamil Nadu 641107',
+  companyGstin: '33ASGPR8663J1Z6',
+  companyStateCode: '33', // Tamil Nadu — decides CGST+SGST (intra-state) vs IGST
+  financialYearStartMonth: 4, // April, per the Indian FY [ASSUMED — confirm]
   brandPrimary: '#1B2A4A',
   brandAccent: '#2563EB',
 

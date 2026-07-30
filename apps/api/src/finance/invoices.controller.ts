@@ -11,6 +11,7 @@ import {
 import { RequireCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { reqMeta } from '../common/req-meta';
+import { PaginationQueryDto } from '../common/pagination';
 import type { AuthUser } from '../auth/auth-user';
 
 const num = (d: unknown) => Number(d ?? 0);
@@ -21,8 +22,8 @@ export class InvoicesController {
 
   @Get()
   @RequireCapability('finance.invoices.create_edit')
-  list(@Query('status') status?: string) {
-    return this.invoices.list(status);
+  list(@Query() query: PaginationQueryDto, @Query('status') status?: string) {
+    return this.invoices.list(status, query);
   }
 
   @Get('dues')
@@ -107,13 +108,18 @@ export class InvoicesController {
         dueDate: inv.dueDate,
         subtotal: num(inv.subtotal),
         gstAmount: num(inv.gstAmount),
+        cgstAmount: num(inv.cgstAmount),
+        sgstAmount: num(inv.sgstAmount),
+        igstAmount: num(inv.igstAmount),
+        placeOfSupplyStateCode: inv.placeOfSupplyStateCode,
+        clientGstin: inv.clientGstin,
         total: num(inv.total),
         amountPaid: num(inv.amountPaid),
         notes: inv.notes,
         footerText: inv.footerText,
         clientName: inv.clientOrg?.name ?? null,
         projectName: inv.project?.name ?? null,
-        lines: inv.lines.map((l) => ({ description: l.description, quantity: num(l.quantity), rate: num(l.rate), gstPercent: num(l.gstPercent), lineTotal: num(l.lineTotal) })),
+        lines: inv.lines.map((l) => ({ description: l.description, hsnSac: l.hsnSac, quantity: num(l.quantity), rate: num(l.rate), gstPercent: num(l.gstPercent), lineTotal: num(l.lineTotal) })),
       },
       config,
     );

@@ -12,6 +12,7 @@ import {
 import { RequireCapability, RequireScopedCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { reqMeta } from '../common/req-meta';
+import { PaginationQueryDto } from '../common/pagination';
 import type { AuthUser } from '../auth/auth-user';
 
 /** Expenses, P&L, and the payroll export (Spec §5.8, §21). */
@@ -32,8 +33,11 @@ export class FinanceController {
 
   @Get('expenses/project/:projectId')
   @RequireScopedCapability('finance.expenses.log')
-  projectExpenses(@Param('projectId', ParseUUIDPipe) projectId: string) {
-    return this.expenses.listForProject(projectId);
+  projectExpenses(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query() query: PaginationQueryDto,
+  ) {
+    return this.expenses.listForProject(projectId, query);
   }
 
   // ── P&L per vertical (Spec §5.8) ──

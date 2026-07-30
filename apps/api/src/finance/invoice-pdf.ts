@@ -1,8 +1,10 @@
 import PDFDocument from 'pdfkit';
 import type { FinanceConfig } from './finance-config';
+import { stateLabel } from './gst';
 
 interface PdfLine {
   description: string;
+  hsnSac?: string | null;
   quantity: number;
   rate: number;
   gstPercent: number;
@@ -15,6 +17,11 @@ interface PdfInvoice {
   dueDate: Date;
   subtotal: number;
   gstAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  placeOfSupplyStateCode?: string | null;
+  clientGstin?: string | null;
   total: number;
   amountPaid: number;
   notes: string | null;
@@ -37,10 +44,23 @@ export function buildInvoicePdf(inv: PdfInvoice, config: FinanceConfig): PDFKit.
   const accent = config.brandAccent || '#2563EB';
 
   // ── Header band ──
+  // Stacked from the top so the optional legal-name line can appear without
+  // colliding with the address: a proprietorship trades under one name but is
+  // registered under the proprietor's, and GST expects the registered one to
+  // be on the document. Lines are laid out in order and only if present.
   doc.rect(0, 0, doc.page.width, 90).fill(primary);
-  doc.fillColor('white').fontSize(22).text(config.companyName, 50, 30);
-  doc.fontSize(9).fillColor('#dbe4ff').text(config.companyAddress, 50, 58);
-  if (config.companyGstin) doc.text(`GSTIN: ${config.companyGstin}`, 50, 70);
+  doc.fillColor('white').fontSize(20).text(config.companyName, 50, 22, { width: 380 });
+  let hy = 46;
+  const headerLine = (text: string) => {
+    doc.fontSize(8).fillColor('#dbe4ff').text(text, 50, hy, { width: 470, lineBreak: false });
+    hy += 11;
+  };
+  const legal = config.companyLegalName?.trim();
+  if (legal && legal.toLowerCase() !== config.companyName.trim().toLowerCase()) {
+    headerLine(`Proprietor: ${legal}`);
+  }
+  if (config.companyAddress) headerLine(config.companyAddress);
+  if (config.companyGstin) headerLine(`GSTIN: ${config.companyGstin}`);
   doc.fillColor(accent).fontSize(20).text('INVOICE', 0, 34, { align: 'right', width: doc.page.width - 50 });
 
   // ── Meta ──
@@ -54,13 +74,27 @@ export function buildInvoicePdf(inv: PdfInvoice, config: FinanceConfig): PDFKit.
   y += 24;
   doc.fillColor('#555').fontSize(10).text('Bill to', 50, y);
   doc.fillColor('#111').fontSize(12).text(inv.clientName ?? 'Client', 50, y + 12);
-  if (inv.projectName) doc.fillColor('#555').fontSize(10).text(`Project: ${inv.projectName}`, 50, y + 30);
+  let billY = y + 30;
+  if (inv.clientGstin) {
+    doc.fillColor('#555').fontSize(10).text(`GSTIN: ${inv.clientGstin}`, 50, billY);
+    billY += 14;
+  }
+  // Place of supply is what justifies the CGST/SGST-vs-IGST choice below, so it
+  // belongs on the face of the invoice rather than being implied by the totals.
+  const pos = stateLabel(inv.placeOfSupplyStateCode);
+  if (pos) {
+    doc.fillColor('#555').fontSize(10).text(`Place of supply: ${pos}`, 50, billY);
+    billY += 14;
+  }
+  if (inv.projectName) doc.fillColor('#555').fontSize(10).text(`Project: ${inv.projectName}`, 50, billY);
 
   // ── Table header ──
-  y += 60;
+  y += 76;
+  const anyHsn = inv.lines.some((l) => l.hsnSac);
   doc.rect(50, y, doc.page.width - 100, 22).fill(primary);
   doc.fillColor('white').fontSize(10);
   doc.text('Description', 58, y + 6);
+  if (anyHsn) doc.text('HSN/SAC', 240, y + 6, { width: 55, align: 'right' });
   doc.text('Qty', 300, y + 6, { width: 50, align: 'right' });
   doc.text('Rate', 355, y + 6, { width: 60, align: 'right' });
   doc.text('GST%', 420, y + 6, { width: 40, align: 'right' });
@@ -69,10 +103,12 @@ export function buildInvoicePdf(inv: PdfInvoice, config: FinanceConfig): PDFKit.
 
   // ── Rows ──
   doc.fillColor('#111').fontSize(10);
+  const descW = anyHsn ? 175 : 235;
   for (const l of inv.lines) {
-    const h = Math.max(18, doc.heightOfString(l.description, { width: 235 }) + 6);
+    const h = Math.max(18, doc.heightOfString(l.description, { width: descW }) + 6);
     if (y + h > doc.page.height - 120) { doc.addPage(); y = 50; }
-    doc.fillColor('#111').text(l.description, 58, y + 4, { width: 235 });
+    doc.fillColor('#111').text(l.description, 58, y + 4, { width: descW });
+    if (anyHsn) doc.text(l.hsnSac ?? '', 240, y + 4, { width: 55, align: 'right' });
     doc.text(String(l.quantity), 300, y + 4, { width: 50, align: 'right' });
     doc.text(l.rate.toFixed(2), 355, y + 4, { width: 60, align: 'right' });
     doc.text(l.gstPercent.toFixed(0), 420, y + 4, { width: 40, align: 'right' });
@@ -92,7 +128,18 @@ export function buildInvoicePdf(inv: PdfInvoice, config: FinanceConfig): PDFKit.
     y += bold ? 20 : 16;
   };
   totalRow('Subtotal', inr(inv.subtotal));
-  totalRow('GST', inr(inv.gstAmount));
+  // The same tax, named the way the recipient has to claim it. Older invoices
+  // predate the split and carry zeros in all three, so fall back to one GST line
+  // rather than printing a tax of zero on a document that charged one.
+  const hasSplit = inv.cgstAmount > 0 || inv.sgstAmount > 0 || inv.igstAmount > 0;
+  if (!hasSplit) {
+    totalRow('GST', inr(inv.gstAmount));
+  } else if (inv.igstAmount > 0) {
+    totalRow('IGST', inr(inv.igstAmount));
+  } else {
+    totalRow('CGST', inr(inv.cgstAmount));
+    totalRow('SGST', inr(inv.sgstAmount));
+  }
   totalRow('Total', inr(inv.total), true);
   totalRow('Paid', inr(inv.amountPaid));
   totalRow('Balance', inr(Math.round((inv.total - inv.amountPaid) * 100) / 100), true);

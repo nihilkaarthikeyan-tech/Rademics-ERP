@@ -8,6 +8,7 @@ import { Grant } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EmailProducer } from '../queue/email.producer';
+import { pageArgs } from '../common/pagination';
 import { CapabilityService } from '../rbac/capability.service';
 import { AttendanceService } from './attendance.service';
 import { AttendanceComputeService } from './attendance-compute.service';
@@ -81,15 +82,24 @@ export class RegularizationService {
   }
 
   // ── Own requests ──
-  listMine(user: AuthUser) {
-    return this.prisma.regularizationRequest.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-    });
+  // One page at a time: a request per correction adds up over years of employment.
+  async listMine(user: AuthUser, query?: { page?: number; pageSize?: number }) {
+    const { page, pageSize, skip, take } = pageArgs(query);
+    const where = { userId: user.id };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.regularizationRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.regularizationRequest.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
   }
 
   // ── Pending requests the caller may approve (scoped for TL/PM) ──
-  async listPending(caller: AuthUser) {
+  async listPending(caller: AuthUser, query?: { page?: number; pageSize?: number }) {
     const grant = await this.capabilities.resolveGrant(
       caller.role,
       caller.resourceType,
@@ -100,11 +110,18 @@ export class RegularizationService {
         ? { status: 'PENDING' as const }
         : { status: 'PENDING' as const, userId: { in: await this.attendance.teamScopeUserIds(caller.id) } };
 
-    return this.prisma.regularizationRequest.findMany({
-      where,
-      orderBy: { createdAt: 'asc' },
-      include: { user: { select: { id: true, name: true, email: true } } },
-    });
+    const { page, pageSize, skip, take } = pageArgs(query);
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.regularizationRequest.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        include: { user: { select: { id: true, name: true, email: true } } },
+        skip,
+        take,
+      }),
+      this.prisma.regularizationRequest.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
   }
 
   // ── Approve / reject (Spec §5.3) ──

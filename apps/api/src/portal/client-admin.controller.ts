@@ -1,7 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ClientAdminService } from './client-admin.service';
-import { CreateClientOrgDto, CreateClientUserDto, GrantAccessDto, OnboardClientDto } from './dto';
+import {
+  CreateClientOrgDto,
+  CreateClientUserDto,
+  GrantAccessDto,
+  OnboardClientDto,
+  UpdateClientOrgBillingDto,
+} from './dto';
 import { RequireCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { reqMeta } from '../common/req-meta';
@@ -22,6 +28,18 @@ export class ClientAdminController {
   @RequireCapability('portal.users.manage')
   listOrgs() {
     return this.admin.listOrgs();
+  }
+
+  /** Set or correct a client's GSTIN / state — what decides CGST+SGST vs IGST. */
+  @Put(':orgId/billing')
+  @RequireCapability('portal.users.manage')
+  updateBilling(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Body() dto: UpdateClientOrgBillingDto,
+    @CurrentUser() actor: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.admin.updateOrgBilling(orgId, dto, actor, reqMeta(req));
   }
 
   /**

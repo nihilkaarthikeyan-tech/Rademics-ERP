@@ -5,11 +5,41 @@ import { AuditService } from '../audit/audit.service';
 import { AuthService } from '../auth/auth.service';
 import type { AuthUser } from '../auth/auth-user';
 import { formatClientCode, formatProjectCode } from '@rademics/types';
-import type { CreateClientOrgDto, CreateClientUserDto, GrantAccessDto, OnboardClientDto } from './dto';
+import type {
+  CreateClientOrgDto,
+  CreateClientUserDto,
+  GrantAccessDto,
+  OnboardClientDto,
+  UpdateClientOrgBillingDto,
+} from './dto';
+import { normaliseStateCode, stateCodeFromGstin } from '../finance/gst';
 
 interface Meta {
   ip?: string | null;
   userAgent?: string | null;
+}
+
+/**
+ * Normalise the billing identity before it is stored.
+ *
+ * The state code is derived from the GSTIN whenever one is present: those two
+ * digits ARE the registered state, so accepting a separately-typed code invites a
+ * mismatch that would silently put the wrong tax on every invoice for that client.
+ * Blank strings are stored as null so "cleared" and "never set" are the same thing.
+ */
+function billingFields(dto: {
+  gstin?: string;
+  stateCode?: string;
+  billingAddress?: string;
+}): { gstin?: string | null; stateCode?: string | null; billingAddress?: string | null } {
+  const out: { gstin?: string | null; stateCode?: string | null; billingAddress?: string | null } = {};
+  if (dto.gstin !== undefined) out.gstin = dto.gstin.trim().toUpperCase() || null;
+  if (dto.billingAddress !== undefined) out.billingAddress = dto.billingAddress.trim() || null;
+  if (dto.gstin !== undefined || dto.stateCode !== undefined) {
+    out.stateCode =
+      stateCodeFromGstin(out.gstin ?? dto.gstin) ?? normaliseStateCode(dto.stateCode) ?? null;
+  }
+  return out;
 }
 
 /** Internal-side client administration (Spec §2, §5.5) — gated by portal.users.manage. */
@@ -23,7 +53,9 @@ export class ClientAdminService {
 
   async createOrg(dto: CreateClientOrgDto, actor: AuthUser, meta: Meta) {
     try {
-      const org = await this.prisma.clientOrg.create({ data: { name: dto.name.trim() } });
+      const org = await this.prisma.clientOrg.create({
+        data: { name: dto.name.trim(), ...billingFields(dto) },
+      });
       await this.audit.record({
         actorId: actor.id, actorEmail: actor.email,
         action: 'CLIENT_ORG_CREATED', entityType: 'ClientOrg', entityId: org.id,
@@ -38,6 +70,33 @@ export class ClientAdminService {
     }
   }
 
+  /**
+   * Set or correct a client's billing identity. Separate from createOrg because
+   * most orgs exist as a reserved number long before anyone knows the GSTIN, and
+   * an existing client can re-register or move state.
+   */
+  async updateOrgBilling(orgId: string, dto: UpdateClientOrgBillingDto, actor: AuthUser, meta: Meta) {
+    const existing = await this.prisma.clientOrg.findUnique({
+      where: { id: orgId },
+      select: { id: true, gstin: true, stateCode: true },
+    });
+    if (!existing) throw new NotFoundException('Client organization not found');
+
+    const org = await this.prisma.clientOrg.update({
+      where: { id: orgId },
+      data: billingFields(dto),
+      select: { id: true, name: true, gstin: true, stateCode: true, billingAddress: true },
+    });
+    await this.audit.record({
+      actorId: actor.id, actorEmail: actor.email,
+      action: 'CLIENT_ORG_BILLING_UPDATED', entityType: 'ClientOrg', entityId: org.id,
+      before: { gstin: existing.gstin, stateCode: existing.stateCode },
+      after: { gstin: org.gstin, stateCode: org.stateCode },
+      ...meta,
+    });
+    return org;
+  }
+
   async listOrgs() {
     // Ordered by number, not name: a reserved client ID has no name yet, and
     // sorting by it would scatter the reservations unpredictably. The code is
@@ -49,6 +108,11 @@ export class ClientAdminService {
         number: true,
         name: true,
         status: true,
+        // Needed by the billing editor on this screen; harmless to expose, since
+        // the whole endpoint is already Super-Admin-only (portal.users.manage).
+        gstin: true,
+        stateCode: true,
+        billingAddress: true,
         _count: { select: { users: true, projects: true } },
       },
     });

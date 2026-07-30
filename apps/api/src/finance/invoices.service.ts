@@ -10,6 +10,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { pageArgs } from '../common/pagination';
+import { normaliseStateCode, splitGst, stateCodeFromGstin } from './gst';
 import { PresenceService } from '../attendance/presence.service';
 import { EmailProducer } from '../queue/email.producer';
 import { toFinanceConfig, type FinanceConfig } from './finance-config';
@@ -88,6 +90,7 @@ export class InvoicesService {
       return {
         position: i,
         description: l.description.trim(),
+        hsnSac: l.hsnSac?.trim() || null,
         quantity: l.quantity,
         rate: l.rate,
         gstPercent,
@@ -97,6 +100,41 @@ export class InvoicesService {
       };
     });
     return { rows, subtotal: money(subtotal), gstAmount: money(gstAmount), total: money(subtotal + gstAmount) };
+  }
+
+  /**
+   * Decide how this invoice's tax is apportioned, and snapshot the customer's
+   * billing identity onto it.
+   *
+   * Snapshotting matters: a client can change GSTIN or move state later, and an
+   * invoice is a record of what was true when it was raised. Reading through the
+   * live relation at print time would silently rewrite issued documents.
+   *
+   * The recipient's state comes from their GSTIN first — those two digits ARE the
+   * registered state and cannot disagree with it — and only then from the state
+   * recorded on the org.
+   */
+  private async resolveTax(
+    gstAmount: number,
+    clientOrgId: string | null | undefined,
+    config: FinanceConfig,
+  ) {
+    let clientGstin: string | null = null;
+    let recipientState: string | null = null;
+
+    if (clientOrgId) {
+      const org = await this.prisma.clientOrg.findUnique({
+        where: { id: clientOrgId },
+        select: { gstin: true, stateCode: true },
+      });
+      clientGstin = org?.gstin ?? null;
+      recipientState = stateCodeFromGstin(org?.gstin) ?? normaliseStateCode(org?.stateCode);
+    }
+
+    return {
+      clientGstin,
+      split: splitGst(gstAmount, config.companyStateCode, recipientState),
+    };
   }
 
   // ── Create a DRAFT invoice (Spec §5.8, §24) ──
@@ -109,6 +147,7 @@ export class InvoicesService {
     if (due < issue) throw new BadRequestException('Due date must be on or after the issue date');
 
     const { rows, subtotal, gstAmount, total } = this.computeLines(dto.lines, config.defaultGstPercent);
+    const tax = await this.resolveTax(gstAmount, dto.clientOrgId, config);
 
     const invoice = await this.prisma.$transaction(async (tx) => {
       const number = await this.nextNumber(issue.getUTCFullYear(), tx);
@@ -122,6 +161,11 @@ export class InvoicesService {
           dueDate: due,
           subtotal,
           gstAmount,
+          cgstAmount: tax.split.cgst,
+          sgstAmount: tax.split.sgst,
+          igstAmount: tax.split.igst,
+          placeOfSupplyStateCode: tax.split.placeOfSupplyStateCode,
+          clientGstin: tax.clientGstin,
           total,
           notes: dto.notes ?? null,
           footerText: config.invoiceFooterText,
@@ -182,6 +226,9 @@ export class InvoicesService {
     const due = dto.dueDate ? new Date(dto.dueDate) : new Date(issue.getTime() + config.paymentTermsDays * 86_400_000);
     if (due < issue) throw new BadRequestException('Due date must be on or after the issue date');
     const { rows, subtotal, gstAmount, total } = this.computeLines(dto.lines, config.defaultGstPercent);
+    // Recomputed, not carried over: editing a draft can change the client, and with
+    // it whether this is an intra- or inter-state supply.
+    const tax = await this.resolveTax(gstAmount, dto.clientOrgId, config);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.invoiceLine.deleteMany({ where: { invoiceId: id } });
@@ -194,6 +241,11 @@ export class InvoicesService {
           dueDate: due,
           subtotal,
           gstAmount,
+          cgstAmount: tax.split.cgst,
+          sgstAmount: tax.split.sgst,
+          igstAmount: tax.split.igst,
+          placeOfSupplyStateCode: tax.split.placeOfSupplyStateCode,
+          clientGstin: tax.clientGstin,
           total,
           notes: dto.notes ?? null,
           lines: { create: rows },
@@ -383,13 +435,25 @@ export class InvoicesService {
     return this.decorate(inv);
   }
 
-  async list(status?: string) {
-    const invoices = await this.prisma.invoice.findMany({
-      where: status ? { status: status as never } : undefined,
-      orderBy: { createdAt: 'desc' },
-      include: INVOICE_INCLUDE,
-    });
-    return invoices.map((i) => this.decorate(i));
+  /**
+   * Newest first, one page at a time. Invoices accumulate for the life of the
+   * business and this used to return every one of them with all lines and
+   * payments included — the heaviest read in the app, growing monthly.
+   */
+  async list(status?: string, query?: { page?: number; pageSize?: number }) {
+    const { page, pageSize, skip, take } = pageArgs(query);
+    const where = status ? { status: status as never } : undefined;
+    const [invoices, total] = await this.prisma.$transaction([
+      this.prisma.invoice.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: INVOICE_INCLUDE,
+        skip,
+        take,
+      }),
+      this.prisma.invoice.count({ where }),
+    ]);
+    return { items: invoices.map((i) => this.decorate(i)), total, page, pageSize };
   }
 
   /** Outstanding dues per client with 0–30 / 31–60 / 61–90 / 90+ aging (Spec §17.5). */

@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -22,6 +23,11 @@ export class InvoiceLineDto {
   @MinLength(1)
   @MaxLength(300)
   description!: string;
+
+  /** HSN (goods) or SAC (services) code. 4–8 digits; optional — see the schema note. */
+  @IsOptional()
+  @Matches(/^[0-9]{4,8}$/, { message: 'HSN/SAC must be 4 to 8 digits' })
+  hsnSac?: string;
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01, { message: 'Quantity must be greater than 0' })

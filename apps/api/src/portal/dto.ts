@@ -4,6 +4,7 @@ import {
   IsArray,
   IsEmail,
   IsInt,
+  IsOptional,
   IsPositive,
   IsString,
   IsUUID,
@@ -20,6 +21,43 @@ export class CreateClientOrgDto {
   @MinLength(2)
   @MaxLength(150)
   name!: string;
+
+  // Billing identity. All optional: an unregistered (B2C) customer has no GSTIN,
+  // and a reserved org is created before any of this is known. Where a GSTIN IS
+  // given the service derives the state from it, because the first two characters
+  // of a GSTIN are the registered state and the two cannot legitimately disagree.
+  @IsOptional()
+  @Matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{2}$/, {
+    message: 'GSTIN must be 15 characters: 2 digits, 5 letters, 4 digits, a letter, then 2 more',
+  })
+  gstin?: string;
+
+  @IsOptional()
+  @Matches(/^[0-9]{2}$/, { message: 'State code must be two digits, e.g. 33 for Tamil Nadu' })
+  stateCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  billingAddress?: string;
+}
+
+/** Same billing fields, for editing an org that already exists. */
+export class UpdateClientOrgBillingDto {
+  @IsOptional()
+  @Matches(/^([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{2})?$/, {
+    message: 'GSTIN must be 15 characters: 2 digits, 5 letters, 4 digits, a letter, then 2 more',
+  })
+  gstin?: string;
+
+  @IsOptional()
+  @Matches(/^([0-9]{2})?$/, { message: 'State code must be two digits, e.g. 33 for Tamil Nadu' })
+  stateCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  billingAddress?: string;
 }
 
 export class CreateClientUserDto {

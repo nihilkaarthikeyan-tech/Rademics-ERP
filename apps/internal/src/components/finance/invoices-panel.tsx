@@ -6,7 +6,7 @@ import { apiFetch, ApiError, API_BASE } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { getToken } from '@/lib/session';
 
-interface Line { description: string; quantity: number; rate: number; gstPercent?: number }
+interface Line { description: string; hsnSac?: string; quantity: number; rate: number; gstPercent?: number }
 interface Payment {
   id: string; paidAt: string; mode: string; reference: string | null;
   amount: string; note: string | null; isReversal: boolean;
@@ -18,7 +18,7 @@ interface Invoice {
 }
 /** Full shape from GET /invoices/:id — lines + payments for the expanded row. */
 interface InvoiceDetail extends Invoice {
-  lines: { id: string; description: string; quantity: string; rate: string; gstPercent: string }[];
+  lines: { id: string; description: string; hsnSac?: string | null; quantity: string; rate: string; gstPercent: string }[];
   payments: Payment[];
 }
 
@@ -49,6 +49,7 @@ export function InvoicesPanel() {
   // Expanded row: full detail (lines + payments) fetched on demand.
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
+  const [total, setTotal] = useState(0);
 
   // create/edit-form state — editingId set means the form PUTs a draft instead of creating.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,9 +59,15 @@ export function InvoicesPanel() {
 
   const load = useCallback(async () => {
     try {
-      setRows(await apiFetch<Invoice[]>('/invoices'));
+      // The API now answers a page at a time (it used to return every invoice ever
+      // raised, with all lines and payments). `total` is kept so the count below can
+      // say what is not on screen instead of quietly hiding it.
+      const page = await apiFetch<{ items: Invoice[]; total: number }>('/invoices?pageSize=100');
+      setRows(page.items);
+      setTotal(page.total);
     } catch {
       setRows([]);
+      setTotal(0);
     }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -99,14 +106,22 @@ export function InvoicesPanel() {
     e.preventDefault();
     setError(null);
     try {
+      // Drop a blank HSN rather than sending "": the field is optional, and an
+      // empty string is a value that fails the 4–8 digit rule.
+      const payloadLines = lines.map(({ hsnSac, ...rest }) =>
+        hsnSac && hsnSac.trim() ? { ...rest, hsnSac: hsnSac.trim() } : rest,
+      );
       if (editingId) {
         // Keep the client/project pairing — the API replaces the whole draft.
         await apiFetch(`/invoices/${editingId}`, {
           method: 'PUT',
-          body: JSON.stringify({ issueDate, lines, ...editingKeeps }),
+          body: JSON.stringify({ issueDate, lines: payloadLines, ...editingKeeps }),
         });
       } else {
-        await apiFetch('/invoices', { method: 'POST', body: JSON.stringify({ issueDate, lines }) });
+        await apiFetch('/invoices', {
+          method: 'POST',
+          body: JSON.stringify({ issueDate, lines: payloadLines }),
+        });
       }
       resetForm();
       await load();
@@ -127,6 +142,7 @@ export function InvoicesPanel() {
       setLines(
         d.lines.map((l) => ({
           description: l.description,
+          hsnSac: l.hsnSac ?? '',
           quantity: Number(l.quantity),
           rate: Number(l.rate),
           gstPercent: Number(l.gstPercent),
@@ -201,7 +217,15 @@ export function InvoicesPanel() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Invoices</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Invoices
+          {/* Say what is off-screen. A silent cap reads as "this is everything". */}
+          {rows && total > rows.length ? (
+            <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
+              newest {rows.length} of {total}
+            </span>
+          ) : null}
+        </h2>
         <Button size="sm" onClick={() => (creating ? resetForm() : setCreating(true))}>
           {creating ? 'Close form' : 'New invoice'}
         </Button>
@@ -220,8 +244,11 @@ export function InvoicesPanel() {
                 <Input id="issue" type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} required />
               </div>
               {lines.map((l, i) => (
-                <div key={i} className="grid gap-2 sm:grid-cols-[1fr_5rem_6rem_5rem]">
+                <div key={i} className="grid gap-2 sm:grid-cols-[1fr_6rem_5rem_6rem_5rem]">
                   <Input placeholder="Description" value={l.description} onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} required />
+                  {/* Optional: required on B2B invoices past the turnover thresholds,
+                      which the app cannot determine — so it is asked for, never invented. */}
+                  <Input placeholder="HSN/SAC" inputMode="numeric" maxLength={8} value={l.hsnSac ?? ''} onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, hsnSac: e.target.value.replace(/\D/g, '').slice(0, 8) } : x)))} />
                   <Input type="number" step="0.01" min="0.01" placeholder="Qty" value={l.quantity} onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, quantity: Number(e.target.value) } : x)))} />
                   <Input type="number" step="0.01" min="0" placeholder="Rate" value={l.rate} onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, rate: Number(e.target.value) } : x)))} />
                   <Input type="number" step="1" min="0" max="28" placeholder="GST%" value={l.gstPercent} onChange={(e) => setLines((p) => p.map((x, j) => (j === i ? { ...x, gstPercent: Number(e.target.value) } : x)))} />

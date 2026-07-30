@@ -22,7 +22,10 @@ export function PendingApprovals() {
 
   const load = useCallback(async () => {
     try {
-      setRows(await apiFetch<PendingRow[]>('/attendance/regularizations/pending'));
+      setRows(
+        (await apiFetch<{ items: PendingRow[] }>('/attendance/regularizations/pending?pageSize=100'))
+          .items,
+      );
     } catch {
       setRows([]);
     }

@@ -31,7 +31,10 @@ export function ExpensesPanel() {
   const load = useCallback(async () => {
     if (!projectId) return;
     try {
-      setRows(await apiFetch<Expense[]>(`/finance/expenses/project/${projectId}`));
+      setRows(
+        (await apiFetch<{ items: Expense[] }>(`/finance/expenses/project/${projectId}?pageSize=100`))
+          .items,
+      );
     } catch {
       setRows([]);
     }

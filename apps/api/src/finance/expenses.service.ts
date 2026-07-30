@@ -3,6 +3,7 @@ import { Grant } from '@rademics/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CapabilityService } from '../rbac/capability.service';
+import { pageArgs } from '../common/pagination';
 import type { CreateExpenseDto } from './dto';
 import type { AuthUser } from '../auth/auth-user';
 
@@ -45,8 +46,15 @@ export class ExpensesService {
     return expense;
   }
 
-  async listForProject(projectId: string) {
-    return this.prisma.expense.findMany({ where: { projectId }, orderBy: { spentAt: 'desc' } });
+  /** Newest first, one page at a time — a long-running project accrues these forever. */
+  async listForProject(projectId: string, query?: { page?: number; pageSize?: number }) {
+    const { page, pageSize, skip, take } = pageArgs(query);
+    const where = { projectId };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.expense.findMany({ where, orderBy: { spentAt: 'desc' }, skip, take }),
+      this.prisma.expense.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
   }
 
   private async assertCanLog(actor: AuthUser, projectPmId: string | null): Promise<void> {
