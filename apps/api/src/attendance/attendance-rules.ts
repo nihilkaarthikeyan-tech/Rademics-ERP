@@ -18,6 +18,24 @@ export interface AttendanceRules {
   idleMinutes: number;
   threeLatesDeduction: { lateCount: number; halfDayDeduction: number };
   timezone: string; // IANA, e.g. 'Asia/Kolkata'
+  secondSaturdayOff: boolean; // 2nd Saturday of each month is a company off-day
+}
+
+/**
+ * True when `date` is the 2nd Saturday of its month. The 2nd Saturday is a standing
+ * company holiday, so it is a WEEKLY_OFF for attendance and is excluded from the
+ * working-day count in reports and leave deductions.
+ */
+export function isSecondSaturday(year: number, month: number, day: number): boolean {
+  // Saturday-ness is the caller's job (weekday === 6); here we only check that this
+  // is the 2nd such day of the month: days 8–14 are the second occurrence of any weekday.
+  return day >= 8 && day <= 14 && new Date(Date.UTC(year, month - 1, day)).getUTCDay() === 6;
+}
+
+/** True when the given local date key ('YYYY-MM-DD') is a 2nd Saturday. */
+export function isSecondSaturdayKey(dateKey: string): boolean {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return isSecondSaturday(y ?? 0, m ?? 0, d ?? 0);
 }
 
 export interface SessionInput {
@@ -178,8 +196,13 @@ export function computeDayMarks(
   sessions: SessionInput[],
   rules: AttendanceRules,
   weekday: number,
+  dateKey?: string,
 ): DayMarks {
-  const isWorkingDay = rules.workingDays.includes(weekday);
+  // 2nd Saturday is a standing company off-day: never a working day, so no late
+  // mark and no ABSENT for not checking in (dateKey omitted ⇒ rule can't apply).
+  const isSecondSat =
+    rules.secondSaturdayOff && weekday === 6 && dateKey !== undefined && isSecondSaturdayKey(dateKey);
+  const isWorkingDay = rules.workingDays.includes(weekday) && !isSecondSat;
 
   const splits = sessions.map((s) => splitSessionSeconds(s, rules));
   const workedSeconds = splits.reduce((sum, x) => sum + x.regular, 0);

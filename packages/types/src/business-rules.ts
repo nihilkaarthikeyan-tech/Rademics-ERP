@@ -22,6 +22,9 @@ export type ConfigurableBy = (typeof ConfigurableBy)[keyof typeof ConfigurableBy
 export const DEFAULT_BUSINESS_RULES = {
   // Working time
   workingDays: [1, 2, 3, 4, 5, 6], // Mon–Sat, Sunday off [ASSUMED]
+  // Every 2nd Saturday of the month is a company holiday, so it is never a working
+  // day for attendance marks, report working-day counts, or leave deductions.
+  secondSaturdayOff: true,
   workStart: '09:00', // 9:00 AM IST [ASSUMED]
   workEnd: '18:00', // 6:00 PM IST [ASSUMED]
   lateThreshold: '09:15', // check-in after = Late [ASSUMED]

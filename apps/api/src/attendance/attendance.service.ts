@@ -60,6 +60,7 @@ export class AttendanceService {
           halfDayDeduction: 1,
         },
       timezone: (r.timezone as string) ?? 'Asia/Kolkata',
+      secondSaturdayOff: (r.secondSaturdayOff as boolean) ?? true,
     };
   }
 
@@ -201,7 +202,7 @@ export class AttendanceService {
         : s.idleSeconds + this.idleGap(s.lastHeartbeatAt ?? s.checkInAt, now, rules),
     }));
     const weekday = zonedParts(now, rules.timezone).weekday;
-    const marks = computeDayMarks(forMarks, rules, weekday);
+    const marks = computeDayMarks(forMarks, rules, weekday, todayKey);
     const openSession = sessions.find((s) => !s.checkOutAt) ?? null;
 
     return {

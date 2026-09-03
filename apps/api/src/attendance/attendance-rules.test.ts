@@ -4,6 +4,7 @@ import {
   businessDateKey,
   overlapWithShiftWindow,
   timeToSeconds,
+  isSecondSaturdayKey,
   type AttendanceRules,
   type SessionInput,
 } from './attendance-rules';
@@ -18,6 +19,7 @@ const RULES: AttendanceRules = {
   idleMinutes: 5,
   threeLatesDeduction: { lateCount: 3, halfDayDeduction: 1 },
   timezone: 'Asia/Kolkata',
+  secondSaturdayOff: true,
 };
 
 // IST is UTC+5:30. 09:00 IST = 03:30 UTC; 09:20 IST = 03:50 UTC.
@@ -132,5 +134,40 @@ describe('helpers', () => {
   it('businessDateKey reflects the company timezone', () => {
     // 2026-07-06 20:00 UTC = 2026-07-07 01:30 IST → next day in IST
     expect(businessDateKey(new Date(Date.UTC(2026, 6, 6, 20, 0)), 'Asia/Kolkata')).toBe('2026-07-07');
+  });
+});
+
+describe('2nd Saturday off', () => {
+  it('identifies only the 2nd Saturday of a month', () => {
+    // Aug 2026 Saturdays: 1, 8, 15, 22, 29
+    expect(isSecondSaturdayKey('2026-08-01')).toBe(false);
+    expect(isSecondSaturdayKey('2026-08-08')).toBe(true);
+    expect(isSecondSaturdayKey('2026-08-15')).toBe(false);
+    // Sep 2026 Saturdays: 5, 12, 19, 26
+    expect(isSecondSaturdayKey('2026-09-12')).toBe(true);
+    // A weekday inside the 8–14 window is not a 2nd Saturday
+    expect(isSecondSaturdayKey('2026-08-10')).toBe(false);
+  });
+
+  it('marks a 2nd Saturday WEEKLY_OFF instead of ABSENT when nobody checks in', () => {
+    // Saturday 2026-08-08, no sessions: without the rule this would be ABSENT.
+    const marks = computeDayMarks([], RULES, 6, '2026-08-08');
+    expect(marks.status).toBe('WEEKLY_OFF');
+  });
+
+  it('still treats other Saturdays as normal working days', () => {
+    const marks = computeDayMarks([], RULES, 6, '2026-08-15');
+    expect(marks.status).toBe('ABSENT');
+  });
+
+  it('does not raise a late flag on a 2nd Saturday', () => {
+    const late: SessionInput = {
+      checkInAt: new Date('2026-08-08T06:00:00Z'), // 11:30 IST — well past 09:15
+      checkOutAt: new Date('2026-08-08T12:00:00Z'),
+      idleSeconds: 0,
+    };
+    const marks = computeDayMarks([late], RULES, 6, '2026-08-08');
+    expect(marks.isLate).toBe(false);
+    expect(marks.status).toBe('WEEKLY_OFF');
   });
 });

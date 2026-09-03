@@ -66,7 +66,7 @@ export class AttendanceComputeService {
   async computeDay(userId: string, dateKey: string, rules: AttendanceRules): Promise<void> {
     const sessions = await this.sessionsForDate(userId, dateKey, rules);
     const weekday = weekdayOfLocalDate(dateKey, rules.timezone);
-    const marks = computeDayMarks(sessions, rules, weekday);
+    const marks = computeDayMarks(sessions, rules, weekday, dateKey);
 
     await this.prisma.attendanceDay.upsert({
       where: { userId_date: { userId, date: new Date(dateKey) } },

@@ -4,6 +4,7 @@ import type { Prisma, TaskStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import type { ReportColumn, ReportData } from './report-export';
+import { isSecondSaturday } from '../attendance/attendance-rules';
 import type { AuthUser } from '../auth/auth-user';
 
 const num = (d: Prisma.Decimal | number | null | undefined) => Number(d ?? 0);
@@ -96,18 +97,22 @@ export class ReportsService {
     const rules = await this.rules();
     const workday = (rules.standardWorkdayHours as number) ?? 8;
 
-    const workingDays = await this.workingDaysBetween(from, to, rules);
     const users = await this.prisma.user.findMany({
       where: { status: 'ACTIVE', resourceType: 'INTERNAL', role: { not: 'CLIENT' }, ...(scope === 'ALL' ? {} : { id: { in: scope } }) },
-      select: { id: true, name: true, team: { select: { name: true } } },
+      select: { id: true, name: true, createdAt: true, team: { select: { name: true } } },
       orderBy: { name: 'asc' },
     });
 
     const rows = [];
     for (const u of users) {
+      // Working days are per-employee: someone who joined mid-range is only
+      // accountable for the days since they joined.
+      const workingDays = await this.workingDaysBetween(from, to, rules, u.createdAt);
       const [days, leaves, regs] = await Promise.all([
         this.prisma.attendanceDay.findMany({ where: { userId: u.id, date: { gte: from, lte: to } }, select: { status: true, isLate: true, workedSeconds: true, idleSeconds: true, overtimeSeconds: true } }),
-        this.prisma.leaveRequest.findMany({ where: { userId: u.id, status: 'APPROVED', fromDate: { gte: from, lte: to } }, select: { type: true, paidDays: true } }),
+        // Overlap, not start-date: a leave that began before this window but runs into
+        // it still applies to these days (fromDate <= to AND toDate >= from).
+        this.prisma.leaveRequest.findMany({ where: { userId: u.id, status: 'APPROVED', fromDate: { lte: to }, toDate: { gte: from } }, select: { type: true, paidDays: true } }),
         this.prisma.regularizationRequest.count({ where: { userId: u.id, status: 'APPROVED', date: { gte: from, lte: to } } }),
       ]);
       const present = days.filter((d) => d.status === 'PRESENT').length;
@@ -116,7 +121,13 @@ export class ReportsService {
       const lates = days.filter((d) => d.isLate).length;
       const workedHrs = round(days.reduce((n, d) => n + d.workedSeconds, 0) / 3600);
       const idleHrs = round(days.reduce((n, d) => n + d.idleSeconds, 0) / 3600);
-      const overtimeDays = round(days.reduce((n, d) => n + d.overtimeSeconds, 0) / (workday * 3600));
+      const overtimeSecs = days.reduce((n, d) => n + d.overtimeSeconds, 0);
+      const overtimeDays = round(overtimeSecs / (workday * 3600));
+      // Overtime in hours as well as workday-units: "Overtime days" alone reads as a
+      // small count next to Half-days/Leave days and hides how much after-hours work
+      // it actually represents. Combined = worked + overtime, the employee's true total.
+      const overtimeHrs = round(overtimeSecs / 3600);
+      const combinedHrs = round(workedHrs + overtimeHrs);
       const idlePct = workedHrs + idleHrs > 0 ? round((idleHrs / (workedHrs + idleHrs)) * 100) : 0;
       const leaveByType: Record<string, number> = {};
       for (const l of leaves) leaveByType[l.type] = round((leaveByType[l.type] ?? 0) + num(l.paidDays));
@@ -124,14 +135,15 @@ export class ReportsService {
       rows.push({
         employee: u.name, team: u.team?.name ?? '—', workingDays, present, absent, lateCount: lates, halfDays: half,
         overtimeDays, leaveDays: Object.entries(leaveByType).map(([t, n]) => `${t}:${n}`).join(' ') || '—',
-        workedHrs, idleHrs, idlePct, regularizations: regs,
+        workedHrs, overtimeHrs, combinedHrs, idleHrs, idlePct, regularizations: regs,
       });
     }
     const columns: ReportColumn[] = [
       { key: 'employee', label: 'Employee' }, { key: 'team', label: 'Team' }, { key: 'workingDays', label: 'Working days' },
       { key: 'present', label: 'Present' }, { key: 'absent', label: 'Absent' }, { key: 'lateCount', label: 'Late count' },
       { key: 'halfDays', label: 'Half-days' }, { key: 'overtimeDays', label: 'Overtime days' }, { key: 'leaveDays', label: 'Leave days' },
-      { key: 'workedHrs', label: 'Worked hrs' }, { key: 'idleHrs', label: 'Idle hrs' }, { key: 'idlePct', label: 'Idle %' },
+      { key: 'workedHrs', label: 'Worked hrs' }, { key: 'overtimeHrs', label: 'Overtime hrs' },
+      { key: 'combinedHrs', label: 'Combined hrs' }, { key: 'idleHrs', label: 'Idle hrs' }, { key: 'idlePct', label: 'Idle %' },
       { key: 'regularizations', label: 'Regularizations' },
     ];
     return { title: 'Attendance Report', columns, rows };
@@ -239,14 +251,33 @@ export class ReportsService {
     }
   }
 
-  private async workingDaysBetween(from: Date, to: Date, rules: Record<string, unknown>): Promise<number> {
+  /**
+   * Working days in [from, to], excluding weekly offs, company holidays and — when
+   * enabled — every 2nd Saturday (a standing company off-day).
+   *
+   * `joinedAt` clips the window to the part of the range the employee was actually
+   * employed for: without it a mid-month joiner is credited the whole month's working
+   * days and every day before they existed is reported as an absence.
+   */
+  private async workingDaysBetween(
+    from: Date,
+    to: Date,
+    rules: Record<string, unknown>,
+    joinedAt?: Date | null,
+  ): Promise<number> {
     const workingDays = (rules.workingDays as number[]) ?? [...DEFAULT_BUSINESS_RULES.workingDays];
+    const secondSaturdayOff = (rules.secondSaturdayOff as boolean) ?? true;
     const holidays = await this.prisma.holiday.findMany({ where: { date: { gte: from, lte: to } }, select: { date: true } });
     const holidaySet = new Set(holidays.map((h) => h.date.toISOString().slice(0, 10)));
+    // Only count days on or after the employee's start date.
+    const start = joinedAt && joinedAt > from ? joinedAt : from;
     let n = 0;
-    for (let t = from.getTime(); t <= to.getTime(); t += 86_400_000) {
+    for (let t = start.getTime(); t <= to.getTime(); t += 86_400_000) {
       const d = new Date(t);
-      if (workingDays.includes(isoWeekday(d)) && !holidaySet.has(d.toISOString().slice(0, 10))) n++;
+      if (!workingDays.includes(isoWeekday(d))) continue;
+      if (holidaySet.has(d.toISOString().slice(0, 10))) continue;
+      if (secondSaturdayOff && isSecondSaturday(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate())) continue;
+      n++;
     }
     return n;
   }
