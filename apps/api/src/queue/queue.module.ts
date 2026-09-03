@@ -19,6 +19,17 @@ import { QUEUE_EMAIL } from './queue.constants';
             host: url.hostname,
             port: Number(url.port || 6379),
             password: url.password || undefined,
+            // A loaded host can be slow to accept a connection even when Redis is
+            // healthy: on 2026-09-01 the API logged 54 straight `connect ETIMEDOUT`
+            // while Redis itself never restarted. Defaults gave up too readily and
+            // background work (invite/notification email, file scans, nightly jobs)
+            // failed silently. Wait longer for the handshake and keep retrying with
+            // a capped backoff instead of surfacing the connect as a hard error.
+            connectTimeout: 20_000,
+            maxRetriesPerRequest: null, // required by BullMQ; retry forever rather than throw
+            enableOfflineQueue: true, // hold commands while reconnecting instead of failing them
+            retryStrategy: (times: number) => Math.min(times * 500, 10_000),
+            reconnectOnError: () => true,
           },
         };
       },

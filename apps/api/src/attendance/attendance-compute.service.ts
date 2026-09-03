@@ -68,6 +68,13 @@ export class AttendanceComputeService {
     const weekday = weekdayOfLocalDate(dateKey, rules.timezone);
     const marks = computeDayMarks(sessions, rules, weekday, dateKey);
 
+    // Approved leave is not an absence. The day is only reclassified when the
+    // employee genuinely did not work it: someone who checks in anyway on an
+    // approved leave day keeps the PRESENT/HALF_DAY mark their sessions earned.
+    if (marks.status === 'ABSENT' && (await this.hasApprovedLeave(userId, dateKey))) {
+      marks.status = 'ON_LEAVE';
+    }
+
     await this.prisma.attendanceDay.upsert({
       where: { userId_date: { userId, date: new Date(dateKey) } },
       create: {
@@ -131,6 +138,16 @@ export class AttendanceComputeService {
         data: { lateDeductionApplied: applies },
       });
     }
+  }
+
+  /** True when an APPROVED leave request covers this local date (inclusive range). */
+  private async hasApprovedLeave(userId: string, dateKey: string): Promise<boolean> {
+    const day = new Date(dateKey);
+    const found = await this.prisma.leaveRequest.findFirst({
+      where: { userId, status: 'APPROVED', fromDate: { lte: day }, toDate: { gte: day } },
+      select: { id: true },
+    });
+    return found !== null;
   }
 
   private async sessionsForDate(

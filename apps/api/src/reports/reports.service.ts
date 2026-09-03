@@ -118,6 +118,9 @@ export class ReportsService {
       const present = days.filter((d) => d.status === 'PRESENT').length;
       const half = days.filter((d) => d.status === 'HALF_DAY').length;
       const absent = days.filter((d) => d.status === 'ABSENT').length;
+      // Days the nightly job reclassified as approved leave — reported separately so
+      // they are never read as unexplained absences.
+      const onLeaveDays = days.filter((d) => d.status === 'ON_LEAVE').length;
       const lates = days.filter((d) => d.isLate).length;
       const workedHrs = round(days.reduce((n, d) => n + d.workedSeconds, 0) / 3600);
       const idleHrs = round(days.reduce((n, d) => n + d.idleSeconds, 0) / 3600);
@@ -133,14 +136,15 @@ export class ReportsService {
       for (const l of leaves) leaveByType[l.type] = round((leaveByType[l.type] ?? 0) + num(l.paidDays));
 
       rows.push({
-        employee: u.name, team: u.team?.name ?? '—', workingDays, present, absent, lateCount: lates, halfDays: half,
+        employee: u.name, team: u.team?.name ?? '—', workingDays, present, absent, onLeaveDays, lateCount: lates, halfDays: half,
         overtimeDays, leaveDays: Object.entries(leaveByType).map(([t, n]) => `${t}:${n}`).join(' ') || '—',
         workedHrs, overtimeHrs, combinedHrs, idleHrs, idlePct, regularizations: regs,
       });
     }
     const columns: ReportColumn[] = [
       { key: 'employee', label: 'Employee' }, { key: 'team', label: 'Team' }, { key: 'workingDays', label: 'Working days' },
-      { key: 'present', label: 'Present' }, { key: 'absent', label: 'Absent' }, { key: 'lateCount', label: 'Late count' },
+      { key: 'present', label: 'Present' }, { key: 'absent', label: 'Absent' },
+      { key: 'onLeaveDays', label: 'On leave' }, { key: 'lateCount', label: 'Late count' },
       { key: 'halfDays', label: 'Half-days' }, { key: 'overtimeDays', label: 'Overtime days' }, { key: 'leaveDays', label: 'Leave days' },
       { key: 'workedHrs', label: 'Worked hrs' }, { key: 'overtimeHrs', label: 'Overtime hrs' },
       { key: 'combinedHrs', label: 'Combined hrs' }, { key: 'idleHrs', label: 'Idle hrs' }, { key: 'idlePct', label: 'Idle %' },
