@@ -334,6 +334,9 @@ export class LeaveService {
 
     const rules = { ...DEFAULT_BUSINESS_RULES, ...(await this.settings.getBusinessRules()) } as Record<string, unknown>;
     const secondSaturdayOff = (rules.secondSaturdayOff as boolean) ?? true;
+    // JS weekday numbers (0=Sun … 6=Sat). Sent so the calendar marks weekly offs
+    // from the configured rule rather than assuming Sunday.
+    const workingDays = (rules.workingDays as number[]) ?? [1, 2, 3, 4, 5, 6];
 
     const [holidayRows, leave] = await Promise.all([
       this.prisma.holiday.findMany({ where: { date: { gte: from, lte: to } }, orderBy: { date: 'asc' } }),
@@ -359,6 +362,7 @@ export class LeaveService {
     return {
       from: dateKey(from),
       to: dateKey(to),
+      workingDays,
       holidays,
       secondSaturdays,
       leave: leave.items,

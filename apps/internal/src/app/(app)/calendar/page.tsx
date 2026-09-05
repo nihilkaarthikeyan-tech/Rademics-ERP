@@ -17,6 +17,7 @@ interface LeaveEntry {
 interface CalendarData {
   from: string;
   to: string;
+  workingDays: number[];
   holidays: { date: string; name: string }[];
   secondSaturdays: string[];
   leave: LeaveEntry[];
@@ -115,7 +116,7 @@ export default function CalendarPage() {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" /> Holiday</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" /> Holiday / weekly off</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" /> 2nd Saturday</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> On leave</span>
       </div>
@@ -135,25 +136,27 @@ export default function CalendarPage() {
                 if (!d) return <div key={`blank-${i}`} />;
                 const k = key(d);
                 const info = byDate.get(k);
-                const sunday = d.getUTCDay() === 0;
+                // Weekly off comes from the configured working days, not a fixed Sunday.
+                const weeklyOff = !(data?.workingDays ?? [1, 2, 3, 4, 5, 6]).includes(d.getUTCDay());
                 const isToday = k === todayKey;
-                const off = Boolean(info?.holiday) || Boolean(info?.secondSat) || sunday;
+                const off = Boolean(info?.holiday) || Boolean(info?.secondSat) || weeklyOff;
                 return (
                   <div
                     key={k}
                     className={[
                       'min-h-[4.5rem] rounded-md border p-1.5 text-left',
-                      off ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white',
+                      off ? 'border-rose-200 bg-rose-50/70' : 'border-slate-200 bg-white',
                       isToday ? 'ring-2 ring-[#7C6CF6]' : '',
                     ].join(' ')}
                   >
                     <div className="flex items-start justify-between">
-                      <span className={`text-xs font-semibold ${off ? 'text-slate-400' : 'text-slate-700'}`}>
+                      <span className={`text-xs font-semibold ${off ? 'text-rose-500' : 'text-slate-700'}`}>
                         {d.getUTCDate()}
                       </span>
                       <span className="flex gap-0.5">
                         {info?.holiday ? <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> : null}
                         {info?.secondSat ? <span className="h-1.5 w-1.5 rounded-full bg-violet-400" /> : null}
+                        {weeklyOff && !info?.holiday && !info?.secondSat ? <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> : null}
                         {info?.leave.length ? <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> : null}
                       </span>
                     </div>
@@ -164,6 +167,9 @@ export default function CalendarPage() {
                     ) : null}
                     {info?.secondSat ? (
                       <p className="mt-0.5 text-[10px] font-medium text-violet-600">2nd Saturday</p>
+                    ) : null}
+                    {weeklyOff && !info?.holiday && !info?.secondSat ? (
+                      <p className="mt-0.5 text-[10px] font-medium text-rose-500">Weekly off</p>
                     ) : null}
                     {info?.leave.slice(0, 2).map((l) => (
                       <p key={l.id} className="mt-0.5 truncate text-[10px] text-amber-700" title={`${l.userName} — ${l.type}`}>
