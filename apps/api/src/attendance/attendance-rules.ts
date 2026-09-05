@@ -197,12 +197,16 @@ export function computeDayMarks(
   rules: AttendanceRules,
   weekday: number,
   dateKey?: string,
+  holidayKeys?: ReadonlySet<string>,
 ): DayMarks {
   // 2nd Saturday is a standing company off-day: never a working day, so no late
   // mark and no ABSENT for not checking in (dateKey omitted ⇒ rule can't apply).
   const isSecondSat =
     rules.secondSaturdayOff && weekday === 6 && dateKey !== undefined && isSecondSaturdayKey(dateKey);
-  const isWorkingDay = rules.workingDays.includes(weekday) && !isSecondSat;
+  // A named company holiday (Diwali, Republic Day…) is an off-day exactly like a
+  // 2nd Saturday: nobody owes attendance on it.
+  const isHoliday = dateKey !== undefined && (holidayKeys?.has(dateKey) ?? false);
+  const isWorkingDay = rules.workingDays.includes(weekday) && !isSecondSat && !isHoliday;
 
   const splits = sessions.map((s) => splitSessionSeconds(s, rules));
   const workedSeconds = splits.reduce((sum, x) => sum + x.regular, 0);
@@ -222,7 +226,14 @@ export function computeDayMarks(
 
   let status: AttendanceDayStatus;
   if (!isWorkingDay) {
-    status = 'WEEKLY_OFF';
+    // Off-day, but someone who actually worked it is credited PRESENT/HALF_DAY —
+    // an off-day excuses attendance, it does not erase work that was done. Only a
+    // day nobody worked is reported as the off-day itself.
+    if (workedSeconds > 0) {
+      status = workedSeconds < rules.halfDayUnderHours * 3600 ? 'HALF_DAY' : 'PRESENT';
+    } else {
+      status = 'WEEKLY_OFF';
+    }
   } else if (sessions.length === 0 || workedSeconds === 0) {
     status = 'ABSENT';
   } else if (workedSeconds < rules.halfDayUnderHours * 3600) {

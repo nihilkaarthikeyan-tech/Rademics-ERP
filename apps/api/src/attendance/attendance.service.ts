@@ -202,7 +202,19 @@ export class AttendanceService {
         : s.idleSeconds + this.idleGap(s.lastHeartbeatAt ?? s.checkInAt, now, rules),
     }));
     const weekday = zonedParts(now, rules.timezone).weekday;
-    const marks = computeDayMarks(forMarks, rules, weekday, todayKey);
+    // Today may itself be a company holiday — the live view must agree with the
+    // nightly job, or the desktop app shows ABSENT on a day the report calls off.
+    const todayHoliday = await this.prisma.holiday.findUnique({
+      where: { date: new Date(todayKey) },
+      select: { date: true },
+    });
+    const marks = computeDayMarks(
+      forMarks,
+      rules,
+      weekday,
+      todayKey,
+      todayHoliday ? new Set([todayKey]) : undefined,
+    );
     const openSession = sessions.find((s) => !s.checkOutAt) ?? null;
 
     return {

@@ -95,8 +95,15 @@ describe('late / half-day / overtime (§4)', () => {
 });
 
 describe('weekly off + idle (§5.3)', () => {
-  it('marks a non-working weekday as WEEKLY_OFF and never late', () => {
+  it('never marks a non-working weekday late, and credits work done on it', () => {
     const marks = computeDayMarks([session(3, 50, 10, 50)], RULES, 0); // Sunday
+    expect(marks.isLate).toBe(false);
+    // Worked on a Sunday: the day is still not owed, but the hours are credited.
+    expect(marks.status).toBe('PRESENT');
+  });
+
+  it('marks an unworked non-working weekday WEEKLY_OFF', () => {
+    const marks = computeDayMarks([], RULES, 0); // Sunday, no sessions
     expect(marks.status).toBe('WEEKLY_OFF');
     expect(marks.isLate).toBe(false);
   });
@@ -168,6 +175,58 @@ describe('2nd Saturday off', () => {
     };
     const marks = computeDayMarks([late], RULES, 6, '2026-08-08');
     expect(marks.isLate).toBe(false);
+    // Worked the 2nd Saturday: credited, not erased.
+    expect(marks.status).toBe('PRESENT');
+  });
+});
+
+describe('company holidays', () => {
+  const HOL = new Set(['2026-09-14']); // Ganesh Chaturthi, a Monday
+
+  it('marks a holiday WEEKLY_OFF when nobody worked it', () => {
+    const marks = computeDayMarks([], RULES, 1, '2026-09-14', HOL);
     expect(marks.status).toBe('WEEKLY_OFF');
+  });
+
+  it('does not raise a late flag on a holiday', () => {
+    const late: SessionInput = {
+      checkInAt: new Date('2026-09-14T06:00:00Z'), // 11:30 IST — well past 09:15
+      checkOutAt: new Date('2026-09-14T12:00:00Z'),
+      idleSeconds: 0,
+    };
+    expect(computeDayMarks([late], RULES, 1, '2026-09-14', HOL).isLate).toBe(false);
+  });
+
+  it('credits PRESENT to someone who works a full day ON the holiday', () => {
+    const full: SessionInput = {
+      checkInAt: new Date('2026-09-14T03:30:00Z'), // 09:00 IST
+      checkOutAt: new Date('2026-09-14T12:30:00Z'), // 18:00 IST — 9h
+      idleSeconds: 0,
+    };
+    const marks = computeDayMarks([full], RULES, 1, '2026-09-14', HOL);
+    expect(marks.status).toBe('PRESENT');
+    expect(marks.workedSeconds).toBe(9 * 3600);
+  });
+
+  it('credits HALF_DAY to someone who works a short day on the holiday', () => {
+    const short: SessionInput = {
+      checkInAt: new Date('2026-09-14T03:30:00Z'), // 09:00 IST
+      checkOutAt: new Date('2026-09-14T06:00:00Z'), // 11:30 IST — 2.5h
+      idleSeconds: 0,
+    };
+    expect(computeDayMarks([short], RULES, 1, '2026-09-14', HOL).status).toBe('HALF_DAY');
+  });
+
+  it('credits work done on a 2nd Saturday too', () => {
+    const worked: SessionInput = {
+      checkInAt: new Date('2026-08-08T03:30:00Z'),
+      checkOutAt: new Date('2026-08-08T12:30:00Z'),
+      idleSeconds: 0,
+    };
+    expect(computeDayMarks([worked], RULES, 6, '2026-08-08').status).toBe('PRESENT');
+  });
+
+  it('leaves an ordinary day unaffected by the holiday set', () => {
+    expect(computeDayMarks([], RULES, 1, '2026-09-21', HOL).status).toBe('ABSENT');
   });
 });

@@ -62,11 +62,28 @@ export class AttendanceComputeService {
     return closed;
   }
 
+  /** 'YYYY-MM-DD' keys of every company holiday on the given dates. */
+  private async holidayKeysFor(dateKeys: string[]): Promise<Set<string>> {
+    if (dateKeys.length === 0) return new Set();
+    const rows = await this.prisma.holiday.findMany({
+      where: { date: { in: dateKeys.map((k) => new Date(k)) } },
+      select: { date: true },
+    });
+    return new Set(rows.map((r) => r.date.toISOString().slice(0, 10)));
+  }
+
   /** Compute (upsert) one user's marks for one local date. */
-  async computeDay(userId: string, dateKey: string, rules: AttendanceRules): Promise<void> {
+  async computeDay(
+    userId: string,
+    dateKey: string,
+    rules: AttendanceRules,
+    holidayKeys?: ReadonlySet<string>,
+  ): Promise<void> {
     const sessions = await this.sessionsForDate(userId, dateKey, rules);
     const weekday = weekdayOfLocalDate(dateKey, rules.timezone);
-    const marks = computeDayMarks(sessions, rules, weekday, dateKey);
+    // Fetched per-call only when the caller has not already done it for a batch.
+    const holidays = holidayKeys ?? (await this.holidayKeysFor([dateKey]));
+    const marks = computeDayMarks(sessions, rules, weekday, dateKey, holidays);
 
     // Approved leave is not an absence. The day is only reclassified when the
     // employee genuinely did not work it: someone who checks in anyway on an
@@ -113,8 +130,9 @@ export class AttendanceComputeService {
       where: { status: 'ACTIVE', resourceType: 'INTERNAL', role: { not: 'CLIENT' } },
       select: { id: true },
     });
+    const holidayKeys = await this.holidayKeysFor([dateKey]);
     for (const u of users) {
-      await this.computeDay(u.id, dateKey, rules);
+      await this.computeDay(u.id, dateKey, rules, holidayKeys);
     }
     await this.applyThreeLatesRule(dateKey, rules);
 
