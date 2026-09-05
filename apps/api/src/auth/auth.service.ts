@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -290,6 +291,52 @@ export class AuthService {
     });
 
     return { id: user.id };
+  }
+
+  /**
+   * Re-send an invite to someone who never set their password (Spec §5.1).
+   *
+   * Without this, a bounced or missed invite left HR with no route back: the
+   * only lever was to deactivate and re-create the person, which loses their
+   * record and its history. Any outstanding INVITE token is burned first, so a
+   * resend leaves exactly one working link rather than several.
+   */
+  async resendInvite(actor: AuthUser, userId: string, meta: RequestMeta): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    // Only a pending invite can be re-sent: an ACTIVE account already has a
+    // password (they want a reset, not an invite), and a DEACTIVATED one must be
+    // reactivated deliberately rather than silently let back in by an email.
+    if (user.status !== 'INVITED') {
+      throw new BadRequestException(
+        user.status === 'ACTIVE'
+          ? 'This account is already active — use password reset instead'
+          : `Cannot re-invite a ${user.status.toLowerCase()} account`,
+      );
+    }
+
+    await this.prisma.authToken.updateMany({
+      where: { userId: user.id, type: 'INVITE', usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const rawToken = await this.createAuthToken(user.id, 'INVITE', INVITE_TTL_DAYS * 24 * 60);
+    const url = `${this.appBaseUrl(user.role)}/set-password?token=${rawToken}`;
+    await this.email.enqueue({
+      to: user.email,
+      subject: 'You have been invited to Rademics ERP',
+      html: `<p>Hi ${escapeHtml(user.name)},</p><p>An account was created for you. Set your password to get started:</p><p><a href="${url}">Set your password</a></p><p>This link expires in ${INVITE_TTL_DAYS} days.</p>`,
+    });
+
+    await this.audit.record({
+      actorId: actor.id,
+      actorEmail: actor.email,
+      action: 'USER_INVITE_RESENT',
+      entityType: 'User',
+      entityId: user.id,
+      after: { email: user.email },
+      ...meta,
+    });
   }
 
   /**

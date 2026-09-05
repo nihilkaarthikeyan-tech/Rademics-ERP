@@ -39,6 +39,17 @@ export class EmployeesController {
     return this.employees.create(dto, actor, reqMeta(req));
   }
 
+  // Same right as creating the account: whoever may invite may re-send that invite.
+  @Post(':id/resend-invite')
+  @RequireCapability('people.employee.create_edit')
+  resendInvite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.employees.resendInvite(id, actor, reqMeta(req));
+  }
+
   @Patch(':id')
   @RequireCapability('people.employee.create_edit')
   update(

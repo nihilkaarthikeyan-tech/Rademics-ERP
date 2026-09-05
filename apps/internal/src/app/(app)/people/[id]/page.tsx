@@ -183,6 +183,22 @@ function EmployeeDetail_({ params }: { params: Promise<{ id: string }> }) {
     }
   }
 
+  async function resendInvite() {
+    if (!emp) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await apiFetch(`/employees/${id}/resend-invite`, { method: 'POST', body: '{}' });
+      setNotice(`Invite re-sent to ${emp.email}. The previous link no longer works.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not re-send the invite');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (state === 'loading') return <LoadingState />;
   if (state === 'error' || !emp) {
     return (
@@ -231,6 +247,20 @@ function EmployeeDetail_({ params }: { params: Promise<{ id: string }> }) {
 
       {error ? <p className="mt-3 text-sm font-medium text-red-600">{error}</p> : null}
       {notice ? <p className="mt-3 text-sm font-medium text-emerald-700">{notice}</p> : null}
+
+      {emp.status === 'INVITED' && canEdit ? (
+        <Card className="mt-4">
+          <CardContent className="pt-5">
+            <p className="text-sm text-slate-600">
+              This person has not set their password yet, so they cannot sign in. If the invite
+              never reached them, send it again — the old link stops working.
+            </p>
+            <Button className="mt-3" variant="outline" onClick={resendInvite} disabled={busy}>
+              {busy ? 'Sending…' : 'Re-send invite email'}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {deactivated ? (
         <Card className="mt-4">

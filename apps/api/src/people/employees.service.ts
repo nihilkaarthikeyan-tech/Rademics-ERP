@@ -46,6 +46,15 @@ export class EmployeesService {
     private readonly presence: PresenceService,
   ) {}
 
+  /**
+   * Re-send a pending invite (Spec §5.1). Delegates to AuthService so the token
+   * lifetime, email body and audit trail stay identical to the first invite.
+   */
+  async resendInvite(id: string, actor: AuthUser, meta: Meta): Promise<{ ok: true }> {
+    await this.auth.resendInvite(actor, id, meta);
+    return { ok: true };
+  }
+
   /** Nudge open directories/pickers to refetch after the roster changes. */
   private announce(): void {
     this.presence.emitToAll('people:changed', {});
