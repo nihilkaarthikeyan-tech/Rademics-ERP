@@ -72,6 +72,13 @@ export class LeaveController {
     return this.leave.teamCalendar(user, query);
   }
 
+  // Holidays + 2nd Saturdays + visible leave, for the company calendar page.
+  @Get('company-calendar')
+  @RequireScopedCapability('leave.calendar.view')
+  companyCalendar(@Query() query: LeaveCalendarQuery, @CurrentUser() user: AuthUser) {
+    return this.leave.companyCalendar(user, query);
+  }
+
   // ── Holidays (Spec §5.13) ──
   @Get('holidays')
   @RequireScopedCapability('leave.calendar.view')

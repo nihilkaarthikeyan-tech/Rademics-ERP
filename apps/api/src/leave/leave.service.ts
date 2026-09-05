@@ -321,6 +321,50 @@ export class LeaveService {
     return this.prisma.leaveRequest.findUnique({ where: { id } });
   }
 
+  /**
+   * One month of company dates: public holidays, 2nd Saturdays and the leave the
+   * caller is allowed to see. The three live in different places (holidays table,
+   * a business rule, leave requests), so the page would otherwise have to stitch
+   * them together itself and re-implement the 2nd-Saturday rule in the browser.
+   * Leave reuses teamCalendar, so its scoping rules are not duplicated here.
+   */
+  async companyCalendar(caller: AuthUser, query: LeaveCalendarQuery) {
+    const from = query.from ? parseDateOnly(query.from) : startOfMonth(new Date());
+    const to = query.to ? parseDateOnly(query.to) : endOfMonth(new Date());
+
+    const rules = { ...DEFAULT_BUSINESS_RULES, ...(await this.settings.getBusinessRules()) } as Record<string, unknown>;
+    const secondSaturdayOff = (rules.secondSaturdayOff as boolean) ?? true;
+
+    const [holidayRows, leave] = await Promise.all([
+      this.prisma.holiday.findMany({ where: { date: { gte: from, lte: to } }, orderBy: { date: 'asc' } }),
+      this.teamCalendar(caller, query),
+    ]);
+
+    const holidays = holidayRows.map((h) => ({ date: dateKey(h.date), name: h.name }));
+
+    // 2nd Saturdays inside the window, skipping any that is already a named holiday.
+    const named = new Set(holidays.map((h) => h.date));
+    const secondSaturdays: string[] = [];
+    if (secondSaturdayOff) {
+      for (let t = from.getTime(); t <= to.getTime(); t += 86_400_000) {
+        const d = new Date(t);
+        if (d.getUTCDay() !== 6) continue;
+        const day = d.getUTCDate();
+        if (day < 8 || day > 14) continue; // days 8-14 are the month's 2nd occurrence
+        const key = dateKey(d);
+        if (!named.has(key)) secondSaturdays.push(key);
+      }
+    }
+
+    return {
+      from: dateKey(from),
+      to: dateKey(to),
+      holidays,
+      secondSaturdays,
+      leave: leave.items,
+    };
+  }
+
   // ── Team leave calendar (Spec §5.7): approved + pending, with overlaps ──
   async teamCalendar(caller: AuthUser, query: LeaveCalendarQuery) {
     const from = query.from ? parseDateOnly(query.from) : startOfMonth(new Date());
