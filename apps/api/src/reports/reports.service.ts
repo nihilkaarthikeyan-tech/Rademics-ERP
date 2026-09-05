@@ -121,6 +121,10 @@ export class ReportsService {
       // they are never read as unexplained absences.
       const onLeaveDays = days.filter((d) => d.status === 'ON_LEAVE').length;
       const lates = days.filter((d) => d.isLate).length;
+      // Days actually worked, counting a half-day as 0.5 — the same basis payroll
+      // uses for payable days, so the two reports cannot disagree. Present already
+      // includes any holiday or weekly off the person chose to work.
+      const daysWorked = round(present + half * 0.5);
       const workedHrs = round(days.reduce((n, d) => n + d.workedSeconds, 0) / 3600);
       const idleHrs = round(days.reduce((n, d) => n + d.idleSeconds, 0) / 3600);
       const overtimeSecs = days.reduce((n, d) => n + d.overtimeSeconds, 0);
@@ -135,14 +139,14 @@ export class ReportsService {
       for (const l of leaves) leaveByType[l.type] = round((leaveByType[l.type] ?? 0) + num(l.paidDays));
 
       rows.push({
-        employee: u.name, team: u.team?.name ?? '—', workingDays, present, absent, onLeaveDays, lateCount: lates, halfDays: half,
+        employee: u.name, team: u.team?.name ?? '—', workingDays, daysWorked, present, absent, onLeaveDays, lateCount: lates, halfDays: half,
         overtimeDays, leaveDays: Object.entries(leaveByType).map(([t, n]) => `${t}:${n}`).join(' ') || '—',
         workedHrs, overtimeHrs, combinedHrs, idleHrs, idlePct, regularizations: regs,
       });
     }
     const columns: ReportColumn[] = [
       { key: 'employee', label: 'Employee' }, { key: 'team', label: 'Team' }, { key: 'workingDays', label: 'Working days' },
-      { key: 'present', label: 'Present' }, { key: 'absent', label: 'Absent' },
+      { key: 'daysWorked', label: 'Days worked' }, { key: 'present', label: 'Present' }, { key: 'absent', label: 'Absent' },
       { key: 'onLeaveDays', label: 'On leave' }, { key: 'lateCount', label: 'Late count' },
       { key: 'halfDays', label: 'Half-days' }, { key: 'leaveDays', label: 'Leave days' },
       // Overtime reads as hours next to its workday-equivalent: "0.98 days" alone
