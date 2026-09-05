@@ -9,7 +9,6 @@ import type { AuthUser } from '../auth/auth-user';
 
 const num = (d: Prisma.Decimal | number | null | undefined) => Number(d ?? 0);
 const round = (n: number, p = 2) => Math.round(n * 10 ** p) / 10 ** p;
-const isoWeekday = (d: Date) => (d.getUTCDay() === 0 ? 7 : d.getUTCDay());
 const OPEN_STATUSES: TaskStatus[] = ['ASSIGNED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'SUBMITTED_FOR_REVIEW'];
 
 export interface ReportQuery { from?: string; to?: string }
@@ -145,9 +144,12 @@ export class ReportsService {
       { key: 'employee', label: 'Employee' }, { key: 'team', label: 'Team' }, { key: 'workingDays', label: 'Working days' },
       { key: 'present', label: 'Present' }, { key: 'absent', label: 'Absent' },
       { key: 'onLeaveDays', label: 'On leave' }, { key: 'lateCount', label: 'Late count' },
-      { key: 'halfDays', label: 'Half-days' }, { key: 'overtimeDays', label: 'Overtime days' }, { key: 'leaveDays', label: 'Leave days' },
+      { key: 'halfDays', label: 'Half-days' }, { key: 'leaveDays', label: 'Leave days' },
+      // Overtime reads as hours next to its workday-equivalent: "0.98 days" alone
+      // hides that it is 8 hours of after-hours work.
       { key: 'workedHrs', label: 'Worked hrs' }, { key: 'overtimeHrs', label: 'Overtime hrs' },
-      { key: 'combinedHrs', label: 'Combined hrs' }, { key: 'idleHrs', label: 'Idle hrs' }, { key: 'idlePct', label: 'Idle %' },
+      { key: 'overtimeDays', label: 'Overtime days' }, { key: 'combinedHrs', label: 'Combined hrs' },
+      { key: 'idleHrs', label: 'Idle hrs' }, { key: 'idlePct', label: 'Idle %' },
       { key: 'regularizations', label: 'Regularizations' },
     ];
     return { title: 'Attendance Report', columns, rows };
@@ -278,7 +280,9 @@ export class ReportsService {
     let n = 0;
     for (let t = start.getTime(); t <= to.getTime(); t += 86_400_000) {
       const d = new Date(t);
-      if (!workingDays.includes(isoWeekday(d))) continue;
+      // workingDays is stored in JS numbering (0=Sun … 6=Sat), matching the
+      // attendance engine; ISO numbering would map Sunday to 7 and never match.
+      if (!workingDays.includes(d.getUTCDay())) continue;
       if (holidaySet.has(d.toISOString().slice(0, 10))) continue;
       if (secondSaturdayOff && isSecondSaturday(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate())) continue;
       n++;
