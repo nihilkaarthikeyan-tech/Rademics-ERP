@@ -343,7 +343,33 @@ export class LeaveService {
       this.teamCalendar(caller, query),
     ]);
 
-    const holidays = holidayRows.map((h) => ({ date: dateKey(h.date), name: h.name }));
+    // Days marked ABSENT by the nightly attendance job. Shown alongside leave
+    // because in practice people take days off without filing a request, and a
+    // calendar that only knows about approved leave shows those days as normal.
+    // Scoped to the same people whose leave the caller may already see.
+    let absentFilter: Prisma.AttendanceDayWhereInput = {};
+    if (caller.role !== 'SUPER_ADMIN' && caller.role !== 'HR') {
+      // Mirrors teamCalendar's scoping: self + own team + anyone managed.
+      const me = await this.prisma.user.findUnique({ where: { id: caller.id }, select: { teamId: true } });
+      const teammates = me?.teamId
+        ? await this.prisma.user.findMany({ where: { teamId: me.teamId }, select: { id: true } })
+        : [];
+      const managed = await this.teamScopeUserIds(caller.id);
+      absentFilter = { userId: { in: [...new Set([caller.id, ...teammates.map((u) => u.id), ...managed])] } };
+    }
+    const absentRows = await this.prisma.attendanceDay.findMany({
+      where: { ...absentFilter, date: { gte: from, lte: to }, status: 'ABSENT' },
+      select: { id: true, userId: true, date: true, user: { select: { name: true } } },
+      orderBy: { date: 'asc' },
+    });
+    const absences = absentRows.map((a) => ({
+      id: a.id,
+      userId: a.userId,
+      userName: a.user.name,
+      date: dateKey(a.date),
+    }));
+
+    const holidays = holidayRows.map((h) => ({ id: h.id, date: dateKey(h.date), name: h.name }));
 
     // 2nd Saturdays inside the window, skipping any that is already a named holiday.
     const named = new Set(holidays.map((h) => h.date));
@@ -365,6 +391,7 @@ export class LeaveService {
       workingDays,
       holidays,
       secondSaturdays,
+      absences,
       leave: leave.items,
     };
   }
@@ -427,6 +454,29 @@ export class LeaveService {
   // ── Holidays (Spec §5.13) + refund recompute (Spec §25) ──
   listHolidays() {
     return this.prisma.holiday.findMany({ orderBy: { date: 'asc' } });
+  }
+
+  /**
+   * Remove a holiday (Spec §5.13). Deliberately does NOT re-charge leave that was
+   * refunded when the holiday was added: taking balance back off people because
+   * an admin corrected a date would be a silent penalty. A wrong refund is rarer,
+   * and visible in the audit trail, so it is fixed by hand rather than automatically.
+   */
+  async deleteHoliday(id: string, actor: AuthUser, meta: Meta) {
+    const holiday = await this.prisma.holiday.findUnique({ where: { id } });
+    if (!holiday) throw new NotFoundException('Holiday not found');
+
+    await this.prisma.holiday.delete({ where: { id } });
+    await this.audit.record({
+      actorId: actor.id,
+      actorEmail: actor.email,
+      action: 'HOLIDAY_REMOVED',
+      entityType: 'Holiday',
+      entityId: id,
+      before: { date: dateKey(holiday.date), name: holiday.name },
+      ...meta,
+    });
+    return { ok: true };
   }
 
   async addHoliday(dto: CreateHolidayDto, actor: AuthUser, meta: Meta) {

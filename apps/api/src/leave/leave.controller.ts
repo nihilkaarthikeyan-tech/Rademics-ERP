@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { LeaveService } from './leave.service';
 import { CreateHolidayDto, CreateLeaveDto, DecideLeaveDto, LeaveCalendarQuery } from './dto';
@@ -90,6 +90,16 @@ export class LeaveController {
   @RequireCapability('leave.policy.configure')
   addHoliday(@Body() dto: CreateHolidayDto, @CurrentUser() user: AuthUser, @Req() req: Request) {
     return this.leave.addHoliday(dto, user, reqMeta(req));
+  }
+
+  @Delete('holidays/:id')
+  @RequireCapability('leave.policy.configure')
+  deleteHoliday(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+    @Req() req: Request,
+  ) {
+    return this.leave.deleteHoliday(id, user, reqMeta(req));
   }
 
   // ── Admin manual triggers (Spec §5.7 jobs run on schedule; these let HR/SA run

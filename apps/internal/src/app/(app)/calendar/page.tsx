@@ -1,12 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Badge, Card, CardContent, CardHeader, CardTitle, Button, LoadingState } from '@rademics/ui';
+import { Badge, Card, CardContent, CardHeader, CardTitle, Button, Input, Label, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useMe } from '@/lib/me-context';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface LeaveEntry {
   id: string;
+  userId: string;
   userName: string;
   type: string;
   half: boolean;
@@ -18,9 +20,10 @@ interface CalendarData {
   from: string;
   to: string;
   workingDays: number[];
-  holidays: { date: string; name: string }[];
+  holidays: { id: string; date: string; name: string }[];
   secondSaturdays: string[];
   leave: LeaveEntry[];
+  absences: { id: string; userId: string; userName: string; date: string }[];
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -39,6 +42,14 @@ export default function CalendarPage() {
   const [data, setData] = useState<CalendarData | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [newDate, setNewDate] = useState('');
+  const [newName, setNewName] = useState('');
+
+  const me = useMe();
+  // Same roles the API grants leave.policy.configure to.
+  const canManage = me.role === 'SUPER_ADMIN' || me.role === 'HR';
 
   const load = useCallback(async () => {
     setState('loading');
@@ -59,10 +70,15 @@ export default function CalendarPage() {
 
   // Index the month's dates once, so each cell is a lookup rather than a scan.
   const byDate = useMemo(() => {
-    const map = new Map<string, { holiday?: string; secondSat?: boolean; leave: LeaveEntry[] }>();
+    const map = new Map<string, {
+      holiday?: string;
+      secondSat?: boolean;
+      leave: LeaveEntry[];
+      absent: { id: string; userId: string; userName: string }[];
+    }>();
     const entry = (k: string) => {
       let e = map.get(k);
-      if (!e) { e = { leave: [] }; map.set(k, e); }
+      if (!e) { e = { leave: [], absent: [] }; map.set(k, e); }
       return e;
     };
     for (const h of data?.holidays ?? []) entry(h.date).holiday = h.name;
@@ -72,6 +88,9 @@ export default function CalendarPage() {
       for (let t = Date.parse(l.fromDate); t <= Date.parse(l.toDate); t += 86_400_000) {
         entry(new Date(t).toISOString().slice(0, 10)).leave.push(l);
       }
+    }
+    for (const a of data?.absences ?? []) {
+      entry(a.date).absent.push({ id: a.id, userId: a.userId, userName: a.userName });
     }
     return map;
   }, [data]);
@@ -91,6 +110,46 @@ export default function CalendarPage() {
     const d = new Date(Date.UTC(year, month + delta, 1));
     setYear(d.getUTCFullYear());
     setMonth(d.getUTCMonth());
+  }
+
+  async function addHoliday(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newDate || !newName.trim()) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const r = await apiFetch<{ refundedRequests?: number }>('/leave/holidays', {
+        method: 'POST',
+        body: JSON.stringify({ date: newDate, name: newName.trim() }),
+      });
+      setNotice(
+        `Holiday added.${r.refundedRequests ? ` ${r.refundedRequests} approved leave request(s) refunded.` : ''}`,
+      );
+      setNewDate('');
+      setNewName('');
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not add the holiday');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeHoliday(hid: string, name: string) {
+    if (!window.confirm(`Remove "${name}"? Leave already refunded for this holiday is not taken back.`)) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await apiFetch(`/leave/holidays/${hid}`, { method: 'DELETE' });
+      setNotice('Holiday removed.');
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not remove the holiday');
+    } finally {
+      setBusy(false);
+    }
   }
 
   const todayKey = key(new Date());
@@ -118,10 +177,11 @@ export default function CalendarPage() {
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" /> Holiday / weekly off</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" /> 2nd Saturday</span>
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> On leave</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> On leave / absent</span>
       </div>
 
       {error ? <p className="mt-3 text-sm font-medium text-red-600">{error}</p> : null}
+      {notice ? <p className="mt-3 text-sm font-medium text-emerald-700">{notice}</p> : null}
 
       {state === 'loading' ? (
         <LoadingState />
@@ -157,7 +217,7 @@ export default function CalendarPage() {
                         {info?.holiday ? <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> : null}
                         {info?.secondSat ? <span className="h-1.5 w-1.5 rounded-full bg-violet-400" /> : null}
                         {weeklyOff && !info?.holiday && !info?.secondSat ? <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> : null}
-                        {info?.leave.length ? <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> : null}
+                        {(info?.leave.length || info?.absent.length) ? <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> : null}
                       </span>
                     </div>
                     {info?.holiday ? (
@@ -172,12 +232,27 @@ export default function CalendarPage() {
                       <p className="mt-0.5 text-[10px] font-medium text-rose-500">Weekly off</p>
                     ) : null}
                     {info?.leave.slice(0, 2).map((l) => (
-                      <p key={l.id} className="mt-0.5 truncate text-[10px] text-amber-700" title={`${l.userName} — ${l.type}`}>
-                        {l.userName.split(' ')[0]}{l.half ? ' ½' : ''}
+                      <p
+                        key={l.id}
+                        className={`mt-0.5 truncate text-[10px] ${l.userId === me.id ? 'font-semibold text-amber-800' : 'text-amber-700'} ${l.status === 'PENDING' ? 'italic opacity-70' : ''}`}
+                        title={`${l.userName} — ${l.type}${l.half ? ' (half day)' : ''} — ${l.status}`}
+                      >
+                        {l.userId === me.id ? 'You' : l.userName.split(' ')[0]}{l.half ? ' ½' : ''}
                       </p>
                     ))}
-                    {info && info.leave.length > 2 ? (
-                      <p className="text-[10px] text-slate-400">+{info.leave.length - 2} more</p>
+                    {info?.absent.slice(0, 2).map((a) => (
+                      <p
+                        key={a.id}
+                        className={`mt-0.5 truncate text-[10px] ${a.userId === me.id ? 'font-semibold text-amber-800' : 'text-amber-700'}`}
+                        title={`${a.userName} — absent (no leave request)`}
+                      >
+                        {a.userId === me.id ? 'You' : a.userName.split(' ')[0]} ·abs
+                      </p>
+                    ))}
+                    {info && info.leave.length + info.absent.length > 4 ? (
+                      <p className="text-[10px] text-slate-400">
+                        +{info.leave.length + info.absent.length - 4} more
+                      </p>
                     ) : null}
                   </div>
                 );
@@ -187,11 +262,47 @@ export default function CalendarPage() {
         </Card>
       )}
 
+      {canManage ? (
+        <Card className="mt-4">
+          <CardHeader><CardTitle>Add a company holiday</CardTitle></CardHeader>
+          <CardContent className="pb-5">
+            <form onSubmit={addHoliday} className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label htmlFor="h-date">Date</Label>
+                <Input
+                  id="h-date"
+                  type="date"
+                  value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="min-w-[14rem] flex-1">
+                <Label htmlFor="h-name">Name</Label>
+                <Input
+                  id="h-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Diwali"
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={busy || !newDate || !newName.trim()}>
+                {busy ? 'Adding…' : 'Add holiday'}
+              </Button>
+            </form>
+            <p className="mt-2 text-xs text-slate-500">
+              Approved leave falling on a new holiday is refunded automatically.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {state === 'ready' && data ? (
         <Card className="mt-4">
           <CardHeader><CardTitle>This month</CardTitle></CardHeader>
           <CardContent className="space-y-2 pb-5">
-            {data.holidays.length === 0 && data.secondSaturdays.length === 0 && data.leave.length === 0 ? (
+            {data.holidays.length === 0 && data.secondSaturdays.length === 0 && data.leave.length === 0 && data.absences.length === 0 ? (
               <p className="text-sm text-slate-500">Nothing scheduled this month.</p>
             ) : null}
             {data.holidays.map((h) => (
@@ -199,6 +310,17 @@ export default function CalendarPage() {
                 <Badge tone="red">Holiday</Badge>
                 <span className="text-slate-600">{h.date}</span>
                 <span className="font-medium text-slate-800">{h.name}</span>
+                {canManage ? (
+                  <button
+                    type="button"
+                    onClick={() => void removeHoliday(h.id, h.name)}
+                    disabled={busy}
+                    className="ml-auto rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                    aria-label={`Remove ${h.name}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
               </div>
             ))}
             {data.secondSaturdays.map((s) => (
@@ -211,11 +333,23 @@ export default function CalendarPage() {
             {data.leave.map((l) => (
               <div key={l.id} className="flex flex-wrap items-center gap-2 text-sm">
                 <Badge tone={l.status === 'APPROVED' ? 'amber' : 'slate'}>{l.status}</Badge>
-                <span className="font-medium text-slate-800">{l.userName}</span>
+                <span className="font-medium text-slate-800">
+                  {l.userName}{l.userId === me.id ? ' (you)' : ''}
+                </span>
                 <span className="text-slate-500">{l.type}{l.half ? ' (half day)' : ''}</span>
                 <span className="text-slate-600">
                   {l.fromDate}{l.toDate !== l.fromDate ? ` → ${l.toDate}` : ''}
                 </span>
+              </div>
+            ))}
+            {data.absences.map((a) => (
+              <div key={a.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge tone="amber">Absent</Badge>
+                <span className="font-medium text-slate-800">
+                  {a.userName}{a.userId === me.id ? ' (you)' : ''}
+                </span>
+                <span className="text-slate-500">No leave request</span>
+                <span className="text-slate-600">{a.date}</span>
               </div>
             ))}
           </CardContent>
