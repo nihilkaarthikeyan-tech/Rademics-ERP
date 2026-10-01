@@ -27,6 +27,9 @@ const EnvSchema = z.object({
 
   // Object storage (MinIO / S3-compatible) — Spec §5.6, §12.
   S3_ENDPOINT: z.string().url().default('http://localhost:9000'),
+  // Optional: where the API itself reaches storage (prod: http://minio:9000).
+  // S3_ENDPOINT stays the public host, used only to sign browser URLs.
+  S3_INTERNAL_ENDPOINT: z.string().url().optional(),
   S3_BUCKET: z.string().default('rademics-files'),
   S3_ACCESS_KEY: z.string().default('rademics'),
   S3_SECRET_KEY: z.string().default('rademics-secret'),
