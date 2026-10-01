@@ -57,8 +57,8 @@ if (!gotLock) {
     const desktopSession = session.fromPartition('persist:rademics-desktop');
     const api = new ApiClient(API_BASE_URL, desktopSession, DESKTOP_APP_KEY);
     const auth = new AuthStore(api);
-    const idleTracker = new IdleTracker(auth);
     const statusPoller = new StatusPoller(auth);
+    const idleTracker = new IdleTracker(auth, () => statusPoller.knownCheckedOut());
 
     const win = new BrowserWindow({
       width: 380,

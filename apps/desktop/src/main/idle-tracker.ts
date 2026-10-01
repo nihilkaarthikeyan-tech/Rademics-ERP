@@ -13,7 +13,11 @@ const POLL_MS = 20_000;
 export class IdleTracker {
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private readonly auth: AuthStore) {}
+  constructor(
+    private readonly auth: AuthStore,
+    /** From StatusPoller — no heartbeats while the server says checked out. */
+    private readonly isCheckedOut: () => boolean,
+  ) {}
 
   start(): void {
     if (this.timer) return;
@@ -26,7 +30,7 @@ export class IdleTracker {
   }
 
   private async tick(): Promise<void> {
-    if (!this.auth.authenticated) return;
+    if (!this.auth.authenticated || this.isCheckedOut()) return;
     const idleSeconds = powerMonitor.getSystemIdleTime();
     if (idleSeconds < POLL_MS / 1000) {
       try {

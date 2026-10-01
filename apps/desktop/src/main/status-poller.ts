@@ -13,9 +13,25 @@ type StatusListener = (payload: StatusUpdatePayload) => void;
 export class StatusPoller {
   private timer: ReturnType<typeof setInterval> | null = null;
   private prevCheckedIn: boolean | null = null;
+  /** Last server answer; null = not known yet (or the signed-in user changed). */
+  private lastCheckedIn: boolean | null = null;
   private listeners = new Set<StatusListener>();
 
-  constructor(private readonly auth: AuthStore) {}
+  constructor(private readonly auth: AuthStore) {
+    auth.onChange(() => {
+      this.lastCheckedIn = null;
+    });
+  }
+
+  /**
+   * True only when the server has said this user is NOT checked in. The idle
+   * tracker skips heartbeats then — the API rejects them with 400 "You are not
+   * checked in" (hundreds a day before this). Unknown counts as checked in, so
+   * a real session never misses a heartbeat on a stale answer.
+   */
+  knownCheckedOut(): boolean {
+    return this.lastCheckedIn === false;
+  }
 
   onUpdate(listener: StatusListener): () => void {
     this.listeners.add(listener);
@@ -29,6 +45,7 @@ export class StatusPoller {
    */
   noteManualCheckout(): void {
     this.prevCheckedIn = false;
+    this.lastCheckedIn = false;
   }
 
   start(): void {
@@ -41,6 +58,7 @@ export class StatusPoller {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.prevCheckedIn = null;
+    this.lastCheckedIn = null;
   }
 
   async tick(): Promise<void> {
@@ -49,6 +67,7 @@ export class StatusPoller {
       const status = await this.auth.today();
       const autoCheckedOut = this.prevCheckedIn === true && !status.checkedIn;
       this.prevCheckedIn = status.checkedIn;
+      this.lastCheckedIn = status.checkedIn;
       const payload: StatusUpdatePayload = { status, autoCheckedOut };
       for (const l of this.listeners) l(payload);
     } catch {
