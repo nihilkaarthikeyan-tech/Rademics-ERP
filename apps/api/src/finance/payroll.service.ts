@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SettingsService } from '../settings/settings.service';
 import { toFinanceConfig } from './finance-config';
+import { isSecondSaturday } from '../attendance/attendance-rules';
 import type { AuthUser } from '../auth/auth-user';
 
 interface Meta {
@@ -14,7 +15,6 @@ interface Meta {
 
 const money = (n: number) => Math.round(n * 100) / 100;
 const num = (d: Prisma.Decimal | number | null | undefined) => Number(d ?? 0);
-const isoWeekday = (d: Date) => (d.getUTCDay() === 0 ? 7 : d.getUTCDay());
 
 export interface PayrollRow {
   employeeCode: string;
@@ -92,13 +92,20 @@ export class PayrollService {
     const monthStart = new Date(Date.UTC(year, month - 1, 1));
     const monthEnd = new Date(Date.UTC(year, month, 0)); // last day of month
 
-    // Base working days = working weekdays in the month minus holidays.
+    // Base working days = working weekdays in the month minus holidays and 2nd
+    // Saturdays — the same off-days the attendance engine marks WEEKLY_OFF, so a
+    // full month's attendance meets this count instead of falling a day short.
+    const secondSaturdayOff = (rules.secondSaturdayOff as boolean | undefined) ?? true;
     const holidays = await this.prisma.holiday.findMany({ where: { date: { gte: monthStart, lte: monthEnd } }, select: { date: true } });
     const holidaySet = new Set(holidays.map((h) => h.date.toISOString().slice(0, 10)));
     let workingDays = 0;
     for (let t = monthStart.getTime(); t <= monthEnd.getTime(); t += 86_400_000) {
       const d = new Date(t);
-      if (config.workingDays.includes(isoWeekday(d)) && !holidaySet.has(d.toISOString().slice(0, 10))) workingDays++;
+      // workingDays is JS numbering (0=Sun … 6=Sat), as the attendance engine reads it.
+      if (!config.workingDays.includes(d.getUTCDay())) continue;
+      if (holidaySet.has(d.toISOString().slice(0, 10))) continue;
+      if (secondSaturdayOff && isSecondSaturday(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate())) continue;
+      workingDays++;
     }
 
     const users = await this.prisma.user.findMany({
