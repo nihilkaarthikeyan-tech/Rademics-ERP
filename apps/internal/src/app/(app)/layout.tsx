@@ -171,7 +171,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </a>
       <div className="flex min-h-screen">
         {/* ── Sidebar: fixed rail from sm up ── */}
-        <aside className="glass-chrome hidden w-64 shrink-0 flex-col border-r border-white/50 sm:flex">
+        {/* Pinned to the viewport height: stretched to the page's length, the
+            account footer (and its sign-out) sat below the fold on long pages.
+            The nav scrolls inside it instead. */}
+        <aside className="glass-chrome sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/50 sm:flex">
           {sidebarContent}
         </aside>
 

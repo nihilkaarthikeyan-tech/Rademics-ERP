@@ -443,7 +443,9 @@ function AvailabilityDonut({
   });
 
   return (
-    <div className="flex items-center gap-5">
+    // Wraps the legend under the donut when the card is narrow — side by side
+    // it pushed past the card edge on laptop widths and scrolled the page sideways.
+    <div className="flex flex-wrap items-center gap-5">
       <div className="relative h-32 w-32 shrink-0">
         <svg viewBox="0 0 42 42" className="h-32 w-32">
           <circle cx="21" cy="21" r="15.9" fill="none" stroke="rgba(79,70,229,0.12)" strokeWidth="4.4" />
@@ -474,7 +476,7 @@ function AvailabilityDonut({
           </div>
         </div>
       </div>
-      <div className="flex flex-col gap-3 text-sm">
+      <div className="flex min-w-[9rem] flex-1 flex-col gap-3 text-sm">
         {segs.map((seg) => (
           <div key={seg.key} className="flex items-center gap-2.5 text-slate-600">
             <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: seg.color }} />
