@@ -1,6 +1,7 @@
 import { app, ipcMain, type BrowserWindow } from 'electron';
 import type { AuthStore } from './auth-store';
 import type { StatusPoller } from './status-poller';
+import type { IdleTracker } from './idle-tracker';
 import { errorMessage } from './error-message';
 import { restartToInstallUpdate } from './updater';
 import { loadSavedLogin, saveLogin } from './saved-login';
@@ -11,9 +12,10 @@ import { IpcChannel, type LoginPayload, type LoginResult } from '../shared/ipc';
 export function registerIpcHandlers(opts: {
   auth: AuthStore;
   statusPoller: StatusPoller;
+  idleTracker: IdleTracker;
   mainWindow: BrowserWindow;
 }): void {
-  const { auth, statusPoller, mainWindow } = opts;
+  const { auth, statusPoller, idleTracker, mainWindow } = opts;
 
   ipcMain.handle(IpcChannel.AuthLogin, async (_event, payload: LoginPayload): Promise<LoginResult> => {
     try {
@@ -48,6 +50,9 @@ export function registerIpcHandlers(opts: {
 
   ipcMain.handle(IpcChannel.AttendanceCheckOut, async () => {
     try {
+      // Deliver any activity saved during an outage first — check-out charges the
+      // gap since the last heartbeat as idle, so it must see those moments.
+      await idleTracker.flush().catch(() => undefined);
       await auth.checkOut();
       statusPoller.noteManualCheckout(); // suppress the false "auto checked-out" banner
       await statusPoller.tick();

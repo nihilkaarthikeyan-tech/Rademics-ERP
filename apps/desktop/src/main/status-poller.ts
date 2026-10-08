@@ -1,5 +1,6 @@
 import type { AuthStore } from './auth-store';
-import type { StatusUpdatePayload } from '../shared/ipc';
+import type { StatusUpdatePayload, TodayStatus } from '../shared/ipc';
+import { ApiError } from './api-error';
 
 const POLL_MS = 20_000;
 
@@ -15,11 +16,13 @@ export class StatusPoller {
   private prevCheckedIn: boolean | null = null;
   /** Last server answer; null = not known yet (or the signed-in user changed). */
   private lastCheckedIn: boolean | null = null;
+  private lastStatus: TodayStatus | null = null;
   private listeners = new Set<StatusListener>();
 
   constructor(private readonly auth: AuthStore) {
     auth.onChange(() => {
       this.lastCheckedIn = null;
+      this.lastStatus = null;
     });
   }
 
@@ -59,6 +62,7 @@ export class StatusPoller {
     this.timer = null;
     this.prevCheckedIn = null;
     this.lastCheckedIn = null;
+    this.lastStatus = null;
   }
 
   async tick(): Promise<void> {
@@ -68,10 +72,16 @@ export class StatusPoller {
       const autoCheckedOut = this.prevCheckedIn === true && !status.checkedIn;
       this.prevCheckedIn = status.checkedIn;
       this.lastCheckedIn = status.checkedIn;
-      const payload: StatusUpdatePayload = { status, autoCheckedOut };
+      this.lastStatus = status;
+      const payload: StatusUpdatePayload = { status, autoCheckedOut, offline: false };
       for (const l of this.listeners) l(payload);
-    } catch {
-      // transient network error — the next tick retries
+    } catch (err) {
+      // Couldn't reach the server (or it's restarting): keep showing the last
+      // figures and say so — the idle tracker is saving activity meanwhile.
+      if (err instanceof ApiError && err.status < 500) return;
+      if (!this.lastStatus) return;
+      const payload: StatusUpdatePayload = { status: this.lastStatus, autoCheckedOut: false, offline: true };
+      for (const l of this.listeners) l(payload);
     }
   }
 }

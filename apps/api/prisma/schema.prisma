@@ -86,6 +86,13 @@ enum RegularizationStatus {
   REJECTED
 }
 
+/// CORRECTION fixes missing/wrong check-in times; POWER_CUT asks for idle in a
+/// time range to be removed (the machine was off, so no activity could be seen).
+enum RegularizationKind {
+  CORRECTION
+  POWER_CUT
+}
+
 enum ProjectStatus {
   ACTIVE
   ON_HOLD
@@ -507,9 +514,29 @@ model AttendanceSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  idleGaps AttendanceIdleGap[]
+
   @@index([userId])
   @@index([userId, checkInAt])
   @@map("attendance_sessions")
+}
+
+/// One stretch of idle as it was charged (start/end of the silent gap and the
+/// seconds it added). Lets a POWER_CUT approval remove exactly the idle that
+/// fell inside the claimed window — never idle from some other part of the day.
+model AttendanceIdleGap {
+  id        String            @id @default(uuid()) @db.Uuid
+  sessionId String            @db.Uuid
+  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String            @db.Uuid
+  startAt   DateTime
+  endAt     DateTime
+  seconds   Int
+  createdAt DateTime          @default(now())
+
+  @@index([userId, startAt])
+  @@index([sessionId])
+  @@map("attendance_idle_gaps")
 }
 
 /// Nightly-computed daily marks (Spec §5.3, §4): late / half-day / overtime,
@@ -542,9 +569,13 @@ model RegularizationRequest {
   user                User                 @relation("RegSubject", fields: [userId], references: [id], onDelete: Cascade)
   date                DateTime             @db.Date
   reason              String
+  kind                RegularizationKind   @default(CORRECTION)
+  // CORRECTION: the corrected check-in/out. POWER_CUT: the outage window.
   requestedCheckInAt  DateTime?
   requestedCheckOutAt DateTime?
   status              RegularizationStatus @default(PENDING)
+  // POWER_CUT only: idle actually removed on approval.
+  idleCreditedSeconds Int?
 
   reviewerId      String? @db.Uuid
   reviewer        User?   @relation("RegReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)

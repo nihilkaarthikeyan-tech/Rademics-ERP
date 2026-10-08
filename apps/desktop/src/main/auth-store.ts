@@ -109,8 +109,8 @@ export class AuthStore {
     return this.withAuth(() => this.api.checkOut(reconcile));
   }
 
-  heartbeat(): Promise<{ idleSeconds: number; checkedIn: boolean }> {
-    return this.withAuth(() => this.api.heartbeat());
+  heartbeat(offlineAt: string[] = []): Promise<{ idleSeconds: number; checkedIn: boolean }> {
+    return this.withAuth(() => this.api.heartbeat(offlineAt));
   }
 
   today(): Promise<TodayStatus> {

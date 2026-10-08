@@ -3,6 +3,7 @@ import { app, BrowserWindow, Menu, powerMonitor, session } from 'electron';
 import { ApiClient } from './api-client';
 import { AuthStore } from './auth-store';
 import { IdleTracker } from './idle-tracker';
+import { OfflineQueue } from './offline-queue';
 import { StatusPoller } from './status-poller';
 import { existsSync, unlinkSync } from 'node:fs';
 import { registerShutdownHandler, shutdownMarkerPath } from './shutdown-handler';
@@ -58,7 +59,8 @@ if (!gotLock) {
     const api = new ApiClient(API_BASE_URL, desktopSession, DESKTOP_APP_KEY);
     const auth = new AuthStore(api);
     const statusPoller = new StatusPoller(auth);
-    const idleTracker = new IdleTracker(auth, () => statusPoller.knownCheckedOut());
+    const offlineQueue = new OfflineQueue(join(app.getPath('userData'), 'offline-activity.json'));
+    const idleTracker = new IdleTracker(auth, () => statusPoller.knownCheckedOut(), offlineQueue);
 
     const win = new BrowserWindow({
       width: 380,
@@ -95,7 +97,7 @@ if (!gotLock) {
     const tray = createTray({ mainWindow: win, isQuitting });
     statusPoller.onUpdate((payload) => tray.setCheckedIn(payload.status?.checkedIn ?? false));
 
-    registerIpcHandlers({ auth, statusPoller, mainWindow: win });
+    registerIpcHandlers({ auth, statusPoller, idleTracker, mainWindow: win });
     registerShutdownHandler(win);
 
     if (process.env.ELECTRON_RENDERER_URL) {

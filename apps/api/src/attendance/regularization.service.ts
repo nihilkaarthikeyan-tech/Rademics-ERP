@@ -12,7 +12,7 @@ import { pageArgs } from '../common/pagination';
 import { CapabilityService } from '../rbac/capability.service';
 import { AttendanceService } from './attendance.service';
 import { AttendanceComputeService } from './attendance-compute.service';
-import { businessDateKey } from './attendance-rules';
+import { businessDateKey, overlapWithShiftWindow } from './attendance-rules';
 import type { AuthUser } from '../auth/auth-user';
 import type { CreateRegularizationDto, DecideRegularizationDto } from './dto';
 
@@ -44,7 +44,21 @@ export class RegularizationService {
     const date = new Date(dto.date);
     if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
     if (date > new Date()) throw new BadRequestException('Cannot regularize a future date');
-    if (dto.requestedCheckInAt && dto.requestedCheckOutAt) {
+    const kind = dto.kind ?? 'CORRECTION';
+    if (kind === 'POWER_CUT') {
+      // The window is the whole claim — both ends required, already over, and
+      // no longer than a working day (anything longer is a correction, not a cut).
+      if (!dto.requestedCheckInAt || !dto.requestedCheckOutAt) {
+        throw new BadRequestException('Give the time the power cut started and ended');
+      }
+      const from = new Date(dto.requestedCheckInAt);
+      const to = new Date(dto.requestedCheckOutAt);
+      if (to <= from) throw new BadRequestException('The power cut must end after it starts');
+      if (to > new Date()) throw new BadRequestException('The power cut end time is in the future');
+      if (to.getTime() - from.getTime() > 12 * 3600 * 1000) {
+        throw new BadRequestException('A power cut request can cover at most 12 hours');
+      }
+    } else if (dto.requestedCheckInAt && dto.requestedCheckOutAt) {
       if (new Date(dto.requestedCheckOutAt) <= new Date(dto.requestedCheckInAt)) {
         throw new BadRequestException('Check-out must be after check-in');
       }
@@ -62,6 +76,7 @@ export class RegularizationService {
         userId: user.id,
         date,
         reason: dto.reason.trim(),
+        kind,
         requestedCheckInAt: dto.requestedCheckInAt ? new Date(dto.requestedCheckInAt) : null,
         requestedCheckOutAt: dto.requestedCheckOutAt ? new Date(dto.requestedCheckOutAt) : null,
       },
@@ -73,7 +88,7 @@ export class RegularizationService {
       action: 'REGULARIZATION_REQUESTED',
       entityType: 'RegularizationRequest',
       entityId: req.id,
-      after: { date: dto.date },
+      after: { date: dto.date, kind },
       ...meta,
     });
     await this.notifyApprover(user.id, dto.date);
@@ -132,6 +147,11 @@ export class RegularizationService {
 
     await this.assertCanApprove(caller, req.userId);
 
+    const idleCreditedSeconds =
+      approve && req.kind === 'POWER_CUT' && req.requestedCheckInAt && req.requestedCheckOutAt
+        ? await this.removeIdleInWindow(req.userId, req.requestedCheckInAt, req.requestedCheckOutAt)
+        : null;
+
     const updated = await this.prisma.regularizationRequest.update({
       where: { id },
       data: {
@@ -139,10 +159,14 @@ export class RegularizationService {
         reviewerId: caller.id,
         decisionComment: dto.comment?.trim() ?? null,
         decidedAt: new Date(),
+        idleCreditedSeconds,
       },
     });
 
-    if (approve && req.requestedCheckInAt && req.requestedCheckOutAt) {
+    if (idleCreditedSeconds !== null) {
+      const rules = await this.attendance.getRules();
+      await this.compute.computeDay(req.userId, businessDateKey(req.requestedCheckInAt!, rules.timezone), rules);
+    } else if (approve && req.requestedCheckInAt && req.requestedCheckOutAt) {
       // Corrective session — original sessions are untouched (§5.3 "never overwrites").
       await this.prisma.attendanceSession.create({
         data: {
@@ -164,7 +188,7 @@ export class RegularizationService {
       entityType: 'RegularizationRequest',
       entityId: id,
       before: { status: 'PENDING' },
-      after: { status: updated.status, comment: dto.comment ?? null },
+      after: { status: updated.status, comment: dto.comment ?? null, idleCreditedSeconds },
       ...meta,
     });
     await this.notifyRequester(req.userId, approve);
@@ -173,6 +197,55 @@ export class RegularizationService {
   }
 
   // ── helpers ──
+
+  /**
+   * Cut [from, to] out of the user's recorded idle stretches and take the
+   * difference off their sessions' idle. Only idle actually charged inside the
+   * window is removed, and a stretch is split rather than shrunk — so the same
+   * outage can never be credited twice by a second request. Returns seconds removed.
+   */
+  private async removeIdleInWindow(userId: string, from: Date, to: Date): Promise<number> {
+    const rules = await this.attendance.getRules();
+    const gaps = await this.prisma.attendanceIdleGap.findMany({
+      where: { userId, startAt: { lt: to }, endAt: { gt: from } },
+    });
+    const perSession = new Map<string, number>();
+    const ops = [];
+    for (const g of gaps) {
+      const pieces = [
+        { startAt: g.startAt, endAt: from < g.startAt ? g.startAt : from },
+        { startAt: to > g.endAt ? g.endAt : to, endAt: g.endAt },
+      ]
+        .map((p) => ({ ...p, seconds: overlapWithShiftWindow(p.startAt, p.endAt, rules) }))
+        .filter((p) => p.endAt > p.startAt && p.seconds > 0);
+      const kept = pieces.reduce((n, p) => n + p.seconds, 0);
+      const removed = Math.max(0, g.seconds - kept);
+      if (removed === 0) continue;
+      perSession.set(g.sessionId, (perSession.get(g.sessionId) ?? 0) + removed);
+      ops.push(this.prisma.attendanceIdleGap.delete({ where: { id: g.id } }));
+      if (pieces.length) {
+        ops.push(
+          this.prisma.attendanceIdleGap.createMany({
+            data: pieces.map((p) => ({ ...p, sessionId: g.sessionId, userId })),
+          }),
+        );
+      }
+    }
+    const sessions = await this.prisma.attendanceSession.findMany({
+      where: { id: { in: [...perSession.keys()] } },
+      select: { id: true, idleSeconds: true },
+    });
+    let total = 0;
+    for (const s of sessions) {
+      const credit = Math.min(s.idleSeconds, perSession.get(s.id) ?? 0);
+      total += credit;
+      ops.push(
+        this.prisma.attendanceSession.update({ where: { id: s.id }, data: { idleSeconds: { decrement: credit } } }),
+      );
+    }
+    await this.prisma.$transaction(ops);
+    return total;
+  }
   private async assertCanApprove(caller: AuthUser, subjectUserId: string): Promise<void> {
     const grant = await this.capabilities.resolveGrant(
       caller.role,

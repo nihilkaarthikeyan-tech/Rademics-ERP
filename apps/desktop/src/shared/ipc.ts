@@ -63,6 +63,8 @@ export interface TodayStatus {
 export interface StatusUpdatePayload {
   status: TodayStatus | null;
   autoCheckedOut: boolean;
+  /** The server can't be reached; activity is being saved to send later. */
+  offline?: boolean;
 }
 
 /**

@@ -21,7 +21,9 @@ interface RegRow {
   id: string;
   date: string;
   reason: string;
+  kind: 'CORRECTION' | 'POWER_CUT';
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  idleCreditedSeconds: number | null;
   decisionComment: string | null;
   createdAt: string;
 }
@@ -161,8 +163,18 @@ export function MyAttendance() {
               {regs.map((r) => (
                 <li key={r.id} className="flex items-start justify-between gap-4 py-2.5">
                   <div>
-                    <div className="text-sm font-medium text-slate-700">{r.date.slice(0, 10)}</div>
+                    <div className="text-sm font-medium text-slate-700">
+                      {r.date.slice(0, 10)}
+                      {r.kind === 'POWER_CUT' ? (
+                        <span className="ml-2 text-xs font-normal text-amber-700">Power cut</span>
+                      ) : null}
+                    </div>
                     <div className="text-xs text-slate-500">{r.reason}</div>
+                    {r.kind === 'POWER_CUT' && r.status === 'APPROVED' && r.idleCreditedSeconds !== null ? (
+                      <div className="mt-0.5 text-xs text-slate-400">
+                        {Math.round(r.idleCreditedSeconds / 60)} min of idle removed
+                      </div>
+                    ) : null}
                     {r.decisionComment ? (
                       <div className="mt-0.5 text-xs text-slate-400">Reviewer: {r.decisionComment}</div>
                     ) : null}

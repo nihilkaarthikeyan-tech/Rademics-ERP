@@ -1,5 +1,8 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
+  IsIn,
   IsEnum,
   IsInt,
   IsISO8601,
@@ -42,6 +45,14 @@ export class HeartbeatDto {
   @IsString()
   @MaxLength(100)
   clientTs?: string;
+
+  // Activity moments the desktop agent saw while offline (one per minute at
+  // most, so a full day is 1440); replayed as heartbeats — see heartbeat().
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1500)
+  @IsISO8601({}, { each: true })
+  offlineAt?: string[];
 }
 
 /** Regularization request (Spec §5.3, §24: reason ≥ 10 chars). */
@@ -61,6 +72,12 @@ export class CreateRegularizationDto {
   @IsOptional()
   @IsISO8601()
   requestedCheckOutAt?: string;
+
+  // POWER_CUT: requestedCheckInAt/OutAt carry the outage window, and approval
+  // removes the idle charged inside it instead of adding a session.
+  @IsOptional()
+  @IsIn(['CORRECTION', 'POWER_CUT'])
+  kind?: 'CORRECTION' | 'POWER_CUT';
 }
 
 /** Approve / reject a regularization (Spec §5.3). */

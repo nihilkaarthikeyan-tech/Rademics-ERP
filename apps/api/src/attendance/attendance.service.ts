@@ -124,18 +124,24 @@ export class AttendanceService {
     const rules = await this.getRules();
     const lastAlive = open.lastHeartbeatAt ?? open.checkInAt;
     const checkOutAt = reconcile ? lastAlive : now;
-    const idleAdd = reconcile ? 0 : this.idleGap(lastAlive, now, rules);
+    const gaps = reconcile ? [] : this.idleGaps(lastAlive, [], now, rules);
+    const idleAdd = gaps.reduce((n, g) => n + g.seconds, 0);
 
-    const session = await this.prisma.attendanceSession.update({
-      where: { id: open.id },
-      data: {
-        checkOutAt,
-        idleSeconds: { increment: idleAdd },
-        checkOutIp: meta.ip ?? null,
-        checkOutUserAgent: meta.userAgent ?? null,
-      },
-      select: SESSION_PUBLIC,
-    });
+    const [session] = await this.prisma.$transaction([
+      this.prisma.attendanceSession.update({
+        where: { id: open.id },
+        data: {
+          checkOutAt,
+          idleSeconds: { increment: idleAdd },
+          checkOutIp: meta.ip ?? null,
+          checkOutUserAgent: meta.userAgent ?? null,
+        },
+        select: SESSION_PUBLIC,
+      }),
+      this.prisma.attendanceIdleGap.createMany({
+        data: gaps.map((g) => ({ ...g, sessionId: open.id, userId: user.id })),
+      }),
+    ]);
 
     // Still checked in elsewhere? (multi-session) Only clear presence if no open session remains.
     if (!(await this.findOpenSession(user.id))) this.presence.markCheckedOut(user.id);
@@ -157,20 +163,35 @@ export class AttendanceService {
   }
 
   // ── Idle heartbeat (Spec §5.3): shown to the employee immediately ──
-  async heartbeat(user: AuthUser) {
+  // `offlineAt` = moments the desktop agent saw real keyboard/mouse activity while
+  // it couldn't reach us (internet drop, router down on a laptop's battery). They
+  // are replayed as the heartbeats they would have been, so working through an
+  // outage isn't charged as idle. Only moments inside this open session and not
+  // in the future count; a silent stretch between them is still idle as usual.
+  async heartbeat(user: AuthUser, offlineAt: string[] = []) {
     const open = await this.findOpenSession(user.id);
     if (!open) throw new BadRequestException('You are not checked in');
 
     const now = new Date();
     const rules = await this.getRules();
-    const idleAdd = this.idleGap(open.lastHeartbeatAt ?? open.checkInAt, now, rules);
+    const since = open.lastHeartbeatAt ?? open.checkInAt;
+    const replayed = offlineAt
+      .map((s) => new Date(s))
+      .filter((d) => !Number.isNaN(d.getTime()) && d > since && d < now);
+    const gaps = this.idleGaps(since, replayed, now, rules);
+    const idleAdd = gaps.reduce((n, g) => n + g.seconds, 0);
 
-    const session = await this.prisma.attendanceSession.update({
-      where: { id: open.id },
-      data: { lastHeartbeatAt: now, idleSeconds: { increment: idleAdd } },
-      select: SESSION_PUBLIC,
-    });
-    return { idleSeconds: session.idleSeconds, checkedIn: true };
+    const [session] = await this.prisma.$transaction([
+      this.prisma.attendanceSession.update({
+        where: { id: open.id },
+        data: { lastHeartbeatAt: now, idleSeconds: { increment: idleAdd } },
+        select: SESSION_PUBLIC,
+      }),
+      this.prisma.attendanceIdleGap.createMany({
+        data: gaps.map((g) => ({ ...g, sessionId: open.id, userId: user.id })),
+      }),
+    ]);
+    return { idleSeconds: session.idleSeconds, checkedIn: true, replayed: replayed.length };
   }
 
   // Idle no longer auto-checks-out (Spec §5.3 revised). A silent session stays open —
@@ -276,6 +297,19 @@ export class AttendanceService {
     const gapSec = Math.floor((now.getTime() - since.getTime()) / 1000);
     if (gapSec <= rules.idleMinutes * 60) return 0;
     return overlapWithShiftWindow(since, now, rules);
+  }
+
+  /** Each idle stretch from `since` through the activity moments to `now`. */
+  private idleGaps(since: Date, activity: Date[], now: Date, rules: AttendanceRules) {
+    const points = [...activity].sort((a, b) => a.getTime() - b.getTime());
+    const gaps: { startAt: Date; endAt: Date; seconds: number }[] = [];
+    let last = since;
+    for (const t of [...points, now]) {
+      const seconds = this.idleGap(last, t, rules);
+      if (seconds > 0) gaps.push({ startAt: last, endAt: t, seconds });
+      last = t;
+    }
+    return gaps;
   }
 
   /** SCOPED team = direct reports ∪ members of teams the caller leads (Spec §3). */

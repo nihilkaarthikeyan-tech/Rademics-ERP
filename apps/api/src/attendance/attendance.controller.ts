@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { AttendanceService } from './attendance.service';
 import { AttendanceComputeService } from './attendance-compute.service';
-import { AttendanceHistoryQuery, CheckInDto, CheckOutDto } from './dto';
+import { AttendanceHistoryQuery, CheckInDto, CheckOutDto, HeartbeatDto } from './dto';
 import { RequireCapability, RequireScopedCapability } from '../rbac/capability.decorator';
 import { CurrentUser } from '../auth/decorators';
 import { reqMeta } from '../common/req-meta';
@@ -35,8 +35,8 @@ export class AttendanceController {
 
   @Post('heartbeat')
   @RequireCapability('attendance.check_in_out')
-  heartbeat(@CurrentUser() user: AuthUser) {
-    return this.attendance.heartbeat(user);
+  heartbeat(@Body() dto: HeartbeatDto, @CurrentUser() user: AuthUser) {
+    return this.attendance.heartbeat(user, dto.offlineAt);
   }
 
   // ── Own status + history (Spec §5.3, §17.1) ──

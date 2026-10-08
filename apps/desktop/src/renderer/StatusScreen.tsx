@@ -16,6 +16,7 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoCheckedOut, setAutoCheckedOut] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -24,6 +25,7 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
   useEffect(() => {
     const unsubscribe = window.rademicsDesktop.onStatusUpdated((payload) => {
       setStatus(payload.status);
+      setOffline(payload.offline === true);
       if (payload.autoCheckedOut) setAutoCheckedOut(true);
     });
     return unsubscribe;
@@ -110,6 +112,11 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
             </div>
           ) : (
           <>
+          {offline ? (
+            <div className="mb-3 rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-800">
+              No internet. Your work is being saved and will sync when you're back online.
+            </div>
+          ) : null}
           {autoCheckedOut ? (
             <div className="mb-3 flex items-start justify-between gap-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
               <span>You were automatically checked out after a period of inactivity.</span>

@@ -9,11 +9,14 @@ interface PendingRow {
   id: string;
   date: string;
   reason: string;
+  kind: 'CORRECTION' | 'POWER_CUT';
   requestedCheckInAt: string | null;
   requestedCheckOutAt: string | null;
   createdAt: string;
   user: { id: string; name: string; email: string };
 }
+
+const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 /** Approver inbox (Spec §5.3): approve/reject scoped regularization requests. */
 export function PendingApprovals() {
@@ -70,9 +73,15 @@ export function PendingApprovals() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-slate-700">{r.user.name}</span>
                     <Badge tone="slate">{r.date.slice(0, 10)}</Badge>
+                    {r.kind === 'POWER_CUT' ? <Badge tone="amber">Power cut</Badge> : null}
                   </div>
                   <div className="text-xs text-slate-500">{r.reason}</div>
-                  {r.requestedCheckInAt ? (
+                  {r.kind === 'POWER_CUT' && r.requestedCheckInAt && r.requestedCheckOutAt ? (
+                    <div className="mt-0.5 text-xs text-slate-400">
+                      Power off {fmtTime(r.requestedCheckInAt)} → {fmtTime(r.requestedCheckOutAt)} · approving removes idle
+                      in this window
+                    </div>
+                  ) : r.requestedCheckInAt ? (
                     <div className="mt-0.5 text-xs text-slate-400">
                       Requested: {new Date(r.requestedCheckInAt).toLocaleString()} →{' '}
                       {r.requestedCheckOutAt ? new Date(r.requestedCheckOutAt).toLocaleString() : '—'}

@@ -18,6 +18,7 @@
     "verify:phase1": "dotenv -e ../../.env -- ts-node scripts/verify-phase1.ts",
     "verify:phase2": "dotenv -e ../../.env -- ts-node scripts/verify-phase2.ts",
     "verify:phase3": "dotenv -e ../../.env -- ts-node scripts/verify-phase3.ts",
+    "verify:offline-idle": "dotenv -e ../../.env -- ts-node scripts/verify-offline-idle.ts",
     "verify:phase4": "dotenv -e ../../.env -- ts-node scripts/verify-phase4.ts",
     "verify:phase5": "dotenv -e ../../.env -- ts-node scripts/verify-phase5.ts",
     "verify:phase6": "dotenv -e ../../.env -- ts-node scripts/verify-phase6.ts",

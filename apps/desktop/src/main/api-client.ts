@@ -78,8 +78,12 @@ export class ApiClient {
     });
   }
 
-  heartbeat(): Promise<{ idleSeconds: number; checkedIn: boolean }> {
-    return this.request('/attendance/heartbeat', { method: 'POST', body: {} });
+  /** `offlineAt`: activity moments saved while the server couldn't be reached. */
+  heartbeat(offlineAt: string[] = []): Promise<{ idleSeconds: number; checkedIn: boolean }> {
+    return this.request('/attendance/heartbeat', {
+      method: 'POST',
+      body: offlineAt.length ? { offlineAt } : {},
+    });
   }
 
   today(): Promise<TodayStatus> {
