@@ -2,6 +2,21 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client as MinioClient } from 'minio';
 
+/** Types safe to render in a browser tab. SVG is left out: it can carry script. */
+const INLINE_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+};
+
+function inlineType(name: string): string | null {
+  const ext = name.toLowerCase().split('.').pop() ?? '';
+  return INLINE_TYPES[ext] ?? null;
+}
+
 /**
  * Object-storage access (Spec §5.6, §12). Uploads/downloads go DIRECTLY to storage
  * via presigned URLs — files never stream through the app server. The only
@@ -72,11 +87,19 @@ export class StorageService implements OnModuleInit {
     downloadName?: string,
     inline = false,
   ): Promise<string> {
-    const headers = downloadName
-      ? {
-          'response-content-disposition': `${inline ? 'inline' : 'attachment'}; filename="${downloadName.replace(/"/g, '')}"`,
-        }
-      : undefined;
+    // The stored Content-Type is whatever the uploader's PUT claimed, so never
+    // trust it: an "a.pdf" stored as text/html, opened inline, would run that
+    // page on the storage host. The type is decided here from the name, and
+    // only images and PDFs may render; everything else is a plain download.
+    const safeInlineType = inlineType(downloadName ?? key);
+    const asInline = inline && safeInlineType !== null;
+    const headers: Record<string, string> = {
+      'response-content-type': asInline ? safeInlineType : 'application/octet-stream',
+    };
+    if (downloadName || !asInline) {
+      const name = (downloadName ?? key.split('/').pop() ?? 'file').replace(/"/g, '');
+      headers['response-content-disposition'] = `${asInline ? 'inline' : 'attachment'}; filename="${name}"`;
+    }
     return this.publicClient.presignedGetObject(this.bucket, key, expirySeconds, headers);
   }
 

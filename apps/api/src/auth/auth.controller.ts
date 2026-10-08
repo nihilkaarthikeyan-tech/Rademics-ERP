@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
+import { Body, Controller, Get, HttpCode, HttpException, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -11,6 +12,32 @@ import { RequireCapability } from '../rbac/capability.decorator';
 import type { AuthUser } from './auth-user';
 
 const REFRESH_COOKIE = 'rademics_rt';
+
+/**
+ * The desktop key ships inside the installer, so anyone can pull it out and
+ * skip the CAPTCHA with it. It is treated as public: logins that use it get a
+ * tight failed-attempt budget per client IP instead (needs nginx to pass the
+ * real client IP, not Cloudflare's — see deploy notes).
+ */
+const DESKTOP_FAIL_LIMIT = 10;
+const DESKTOP_FAIL_WINDOW_MS = 15 * 60_000;
+const desktopFailures = new Map<string, { count: number; since: number }>();
+
+function desktopBudgetLeft(ip: string): boolean {
+  const entry = desktopFailures.get(ip);
+  if (!entry || Date.now() - entry.since > DESKTOP_FAIL_WINDOW_MS) return true;
+  return entry.count < DESKTOP_FAIL_LIMIT;
+}
+
+function noteDesktopFailure(ip: string): void {
+  const entry = desktopFailures.get(ip);
+  if (!entry || Date.now() - entry.since > DESKTOP_FAIL_WINDOW_MS) {
+    desktopFailures.set(ip, { count: 1, since: Date.now() });
+  } else {
+    entry.count++;
+  }
+  if (desktopFailures.size > 10_000) desktopFailures.clear(); // bound memory under a spray
+}
 
 @Controller('auth')
 export class AuthController {
@@ -31,15 +58,25 @@ export class AuthController {
     // Turnstile. Bot protection there falls back to the 20/min rate limit + 5-fail
     // lockout (same as if no CAPTCHA existed). The website login is unaffected — a
     // request without the valid key still goes through Turnstile as before.
-    if (!this.isTrustedDesktopClient(req)) {
+    const desktop = this.isTrustedDesktopClient(req);
+    const ip = req.ip ?? 'unknown';
+    if (!desktop) {
       await this.turnstile.verify(dto.captchaToken, req.ip);
+    } else if (!desktopBudgetLeft(ip)) {
+      throw new HttpException('Too many failed sign-in attempts. Try again in 15 minutes.', HttpStatus.TOO_MANY_REQUESTS);
     }
     // Outdated desktop builds are refused once a newer version has been published
     // for 24h+ ("use the old app for more than 1 day → must update"). Website
     // logins are untouched (no desktop key).
     await this.desktopVersion.assertSupported(req);
-    const tokens = await this.auth.login(dto.email, dto.password, meta(req));
-    return this.respondWithTokens(res, tokens);
+    try {
+      const tokens = await this.auth.login(dto.email, dto.password, meta(req));
+      if (desktop) desktopFailures.delete(ip);
+      return this.respondWithTokens(res, tokens);
+    } catch (err) {
+      if (desktop) noteDesktopFailure(ip);
+      throw err;
+    }
   }
 
   /** True only when the request carries the configured desktop-app key. */
@@ -47,7 +84,8 @@ export class AuthController {
     const expected = this.config.get<string>('DESKTOP_APP_KEY');
     if (!expected) return false; // not configured -> everyone goes through Turnstile
     const provided = req.headers['x-rademics-desktop'];
-    return typeof provided === 'string' && provided === expected;
+    if (typeof provided !== 'string' || provided.length !== expected.length) return false;
+    return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
   }
 
   @Public()

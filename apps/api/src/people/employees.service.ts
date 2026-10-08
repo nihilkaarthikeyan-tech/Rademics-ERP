@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -173,6 +174,7 @@ export class EmployeesService {
   async update(id: string, dto: UpdateEmployeeDto, actor: AuthUser, meta: Meta) {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Employee not found');
+    this.assertMayManage(existing, actor);
 
     if (dto.joinDate && new Date(dto.joinDate) > new Date()) {
       throw new BadRequestException('Join date cannot be in the future');
@@ -224,6 +226,8 @@ export class EmployeesService {
   async deactivate(id: string, actor: AuthUser, meta: Meta) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Employee not found');
+    if (user.id === actor.id) throw new BadRequestException('You cannot deactivate your own account');
+    this.assertMayManage(user, actor);
     if (user.status === 'DEACTIVATED') return { id, status: user.status };
 
     await this.prisma.user.update({
@@ -296,6 +300,17 @@ export class EmployeesService {
    * never to/from CLIENT (client accounts are org-bound, made by onboarding).
    * Sessions are revoked so the new role applies at next login, not in 15 min.
    */
+  /**
+   * HR holds employee edit/deactivate, but a Super Admin is above HR: HR
+   * deactivating every Super Admin would leave nobody able to assign roles,
+   * read the audit log or change settings. Only a Super Admin manages one.
+   */
+  private assertMayManage(target: { role: string }, actor: AuthUser): void {
+    if (target.role === 'SUPER_ADMIN' && actor.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Only a Super Admin can change a Super Admin account');
+    }
+  }
+
   async setRole(id: string, role: string, actor: AuthUser, meta: Meta) {
     if (id === actor.id) throw new BadRequestException('You cannot change your own role');
     const user = await this.prisma.user.findUnique({

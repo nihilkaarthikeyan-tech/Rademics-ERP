@@ -120,10 +120,14 @@ export class RegularizationService {
       caller.resourceType,
       APPROVE_CAPABILITY,
     );
+    // Never your own requests — someone else has to approve those (see assertCanApprove).
     const where =
       grant === Grant.ALLOW
-        ? { status: 'PENDING' as const }
-        : { status: 'PENDING' as const, userId: { in: await this.attendance.teamScopeUserIds(caller.id) } };
+        ? { status: 'PENDING' as const, userId: { not: caller.id } }
+        : {
+            status: 'PENDING' as const,
+            userId: { in: (await this.attendance.teamScopeUserIds(caller.id)).filter((id) => id !== caller.id) },
+          };
 
     const { page, pageSize, skip, take } = pageArgs(query);
     const [items, total] = await this.prisma.$transaction([
@@ -247,6 +251,10 @@ export class RegularizationService {
     return total;
   }
   private async assertCanApprove(caller: AuthUser, subjectUserId: string): Promise<void> {
+    // HR holds request + approve, and a Team Lead sits inside their own team
+    // scope — without this either could approve a correction (a paid day) or
+    // a power cut (erased idle) for themselves. Leave has the same rule.
+    if (subjectUserId === caller.id) throw new ForbiddenException('You cannot approve your own request');
     const grant = await this.capabilities.resolveGrant(
       caller.role,
       caller.resourceType,

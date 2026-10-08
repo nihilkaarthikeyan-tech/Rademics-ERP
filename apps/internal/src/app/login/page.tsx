@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { Button, Input, Label } from '@rademics/ui';
-import { apiFetch, type Me } from '@/lib/api';
+import { apiFetch, ApiError, type Me } from '@/lib/api';
 import { setToken } from '@/lib/session';
 import { Turnstile, TURNSTILE_ENABLED } from '@/components/turnstile';
 
@@ -29,8 +29,13 @@ export default function LoginPage() {
       });
       setToken(res.accessToken);
       router.push('/dashboard');
-    } catch {
-      setError('Invalid email or password');
+    } catch (err) {
+      // A wrong password stays deliberately vague; anything else (CAPTCHA not
+      // completed, account locked, too many attempts) says what actually
+      // happened — "invalid password" for a missing CAPTCHA hid a broken widget.
+      if (err instanceof ApiError && err.status !== 401) setError(err.message);
+      else if (err instanceof ApiError) setError('Invalid email or password');
+      else setError("Can't reach the server. Check your internet connection and try again.");
     } finally {
       setLoading(false);
     }
