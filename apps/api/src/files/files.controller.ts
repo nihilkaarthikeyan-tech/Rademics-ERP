@@ -27,8 +27,8 @@ export class FilesController {
 
   @Get('versions/:id/status')
   @RequireCapability('files.upload')
-  status(@Param('id', ParseUUIDPipe) id: string) {
-    return this.files.scanStatus(id);
+  status(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthUser) {
+    return this.files.scanStatus(id, actor);
   }
 
   @Get('versions/:id/download')

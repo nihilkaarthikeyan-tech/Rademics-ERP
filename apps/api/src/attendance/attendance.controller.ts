@@ -35,8 +35,8 @@ export class AttendanceController {
 
   @Post('heartbeat')
   @RequireCapability('attendance.check_in_out')
-  heartbeat(@Body() dto: HeartbeatDto, @CurrentUser() user: AuthUser) {
-    return this.attendance.heartbeat(user, dto.offlineAt);
+  heartbeat(@Body() dto: HeartbeatDto, @CurrentUser() user: AuthUser, @Req() req: Request) {
+    return this.attendance.heartbeat(user, dto.offlineAt, this.desktopVersion.isDesktopClient(req));
   }
 
   // ── Own status + history (Spec §5.3, §17.1) ──

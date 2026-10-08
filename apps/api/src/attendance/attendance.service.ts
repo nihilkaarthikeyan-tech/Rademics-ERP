@@ -21,6 +21,9 @@ interface Meta {
   userAgent?: string | null;
 }
 
+/** How far back saved offline activity may reach (a long outage, not a week). */
+const OFFLINE_REPLAY_MAX_MS = 12 * 3600 * 1000;
+
 const SESSION_PUBLIC = {
   id: true,
   checkInAt: true,
@@ -74,9 +77,14 @@ export class AttendanceService {
     if (idempotencyKey) {
       const existing = await this.prisma.attendanceSession.findUnique({
         where: { idempotencyKey },
-        select: SESSION_PUBLIC,
+        select: { ...SESSION_PUBLIC, userId: true },
       });
-      if (existing) return existing; // retried request — return the same session
+      if (existing) {
+        // Keys are client-chosen: only ever hand back the caller's own session.
+        if (existing.userId !== user.id) throw new ConflictException('Retry key already used');
+        const { userId: _owner, ...session } = existing;
+        return session; // retried request — return the same session
+      }
     }
 
     const open = await this.findOpenSession(user.id);
@@ -168,16 +176,22 @@ export class AttendanceService {
   // are replayed as the heartbeats they would have been, so working through an
   // outage isn't charged as idle. Only moments inside this open session and not
   // in the future count; a silent stretch between them is still idle as usual.
-  async heartbeat(user: AuthUser, offlineAt: string[] = []) {
+  //
+  // The moments are self-reported, so they are only taken from the desktop app
+  // on a session it checked in, reach back at most 12 hours, and every replay
+  // is written to the audit log (count + span) where HR can see it.
+  async heartbeat(user: AuthUser, offlineAt: string[] = [], fromDesktop = false) {
     const open = await this.findOpenSession(user.id);
     if (!open) throw new BadRequestException('You are not checked in');
 
     const now = new Date();
     const rules = await this.getRules();
     const since = open.lastHeartbeatAt ?? open.checkInAt;
-    const replayed = offlineAt
+    const oldest = new Date(now.getTime() - OFFLINE_REPLAY_MAX_MS);
+    const trusted = fromDesktop && open.source === AttendanceSource.DESKTOP;
+    const replayed = (trusted ? offlineAt : [])
       .map((s) => new Date(s))
-      .filter((d) => !Number.isNaN(d.getTime()) && d > since && d < now);
+      .filter((d) => !Number.isNaN(d.getTime()) && d > since && d >= oldest && d < now);
     const gaps = this.idleGaps(since, replayed, now, rules);
     const idleAdd = gaps.reduce((n, g) => n + g.seconds, 0);
 
@@ -191,6 +205,21 @@ export class AttendanceService {
         data: gaps.map((g) => ({ ...g, sessionId: open.id, userId: user.id })),
       }),
     ]);
+    if (replayed.length) {
+      const times = replayed.map((d) => d.getTime());
+      await this.audit.record({
+        actorId: user.id,
+        actorEmail: user.email,
+        action: 'ATTENDANCE_OFFLINE_REPLAY',
+        entityType: 'AttendanceSession',
+        entityId: open.id,
+        after: {
+          moments: replayed.length,
+          from: new Date(Math.min(...times)).toISOString(),
+          to: new Date(Math.max(...times)).toISOString(),
+        },
+      });
+    }
     return { idleSeconds: session.idleSeconds, checkedIn: true, replayed: replayed.length };
   }
 
@@ -283,7 +312,7 @@ export class AttendanceService {
     return this.prisma.attendanceSession.findFirst({
       where: { userId, checkOutAt: null },
       orderBy: { checkInAt: 'desc' },
-      select: { id: true, checkInAt: true, lastHeartbeatAt: true },
+      select: { id: true, checkInAt: true, lastHeartbeatAt: true, source: true },
     });
   }
 

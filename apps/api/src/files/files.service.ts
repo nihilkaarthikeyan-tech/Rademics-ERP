@@ -107,9 +107,11 @@ export class FilesService {
   async finalize(versionId: string, actor: AuthUser, meta: Meta) {
     const version = await this.prisma.fileVersion.findUnique({
       where: { id: versionId },
-      select: { id: true, storageKey: true, scanStatus: true, originalName: true, fileAssetId: true },
+      select: { id: true, storageKey: true, scanStatus: true, originalName: true, fileAssetId: true, uploadedById: true },
     });
-    if (!version) throw new NotFoundException('File version not found');
+    // Only the uploader completes their own upload — anyone else could force
+    // rescans of other people's files by version id.
+    if (!version || version.uploadedById !== actor.id) throw new NotFoundException('File version not found');
 
     const stat = await this.storage.stat(version.storageKey);
     if (!stat) throw new BadRequestException('Upload not found in storage — did the PUT complete?');
@@ -153,13 +155,15 @@ export class FilesService {
     return { versionId, scanStatus: 'SCANNING' as const };
   }
 
-  scanStatus(versionId: string) {
-    return this.prisma.fileVersion
-      .findUnique({ where: { id: versionId }, select: { id: true, scanStatus: true, scanDetail: true } })
-      .then((v) => {
-        if (!v) throw new NotFoundException('File version not found');
-        return v;
-      });
+  /** The uploader polls this while their file is scanned; nobody else needs it. */
+  async scanStatus(versionId: string, actor: AuthUser) {
+    const v = await this.prisma.fileVersion.findUnique({
+      where: { id: versionId },
+      select: { id: true, scanStatus: true, scanDetail: true, uploadedById: true },
+    });
+    if (!v || v.uploadedById !== actor.id) throw new NotFoundException('File version not found');
+    const { uploadedById: _uploader, ...status } = v;
+    return status;
   }
 
   /** Only people who administer staff records may touch someone else's profile files. */
@@ -219,7 +223,7 @@ export class FilesService {
         scanStatus: true,
         visibility: true,
         deletedAt: true,
-        fileAsset: { select: { taskId: true, profileUserId: true, createdById: true } },
+        fileAsset: { select: { taskId: true, profileUserId: true, createdById: true, chatMessageId: true } },
       },
     });
     if (!v || v.deletedAt) throw new NotFoundException('File not found');
@@ -229,6 +233,10 @@ export class FilesService {
       await this.assertTaskAccess(v.fileAsset.taskId, user);
     } else if (v.fileAsset.profileUserId && v.fileAsset.profileUserId !== user.id) {
       await this.assertMayManagePeople(user);
+    } else if (!v.fileAsset.profileUserId && !v.fileAsset.chatMessageId && v.fileAsset.createdById !== user.id) {
+      // An attachment still being drafted (not sent to chat or attached to
+      // anything yet) is its creator's alone.
+      throw new NotFoundException('File not found');
     }
     if (v.scanStatus !== 'AVAILABLE') {
       throw new ConflictException(

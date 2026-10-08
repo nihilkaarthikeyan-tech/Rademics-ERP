@@ -13,6 +13,8 @@ import { CapabilityService } from '../rbac/capability.service';
 import { AttendanceService } from './attendance.service';
 import { AttendanceComputeService } from './attendance-compute.service';
 import { businessDateKey, overlapWithShiftWindow } from './attendance-rules';
+
+const HOUR_MS = 3600 * 1000;
 import type { AuthUser } from '../auth/auth-user';
 import type { CreateRegularizationDto, DecideRegularizationDto } from './dto';
 
@@ -45,24 +47,10 @@ export class RegularizationService {
     if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
     if (date > new Date()) throw new BadRequestException('Cannot regularize a future date');
     const kind = dto.kind ?? 'CORRECTION';
-    if (kind === 'POWER_CUT') {
-      // The window is the whole claim — both ends required, already over, and
-      // no longer than a working day (anything longer is a correction, not a cut).
-      if (!dto.requestedCheckInAt || !dto.requestedCheckOutAt) {
-        throw new BadRequestException('Give the time the power cut started and ended');
-      }
-      const from = new Date(dto.requestedCheckInAt);
-      const to = new Date(dto.requestedCheckOutAt);
-      if (to <= from) throw new BadRequestException('The power cut must end after it starts');
-      if (to > new Date()) throw new BadRequestException('The power cut end time is in the future');
-      if (to.getTime() - from.getTime() > 12 * 3600 * 1000) {
-        throw new BadRequestException('A power cut request can cover at most 12 hours');
-      }
-    } else if (dto.requestedCheckInAt && dto.requestedCheckOutAt) {
-      if (new Date(dto.requestedCheckOutAt) <= new Date(dto.requestedCheckInAt)) {
-        throw new BadRequestException('Check-out must be after check-in');
-      }
+    if (kind === 'POWER_CUT' && (!dto.requestedCheckInAt || !dto.requestedCheckOutAt)) {
+      throw new BadRequestException('Give the time the power cut started and ended');
     }
+    await this.assertWindowFitsDay(dto, kind);
 
     // No overlapping pending request for the same day (§24).
     const clash = await this.prisma.regularizationRequest.findFirst({
@@ -151,21 +139,29 @@ export class RegularizationService {
 
     await this.assertCanApprove(caller, req.userId);
 
-    const idleCreditedSeconds =
-      approve && req.kind === 'POWER_CUT' && req.requestedCheckInAt && req.requestedCheckOutAt
-        ? await this.removeIdleInWindow(req.userId, req.requestedCheckInAt, req.requestedCheckOutAt)
-        : null;
-
-    const updated = await this.prisma.regularizationRequest.update({
-      where: { id },
+    // Claim the request atomically before applying anything: two approvers
+    // clicking at once would otherwise both pass the PENDING check above and
+    // create two corrective sessions (or credit a power cut twice).
+    const claimed = await this.prisma.regularizationRequest.updateMany({
+      where: { id, status: 'PENDING' },
       data: {
         status: approve ? 'APPROVED' : 'REJECTED',
         reviewerId: caller.id,
         decisionComment: dto.comment?.trim() ?? null,
         decidedAt: new Date(),
-        idleCreditedSeconds,
       },
     });
+    if (claimed.count === 0) throw new BadRequestException('Request is already actioned');
+
+    const idleCreditedSeconds =
+      approve && req.kind === 'POWER_CUT' && req.requestedCheckInAt && req.requestedCheckOutAt
+        ? await this.removeIdleInWindow(req.userId, req.requestedCheckInAt, req.requestedCheckOutAt)
+        : null;
+
+    const updated =
+      idleCreditedSeconds === null
+        ? await this.prisma.regularizationRequest.findUniqueOrThrow({ where: { id } })
+        : await this.prisma.regularizationRequest.update({ where: { id }, data: { idleCreditedSeconds } });
 
     if (idleCreditedSeconds !== null) {
       const rules = await this.attendance.getRules();
@@ -201,6 +197,39 @@ export class RegularizationService {
   }
 
   // ── helpers ──
+
+  /**
+   * The requested times must belong to the day being corrected: the start on
+   * that business date, nothing in the future, and no longer than a day (12h
+   * for a power cut). Without this a request "for yesterday" could carry a
+   * 30-day session, and approving it would pay for all of it.
+   */
+  private async assertWindowFitsDay(dto: CreateRegularizationDto, kind: 'CORRECTION' | 'POWER_CUT') {
+    const from = dto.requestedCheckInAt ? new Date(dto.requestedCheckInAt) : null;
+    const to = dto.requestedCheckOutAt ? new Date(dto.requestedCheckOutAt) : null;
+    if (!from && !to) return;
+    const label = kind === 'POWER_CUT' ? 'power cut' : 'check-in/out';
+    const now = new Date();
+    if ((from && from > now) || (to && to > now)) {
+      throw new BadRequestException(`The ${label} times can't be in the future`);
+    }
+    const { timezone } = await this.attendance.getRules();
+    // A lone check-out is anchored to the day too; a check-out after a check-in
+    // may run past midnight (a late shift), bounded by the length limit below.
+    const anchor = from ?? to!;
+    if (businessDateKey(anchor, timezone) !== dto.date.slice(0, 10)) {
+      throw new BadRequestException(`The ${label} times must be on ${dto.date.slice(0, 10)}`);
+    }
+    if (from && to) {
+      if (to <= from) {
+        throw new BadRequestException(kind === 'POWER_CUT' ? 'The power cut must end after it starts' : 'Check-out must be after check-in');
+      }
+      const maxHours = kind === 'POWER_CUT' ? 12 : 24;
+      if (to.getTime() - from.getTime() > maxHours * HOUR_MS) {
+        throw new BadRequestException(`A ${kind === 'POWER_CUT' ? 'power cut' : 'correction'} can cover at most ${maxHours} hours`);
+      }
+    }
+  }
 
   /**
    * Cut [from, to] out of the user's recorded idle stretches and take the

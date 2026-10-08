@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
@@ -29,11 +30,20 @@ export class DesktopVersionService {
 
   constructor(private readonly config: ConfigService) {}
 
+  /**
+   * True when the request carries the desktop app key. The key ships inside
+   * the installer, so this says "probably our app", never "trust this user".
+   */
+  isDesktopClient(req: Request): boolean {
+    const expected = this.config.get<string>('DESKTOP_APP_KEY');
+    const provided = req.headers['x-rademics-desktop'];
+    if (!expected || typeof provided !== 'string' || provided.length !== expected.length) return false;
+    return timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  }
+
   /** Throws 403 when a trusted desktop client is outdated past the grace window. */
   async assertSupported(req: Request): Promise<void> {
-    const expectedKey = this.config.get<string>('DESKTOP_APP_KEY');
-    const providedKey = req.headers['x-rademics-desktop'];
-    if (!expectedKey || providedKey !== expectedKey) return; // not the desktop app
+    if (!this.isDesktopClient(req)) return; // not the desktop app
 
     const feed = await this.feedInfo();
     if (!feed.version || !feed.publishedAt) return; // nothing published / pre-enforcement feed

@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { csvCell } from '../common/csv';
 
 export interface ReportColumn {
   key: string;
@@ -18,7 +19,7 @@ const cell = (v: unknown): string => {
 
 /** Generic CSV for any report (Spec §5.11, §21 columns). */
 export function reportToCsv(data: ReportData): string {
-  const esc = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  const esc = csvCell;
   const header = data.columns.map((c) => esc(c.label)).join(',');
   const lines = data.rows.map((r) => data.columns.map((c) => esc(cell(r[c.key]))).join(','));
   return [header, ...lines].join('\n');

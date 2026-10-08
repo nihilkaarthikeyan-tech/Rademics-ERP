@@ -492,7 +492,7 @@ export class ChatService {
   /** Poll while a just-uploaded attachment is still being scanned. */
   async attachmentStatus(user: AuthUser, versionId: string) {
     this.assertStaff(user);
-    return this.files.scanStatus(versionId);
+    return this.files.scanStatus(versionId, user);
   }
 
   /**

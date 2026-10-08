@@ -53,6 +53,7 @@ async function main(): Promise<void> {
   const sa = await user('verify.sec.sa@rademics.local', 'SUPER_ADMIN', 'SaVerify123!');
   check('Test users signed in', !!hr.token && !!hr2.token && !!sa.token);
   await prisma.regularizationRequest.deleteMany({ where: { userId: { in: [hr.id, hr2.id] } } });
+  await prisma.attendanceSession.deleteMany({ where: { userId: { in: [hr.id, hr2.id] } } });
 
   console.log('\n— Self-approval');
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(Date.now() - 86_400_000));
@@ -66,6 +67,40 @@ async function main(): Promise<void> {
   check('HR approving their own request is refused (403)', self.status === 403, `(${self.status})`);
   const other = await req(`/attendance/regularizations/${own.json?.id}/approve`, { method: 'POST', token: hr2.token, body: {} });
   check('Another HR can approve it', other.status < 300, `(${other.status})`);
+
+  console.log('\n— Correction requests must fit the day');
+  const DAY_MS = 86_400_000;
+  const base = new Date(`${day}T04:00:00Z`).getTime(); // 09:30 IST on that day
+  const iso = (t: number) => new Date(t).toISOString();
+  const thirty = await req('/attendance/regularizations', {
+    method: 'POST', token: hr2.token,
+    body: { date: day, reason: 'Thirty day window attempt', requestedCheckInAt: iso(base), requestedCheckOutAt: iso(base + 30 * DAY_MS) },
+  });
+  check('30-day correction refused (400)', thirty.status === 400, `(${thirty.status})`);
+  const wrongDay = await req('/attendance/regularizations', {
+    method: 'POST', token: hr2.token,
+    body: { date: day, reason: 'Times from another day', requestedCheckInAt: iso(base - 3 * DAY_MS), requestedCheckOutAt: iso(base - 3 * DAY_MS + 8 * 3600_000) },
+  });
+  check('Times on a different date refused (400)', wrongDay.status === 400, `(${wrongDay.status})`);
+  const future = await req('/attendance/regularizations', {
+    method: 'POST', token: hr2.token,
+    body: { date: day, reason: 'Check-out in the future', requestedCheckInAt: iso(base), requestedCheckOutAt: iso(Date.now() + 3600_000) },
+  });
+  check('Future check-out refused (400)', future.status === 400, `(${future.status})`);
+  const fine = await req('/attendance/regularizations', {
+    method: 'POST', token: hr2.token,
+    body: { date: day, reason: 'Normal correction for one day', requestedCheckInAt: iso(base), requestedCheckOutAt: iso(base + 8.5 * 3600_000) },
+  });
+  check('A normal one-day correction is accepted', fine.status < 300, `(${fine.status} ${JSON.stringify(fine.json)})`);
+
+  console.log('\n— Concurrent approvals apply once');
+  const [a, b] = await Promise.all([
+    req(`/attendance/regularizations/${fine.json?.id}/approve`, { method: 'POST', token: hr.token, body: {} }),
+    req(`/attendance/regularizations/${fine.json?.id}/approve`, { method: 'POST', token: sa.token, body: {} }),
+  ]);
+  const created = await prisma.attendanceSession.count({ where: { userId: hr2.id, checkInUserAgent: 'regularization' } });
+  check('Exactly one approval succeeded', [a.status, b.status].filter((s) => s < 300).length === 1, `(${a.status}, ${b.status})`);
+  check('Exactly one corrective session created', created === 1, `(${created})`);
 
   console.log('\n— Super Admin protection');
   const edit = await req(`/employees/${sa.id}`, { method: 'PATCH', token: hr.token, body: { name: 'Hacked' } });

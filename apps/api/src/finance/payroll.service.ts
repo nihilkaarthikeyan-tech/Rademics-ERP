@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { SettingsService } from '../settings/settings.service';
 import { toFinanceConfig } from './finance-config';
+import { csvCell } from '../common/csv';
 import { isSecondSaturday } from '../attendance/attendance-rules';
 import type { AuthUser } from '../auth/auth-user';
 
@@ -170,10 +171,7 @@ export class PayrollService {
       'Casual (paid)', 'Sick (paid)', 'Earned (paid)',
       'Unpaid Leave Days', 'Half-day Deductions (3-lates)', 'Overtime Days', 'Remarks',
     ];
-    const esc = (v: string | number) => {
-      const s = String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
+    const esc = csvCell;
     const lines = rows.map((r) =>
       [r.employeeCode, r.name, r.workingDays, r.payableDays, r.paidLeaveByType.CASUAL, r.paidLeaveByType.SICK, r.paidLeaveByType.EARNED, r.unpaidLeaveDays, r.halfDayDeductions, r.overtimeDays, r.remarks].map(esc).join(','),
     );

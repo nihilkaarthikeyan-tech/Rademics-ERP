@@ -19,12 +19,16 @@ function check(name: string, ok: boolean, detail = ''): void {
   else { failed++; console.log(`  ✗ ${name} ${detail}`); }
 }
 
-async function req(path: string, opts: { method?: string; token?: string; body?: unknown } = {}) {
+// Replay is only honoured from the desktop app — act like it unless told not to.
+const DESKTOP_KEY = process.env.DESKTOP_APP_KEY ?? '';
+
+async function req(path: string, opts: { method?: string; token?: string; body?: unknown; web?: boolean } = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method: opts.method ?? 'GET',
     headers: {
       'content-type': 'application/json',
       ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
+      ...(DESKTOP_KEY && !opts.web ? { 'x-rademics-desktop': DESKTOP_KEY } : {}),
     },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
@@ -73,7 +77,8 @@ async function main(): Promise<void> {
   const token = await login(email, 'Employee123!');
   check('Employee login', !!token);
 
-  const ci = await req('/attendance/check-in', { method: 'POST', token, body: {} });
+  if (!DESKTOP_KEY) throw new Error('Set DESKTOP_APP_KEY (same value as the running API) to run this check');
+  const ci = await req('/attendance/check-in', { method: 'POST', token, body: { source: 'DESKTOP' } });
   check('Check-in', ci.status < 300, `(${ci.status})`);
   const sessionId = ci.json?.id as string;
   const rewind = (ms: number) =>
@@ -92,6 +97,20 @@ async function main(): Promise<void> {
   check('Heartbeat with saved activity accepted', hb.status < 300, `(${hb.status} ${JSON.stringify(hb.json)})`);
   check('All 59 saved moments replayed', hb.json?.replayed === 59, `(${hb.json?.replayed})`);
   check('No idle charged', (await idle()) === 0, `(${await idle()})`);
+
+  console.log('\n— Same trick from the website (no desktop key) is ignored');
+  await rewind(30 * MIN);
+  now = Date.now();
+  const beforeWeb = await idle();
+  hb = await req('/attendance/heartbeat', {
+    method: 'POST', token, web: true, body: { offlineAt: minutesBetween(now - 29 * MIN, now - MIN) },
+  });
+  check('Website replay not honoured', hb.json?.replayed === 0, `(${hb.json?.replayed})`);
+  check('30 min charged as idle', Math.abs((await idle()) - beforeWeb - 1800) <= 2, `(${(await idle()) - beforeWeb})`);
+  const audited = await prisma.auditLog.count({ where: { action: 'ATTENDANCE_OFFLINE_REPLAY', entityId: sessionId } });
+  check('Desktop replay was written to the audit log', audited === 1, `(${audited})`);
+  await prisma.attendanceIdleGap.deleteMany({ where: { sessionId } });
+  await prisma.attendanceSession.update({ where: { id: sessionId }, data: { idleSeconds: 0 } });
 
   console.log('\n— Really away for 60 min (nothing saved)');
   await rewind(60 * MIN);
