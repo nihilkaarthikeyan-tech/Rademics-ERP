@@ -68,9 +68,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         Skip to content
       </a>
       <header className="glass-chrome sticky top-0 z-40 border-b border-white/50">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4">
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="flex items-center gap-2">
+        {/* On a phone the logo, three pills, bell and logout are wider than the
+            screen: the nav shrinks and scrolls sideways instead of the whole page. */}
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-2 px-4">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+            <Link href="/dashboard" className="flex shrink-0 items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-sm font-bold text-white shadow-[0_8px_18px_-6px_rgba(124,108,246,0.7)]">
                 R
               </span>
@@ -79,7 +81,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                 Portal
               </span>
             </Link>
-            <nav className="flex items-center gap-1">
+            <nav className="flex min-w-0 items-center gap-1 overflow-x-auto">
               {NAV.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/');
                 return (
@@ -87,7 +89,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
+                      'shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors sm:px-3.5',
                       active
                         ? 'bg-gradient-to-r from-[#4F46E5] to-[#7C6CF6] text-white shadow-[0_8px_18px_-8px_rgba(79,70,229,0.6)]'
                         : 'text-slate-500 hover:bg-white/60 hover:text-slate-900',
@@ -99,7 +101,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               })}
             </nav>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <UpdatesBell />
             <div className="hidden items-center gap-2 sm:flex">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-xs font-semibold text-white">

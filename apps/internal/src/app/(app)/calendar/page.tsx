@@ -188,7 +188,7 @@ export default function CalendarPage() {
       ) : (
         <Card className="mt-4">
           <CardContent className="p-3 sm:p-4">
-            <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-400">
+            <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-500">
               {WEEKDAYS.map((w) => <div key={w} className="py-1">{w}</div>)}
             </div>
             <div className="mt-1 grid grid-cols-7 gap-1">
@@ -250,7 +250,7 @@ export default function CalendarPage() {
                       </p>
                     ))}
                     {info && info.leave.length + info.absent.length > 4 ? (
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-[10px] text-slate-500">
                         +{info.leave.length + info.absent.length - 4} more
                       </p>
                     ) : null}
@@ -315,7 +315,7 @@ export default function CalendarPage() {
                     type="button"
                     onClick={() => void removeHoliday(h.id, h.name)}
                     disabled={busy}
-                    className="ml-auto rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                    className="ml-auto rounded p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
                     aria-label={`Remove ${h.name}`}
                   >
                     <X className="h-3.5 w-3.5" />

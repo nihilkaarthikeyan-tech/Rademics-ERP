@@ -129,7 +129,7 @@ export function MyAttendance() {
                           {d.lateDeductionApplied ? 'Late · deduction' : 'Late'}
                         </Badge>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-slate-500">—</span>
                       )}
                     </td>
                   </tr>
@@ -171,12 +171,12 @@ export function MyAttendance() {
                     </div>
                     <div className="text-xs text-slate-500">{r.reason}</div>
                     {r.kind === 'POWER_CUT' && r.status === 'APPROVED' && r.idleCreditedSeconds !== null ? (
-                      <div className="mt-0.5 text-xs text-slate-400">
+                      <div className="mt-0.5 text-xs text-slate-500">
                         {Math.round(r.idleCreditedSeconds / 60)} min of idle removed
                       </div>
                     ) : null}
                     {r.decisionComment ? (
-                      <div className="mt-0.5 text-xs text-slate-400">Reviewer: {r.decisionComment}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">Reviewer: {r.decisionComment}</div>
                     ) : null}
                   </div>
                   <Badge tone={REG_TONE[r.status]}>{r.status}</Badge>

@@ -507,8 +507,8 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
   async addMembers(user: AuthUser, roomId: string, memberIds: string[], meta: Meta) {
     this.assertStaff(user);
     this.assertModerator(user, 'add people to groups');
-    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId }, select: { id: true, kind: true } });
-    if (!room || room.kind !== 'GROUP') throw new NotFoundException('Group not found');
+    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId }, select: { id: true, kind: true, archivedAt: true } });
+    if (!room || room.kind !== 'GROUP' || room.archivedAt) throw new NotFoundException('Group not found');
     const ids = await this.validStaff(memberIds);
     if (ids.length === 0) throw new BadRequestException('Choose at least one person');
     await this.prisma.chatRoomMember.createMany({
@@ -537,8 +537,8 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
   async removeMember(user: AuthUser, roomId: string, memberId: string, meta: Meta) {
     this.assertStaff(user);
     this.assertModerator(user, 'remove people from groups');
-    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId }, select: { id: true, kind: true } });
-    if (!room || room.kind !== 'GROUP') throw new NotFoundException('Group not found');
+    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId }, select: { id: true, kind: true, archivedAt: true } });
+    if (!room || room.kind !== 'GROUP' || room.archivedAt) throw new NotFoundException('Group not found');
     await this.emitToRoom(room, 'chat:roomsChanged', { roomId });
     await this.prisma.chatRoomMember.deleteMany({ where: { roomId, userId: memberId } });
     await this.audit.record({
@@ -609,14 +609,26 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async post(user: AuthUser, body: string, fileAssetIds: string[] = [], roomId?: string, replyToId?: string) {
+  /**
+   * `scheduled`: sent by the scheduler on the author's behalf. That skips the
+   * flood limit (several messages may be due at the same minute) and doesn't
+   * mark the room read for an author who may be away.
+   */
+  async post(
+    user: AuthUser,
+    body: string,
+    fileAssetIds: string[] = [],
+    roomId?: string,
+    replyToId?: string,
+    opts: { scheduled?: boolean } = {},
+  ) {
     this.assertStaff(user);
     const room = await this.roomFor(user, roomId);
     const text = body.trim();
     if (!text && fileAssetIds.length === 0) {
       throw new BadRequestException('Write something or attach a file');
     }
-    await this.assertNotFlooding(user);
+    if (!opts.scheduled) await this.assertNotFlooding(user);
 
     // A reply quotes a message from the SAME conversation, never a way to
     // surface text from a room the readers can't see.
@@ -669,7 +681,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
     // Live to everyone who can read this room; senders dedupe by id on their own append.
     await this.emitToRoom(room, 'chat:message', shaped);
     // Your own message never counts as unread for you.
-    await this.markRead(user, room.id);
+    if (!opts.scheduled) await this.markRead(user, room.id);
     // Mentions ring the bell even for someone who doesn't have the room open.
     await this.notifyMentions(user, room, message.id, text);
     return shaped;
@@ -788,7 +800,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
     if (message.deletedAt) throw new NotFoundException('Message not found');
     if (message.authorId !== user.id) throw new ForbiddenException('You can only edit your own messages');
     if (Date.now() - message.createdAt.getTime() > EDIT_WINDOW_MS) {
-      throw new BadRequestException('The edit window has passed — post a follow-up instead');
+      throw new BadRequestException('Messages can only be edited within 15 minutes of sending. Send a new message instead.');
     }
 
     const updated = await this.prisma.chatMessage.update({
@@ -938,7 +950,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('File not found');
     }
     await this.roomFor(user, msg.roomId);
-    return this.files.download(versionId, user, inline);
+    return this.files.download(versionId, user, inline, true);
   }
 
   /** A draft is an asset you created that has not been attached to anything yet. */
@@ -1199,18 +1211,29 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
         versions: {
           orderBy: { versionNumber: 'desc' },
           take: 1,
-          select: { storageKey: true, originalName: true, sizeBytes: true, contentType: true, scanStatus: true, deletedAt: true },
+          select: {
+            storageKey: true,
+            originalName: true,
+            sizeBytes: true,
+            contentType: true,
+            scanStatus: true,
+            scannedEtag: true,
+            deletedAt: true,
+          },
         },
       },
     });
     // Only clean, available files travel — never one still being scanned or quarantined.
-    const copies: { displayName: string; key: string; v: (typeof assets)[number]['versions'][number] }[] = [];
+    const copies: { displayName: string; key: string; etag: string | null; v: (typeof assets)[number]['versions'][number] }[] = [];
     for (const a of assets) {
       const v = a.versions[0];
       if (!v || v.deletedAt || v.scanStatus !== 'AVAILABLE') continue;
+      await this.files.assertUnchangedSinceScan(v.storageKey, v.scannedEtag);
       const key = `files/fwd/${randomUUID()}/${v.storageKey.split('/').pop()}`;
       await this.storage.copy(v.storageKey, key);
-      copies.push({ displayName: a.displayName, key, v });
+      // The copy is a new object; it is the one future downloads must match.
+      const etag = (await this.storage.stat(key))?.etag ?? null;
+      copies.push({ displayName: a.displayName, key, etag, v });
     }
     if (!this.open(message.body).trim() && copies.length === 0) {
       throw new BadRequestException('There is nothing in that message that can be forwarded');
@@ -1235,6 +1258,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
                 sizeBytes: c.v.sizeBytes,
                 contentType: c.v.contentType,
                 scanStatus: 'AVAILABLE',
+                scannedEtag: c.etag,
                 uploadedById: user.id,
               },
             },
@@ -1330,15 +1354,28 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
           resourceType: s.author.resourceType as AuthUser['resourceType'],
           desktopCheckInRequired: s.author.desktopCheckInRequired,
         };
-        const m = await this.post(author, this.open(s.body), [], s.roomId);
+        const m = await this.post(author, this.open(s.body), [], s.roomId, undefined, { scheduled: true });
         await this.prisma.chatScheduledMessage.update({ where: { id: s.id }, data: { messageId: m.id } });
         this.presence.emitToUser(s.author.id, 'chat:scheduledSent', { id: s.id, roomId: s.roomId });
         sent++;
       } catch (err) {
-        await this.prisma.chatScheduledMessage.update({
-          where: { id: s.id },
-          data: { failedReason: (err as Error).message.slice(0, 300) },
-        });
+        const reason = (err as Error).message.slice(0, 300);
+        await this.prisma.chatScheduledMessage.update({ where: { id: s.id }, data: { failedReason: reason } });
+        // Never fail silently: tell the author it wasn't sent and why.
+        await this.notifications
+          .notify({
+            userId: s.author.id,
+            type: 'CHAT_SCHEDULED_FAILED',
+            eventGroup: 'chat',
+            title: 'A scheduled message was not sent',
+            body:
+              reason === 'Conversation not found'
+                ? 'You are no longer in that conversation, or it was deleted.'
+                : reason,
+            channel: 'IN_APP',
+          })
+          .catch(() => undefined);
+        this.presence.emitToUser(s.author.id, 'chat:scheduledSent', { id: s.id, roomId: s.roomId });
       }
     }
     return sent;

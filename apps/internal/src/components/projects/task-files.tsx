@@ -117,7 +117,7 @@ export function TaskFiles({ taskId }: { taskId: string }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Files</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Files</span>
         {canUpload ? (
           <>
             <input
@@ -136,7 +136,7 @@ export function TaskFiles({ taskId }: { taskId: string }) {
       {error ? <p className="mb-2 text-xs text-slate-900">{error}</p> : null}
 
       {assets.length === 0 ? (
-        <p className="text-sm text-slate-400">No files attached.</p>
+        <p className="text-sm text-slate-500">No files attached.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {assets.map((a) => {
@@ -146,7 +146,7 @@ export function TaskFiles({ taskId }: { taskId: string }) {
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-slate-700">{a.displayName}</div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-slate-500">
                       v{latest?.versionNumber} · {fmtSize(latest?.sizeBytes ?? null)}
                       {latest?.uploadedBy ? ` · ${latest.uploadedBy.name}` : ''}
                       {a.versions.length > 1 ? ` · ${a.versions.length} versions` : ''}
@@ -169,7 +169,7 @@ export function TaskFiles({ taskId }: { taskId: string }) {
                     </button>
                   ) : null}
                   {canUpload ? (
-                    <label className="cursor-pointer text-xs text-slate-400 hover:text-slate-600">
+                    <label className="cursor-pointer text-xs text-slate-500 hover:text-slate-600">
                       + new version
                       <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], a.id)} />
                     </label>

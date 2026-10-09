@@ -63,7 +63,7 @@ export function LeaveApprovals() {
       <CardHeader>
         <CardTitle>
           Pending leave approvals
-          {rows ? <span className="ml-2 text-slate-400">({rows.length})</span> : null}
+          {rows ? <span className="ml-2 text-slate-500">({rows.length})</span> : null}
         </CardTitle>
       </CardHeader>
       <CardContent>

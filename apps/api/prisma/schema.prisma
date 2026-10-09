@@ -878,6 +878,10 @@ model FileVersion {
 
   scanStatus FileScanStatus @default(PENDING)
   scanDetail String? // signature name when INFECTED
+  /// The storage ETag of the exact bytes that passed the virus scan. A file is
+  /// only served while the stored object still has this ETag, so replacing it
+  /// after the scan (the upload link stays valid a few minutes) can't slip through.
+  scannedEtag String?
   visibility FileVisibility @default(INTERNAL)
   note       String? // optional version note ≤ 500 chars (§24)
 

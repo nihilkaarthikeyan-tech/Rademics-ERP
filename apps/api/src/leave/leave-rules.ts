@@ -2,6 +2,7 @@
  * Pure leave helpers (Spec §5.7, §4). No DB, no time zone surprises: leave dates are
  * whole calendar dates (@db.Date), so all arithmetic is on UTC-midnight day keys.
  */
+import { isSecondSaturdayKey } from '../attendance/attendance-rules';
 import { DEFAULT_BUSINESS_RULES } from '@rademics/types';
 
 export type LeaveTypeKey = 'CASUAL' | 'SICK' | 'EARNED' | 'UNPAID';
@@ -18,6 +19,8 @@ export interface LeaveConfig {
   workingDays: number[]; // ISO weekday numbers that are working days (1=Mon..7=Sun)
   quotas: Record<'CASUAL' | 'SICK' | 'EARNED', LeaveQuota>;
   escalationHours: number;
+  /** The company's standing 2nd-Saturday off-day (same setting attendance and payroll use). */
+  secondSaturdayOff: boolean;
 }
 
 const DEFAULT_LEAVE = DEFAULT_BUSINESS_RULES.leave;
@@ -35,6 +38,7 @@ export function toLeaveConfig(rules: Record<string, unknown>): LeaveConfig {
     workingDays: (rules.workingDays as number[]) ?? [...DEFAULT_BUSINESS_RULES.workingDays],
     quotas: { CASUAL: quota('casual'), SICK: quota('sick'), EARNED: quota('earned') },
     escalationHours: (rules.leaveEscalationHours as number) ?? DEFAULT_BUSINESS_RULES.leaveEscalationHours,
+    secondSaturdayOff: (rules.secondSaturdayOff as boolean) ?? true,
   };
 }
 
@@ -72,8 +76,14 @@ export function countWorkingDays(
   half: LeaveHalfKey,
   workingDays: number[],
   holidayKeys: ReadonlySet<string>,
+  secondSaturdayOff = false,
 ): number {
-  const isWorking = (d: Date) => workingDays.includes(isoWeekday(d)) && !holidayKeys.has(dateKey(d));
+  // The 2nd Saturday is an off-day for everyone, so leave never charges for it
+  // (attendance, payroll and reports already treat it that way).
+  const isWorking = (d: Date) =>
+    workingDays.includes(isoWeekday(d)) &&
+    !holidayKeys.has(dateKey(d)) &&
+    !(secondSaturdayOff && isSecondSaturdayKey(dateKey(d)));
   if (half !== 'FULL') {
     // Half-day is a single calendar day (enforced in the DTO/service).
     return isWorking(from) ? 0.5 : 0;

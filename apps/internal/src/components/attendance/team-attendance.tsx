@@ -99,7 +99,7 @@ export function TeamAttendance({ scope }: { scope: 'all' | 'team' }) {
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle>
-            Online now{online ? <span className="ml-2 text-slate-400">({online.length})</span> : null}
+            Online now{online ? <span className="ml-2 text-slate-500">({online.length})</span> : null}
           </CardTitle>
           <Badge tone={live ? 'green' : 'slate'}>
             <span className="flex items-center gap-1">
@@ -122,7 +122,7 @@ export function TeamAttendance({ scope }: { scope: 'all' | 'team' }) {
                 >
                   <Circle className="h-2 w-2 fill-slate-900 text-slate-900" />
                   <span className="font-medium text-slate-700">{u.name}</span>
-                  {u.team ? <span className="text-xs text-slate-400">· {u.team.name}</span> : null}
+                  {u.team ? <span className="text-xs text-slate-500">· {u.team.name}</span> : null}
                 </li>
               ))}
             </ul>
@@ -171,7 +171,7 @@ export function TeamAttendance({ scope }: { scope: 'all' | 'team' }) {
                     <td className="px-4 py-2.5 tabular-nums text-slate-600">{r.date.slice(0, 10)}</td>
                     <td className="px-4 py-2.5">
                       <div className="font-medium text-slate-800">{r.user.name}</div>
-                      <div className="text-xs text-slate-400">{r.user.email}</div>
+                      <div className="text-xs text-slate-500">{r.user.email}</div>
                     </td>
                     <td className="px-4 py-2.5">
                       <Badge tone={STATUS_TONE[r.status] ?? 'slate'}>{r.status.replace('_', ' ')}</Badge>
@@ -187,14 +187,14 @@ export function TeamAttendance({ scope }: { scope: 'all' | 'team' }) {
                           {r.lateDeductionApplied ? 'Late · deduction' : 'Late'}
                         </Badge>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-slate-500">—</span>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
+            <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
               {history.total} {history.total === 1 ? 'record' : 'records'}
             </div>
           </div>

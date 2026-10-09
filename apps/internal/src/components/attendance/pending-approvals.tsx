@@ -57,7 +57,7 @@ export function PendingApprovals() {
       <CardHeader>
         <CardTitle>
           Pending regularizations
-          {rows ? <span className="ml-2 text-slate-400">({rows.length})</span> : null}
+          {rows ? <span className="ml-2 text-slate-500">({rows.length})</span> : null}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -77,12 +77,12 @@ export function PendingApprovals() {
                   </div>
                   <div className="text-xs text-slate-500">{r.reason}</div>
                   {r.kind === 'POWER_CUT' && r.requestedCheckInAt && r.requestedCheckOutAt ? (
-                    <div className="mt-0.5 text-xs text-slate-400">
+                    <div className="mt-0.5 text-xs text-slate-500">
                       Power off {fmtTime(r.requestedCheckInAt)} → {fmtTime(r.requestedCheckOutAt)} · approving removes idle
                       in this window
                     </div>
                   ) : r.requestedCheckInAt ? (
-                    <div className="mt-0.5 text-xs text-slate-400">
+                    <div className="mt-0.5 text-xs text-slate-500">
                       Requested: {new Date(r.requestedCheckInAt).toLocaleString()} →{' '}
                       {r.requestedCheckOutAt ? new Date(r.requestedCheckOutAt).toLocaleString() : '—'}
                     </div>

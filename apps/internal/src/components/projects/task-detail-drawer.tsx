@@ -441,7 +441,7 @@ export function TaskDetailDrawer({
                 <>
                   Waiting for {name(assigneeName!)} to accept the task.
                   {assignedEntry ? (
-                    <span className="ml-1.5 text-xs text-slate-400">assigned {relTime(assignedEntry.createdAt)}</span>
+                    <span className="ml-1.5 text-xs text-slate-500">assigned {relTime(assignedEntry.createdAt)}</span>
                   ) : null}
                 </>
               ),
@@ -562,7 +562,7 @@ export function TaskDetailDrawer({
                 <button
                   onClick={onClose}
                   aria-label="Close task panel"
-                  className="text-slate-400 hover:text-slate-700"
+                  className="text-slate-500 hover:text-slate-700"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -615,7 +615,7 @@ export function TaskDetailDrawer({
                   </div>
                   <div className="mt-2 flex items-baseline justify-between">
                     <span className="text-sm font-semibold text-slate-800">{stages[currentStage]}</span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-500">
                       Step {currentStage + 1} of {stages.length}
                     </span>
                   </div>
@@ -748,7 +748,7 @@ export function TaskDetailDrawer({
                             <button
                               onClick={closePanels}
                               aria-label="Close the assign panel"
-                              className="text-slate-400 hover:text-slate-700"
+                              className="text-slate-500 hover:text-slate-700"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -782,7 +782,7 @@ export function TaskDetailDrawer({
                                   <span className="min-w-0 flex-1">
                                     <span className="block truncate text-sm font-medium text-slate-800">
                                       {m.name}
-                                      {current ? <span className="font-normal text-slate-400"> (current)</span> : null}
+                                      {current ? <span className="font-normal text-slate-500"> (current)</span> : null}
                                     </span>
                                     <span className="block text-xs text-slate-500">
                                       {roleLabel(m.role)}
@@ -797,7 +797,7 @@ export function TaskDetailDrawer({
                               );
                             })}
                             {filteredMembers.length === 0 ? (
-                              <p className="px-2 py-3 text-sm text-slate-400">
+                              <p className="px-2 py-3 text-sm text-slate-500">
                                 Nobody matches &ldquo;{assignQuery}&rdquo;.
                               </p>
                             ) : null}
@@ -851,7 +851,7 @@ export function TaskDetailDrawer({
                   {task.assignee ? (
                     <span className="text-slate-800">
                       {task.assignee.name}
-                      {isAssignee ? <span className="font-normal text-slate-400"> (you)</span> : null}
+                      {isAssignee ? <span className="font-normal text-slate-500"> (you)</span> : null}
                     </span>
                   ) : (
                     <span className="text-amber-700">Unassigned</span>
@@ -937,7 +937,7 @@ export function TaskDetailDrawer({
                             act(() => apiFetch(`/tasks/${taskId}/checklist/${c.id}/toggle`, { method: 'POST', body: '{}' }))
                           }
                         />
-                        <span className={c.done ? 'text-slate-400 line-through' : ''}>{c.text}</span>
+                        <span className={c.done ? 'text-slate-500 line-through' : ''}>{c.text}</span>
                       </label>
                     </li>
                   ))}
@@ -967,7 +967,7 @@ export function TaskDetailDrawer({
                         {c.visibility === 'CLIENT_VISIBLE' ? (
                           <Badge tone="blue">Shared with client</Badge>
                         ) : null}
-                        <span className="text-xs text-slate-400" title={new Date(c.createdAt).toLocaleString()}>
+                        <span className="text-xs text-slate-500" title={new Date(c.createdAt).toLocaleString()}>
                           {relTime(c.createdAt)}
                         </span>
                       </div>
@@ -975,7 +975,7 @@ export function TaskDetailDrawer({
                     </li>
                   ))}
                   {task.comments.length === 0 ? (
-                    <li className="text-sm text-slate-400">No comments yet — notes posted here stay with the task.</li>
+                    <li className="text-sm text-slate-500">No comments yet — notes posted here stay with the task.</li>
                   ) : null}
                 </ul>
                 <div className="mt-2 flex gap-2">
@@ -1021,7 +1021,7 @@ export function TaskDetailDrawer({
                               phrase.verb
                             )}
                           </span>
-                          <span className="ml-1.5 text-xs text-slate-400" title={new Date(h.createdAt).toLocaleString()}>
+                          <span className="ml-1.5 text-xs text-slate-500" title={new Date(h.createdAt).toLocaleString()}>
                             {relTime(h.createdAt)}
                           </span>
                           {h.comment ? (
@@ -1087,7 +1087,7 @@ export function TaskDetailDrawer({
                       type="button"
                       disabled={busy}
                       onClick={() => openReason(TaskAction.CANCEL, true)}
-                      className="text-sm text-slate-400 underline-offset-2 hover:text-red-600 hover:underline disabled:opacity-50"
+                      className="text-sm text-slate-500 underline-offset-2 hover:text-red-600 hover:underline disabled:opacity-50"
                     >
                       Cancel this task…
                     </button>

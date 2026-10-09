@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Trash2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 
@@ -41,6 +41,8 @@ function relTime(iso: string): string {
 export function UpdatesBell() {
   const [items, setItems] = useState<PortalNotification[]>([]);
   const [open, setOpen] = useState(false);
+  // "Clear all" asks first: it deletes every update and cannot be undone.
+  const [confirmClear, setConfirmClear] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -70,11 +72,24 @@ export function UpdatesBell() {
   async function openPanel() {
     const next = !open;
     setOpen(next);
+    setConfirmClear(false);
     // Opening the panel IS reading them — the client has now seen every line.
     if (next && unread > 0) {
       setItems((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })));
       await apiFetch('/notifications/read-all', { method: 'POST', body: '{}' }).catch(() => undefined);
     }
+  }
+
+  /** Delete one update from your list (the API only ever deletes your own). */
+  async function removeOne(id: string) {
+    setItems((prev) => prev.filter((n) => n.id !== id));
+    await apiFetch(`/notifications/${id}`, { method: 'DELETE' }).catch(() => undefined);
+  }
+
+  async function clearAll() {
+    setConfirmClear(false);
+    setItems([]);
+    await apiFetch('/notifications', { method: 'DELETE' }).catch(() => undefined);
   }
 
   return (
@@ -94,10 +109,37 @@ export function UpdatesBell() {
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-80 overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-glass backdrop-blur-xl">
-          <div className="border-b border-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-800">
-            Updates
-          </div>
+        <div className="absolute right-0 z-20 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-white/70 bg-white/95 shadow-glass backdrop-blur-xl">
+          {confirmClear ? (
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5" role="alert">
+              <span className="text-sm font-medium text-slate-800">Delete all updates?</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setConfirmClear(false)}
+                  // Focus lands on the safe choice, so a stray Enter keeps everything.
+                  autoFocus
+                  className="rounded text-xs text-slate-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void clearAll()}
+                  className="rounded text-xs font-semibold text-danger hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+              <span className="text-sm font-semibold text-slate-800">Updates</span>
+              {items.length > 0 ? (
+                <button onClick={() => setConfirmClear(true)} className="text-xs text-slate-500 hover:text-danger hover:underline">
+                  Clear all
+                </button>
+              ) : null}
+            </div>
+          )}
           {items.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-slate-400">
               Nothing yet. Updates from your project team appear here.
@@ -105,10 +147,20 @@ export function UpdatesBell() {
           ) : (
             <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
               {items.map((n) => (
-                <li key={n.id} className="px-4 py-3">
+                <li key={n.id} className="group px-4 py-3">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-medium text-slate-800">{n.title}</span>
-                    <span className="shrink-0 text-xs text-slate-400">{relTime(n.createdAt)}</span>
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-slate-400">
+                      {relTime(n.createdAt)}
+                      <button
+                        onClick={() => void removeOne(n.id)}
+                        title="Delete this update"
+                        aria-label={`Delete update: ${n.title}`}
+                        className="rounded p-0.5 text-slate-400 hover:text-danger sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
                   </div>
                   {n.body ? (
                     <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-600">{n.body}</p>

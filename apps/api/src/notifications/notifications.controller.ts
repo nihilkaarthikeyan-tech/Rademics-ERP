@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { SetPreferenceDto } from './dto';
 import { CurrentUser } from '../auth/decorators';
@@ -30,6 +30,18 @@ export class NotificationsController {
   @Post('read-all')
   markAllRead(@CurrentUser() user: AuthUser) {
     return this.notifications.markAllRead(user.id);
+  }
+
+  /** Remove one of your own notifications from the inbox. */
+  @Delete(':id')
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.notifications.remove(user.id, id);
+  }
+
+  /** Clear your inbox: everything, or only what you have already read (`?read=true`). */
+  @Delete()
+  clear(@CurrentUser() user: AuthUser, @Query('read') read?: string) {
+    return this.notifications.clear(user.id, read === 'true');
   }
 
   @Get('preferences')

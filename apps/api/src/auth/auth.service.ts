@@ -421,12 +421,22 @@ export class AuthService {
     if (!token || token.type !== type || token.usedAt || token.expiresAt < new Date()) {
       throw new BadRequestException('This link is invalid or has expired');
     }
+    // A link never brings back a deactivated account: an invite only works for
+    // someone still invited, a reset only for someone currently active.
+    const owner = await this.prisma.user.findUnique({ where: { id: token.userId }, select: { status: true } });
+    const allowed = type === 'INVITE' ? owner?.status === 'INVITED' : owner?.status === 'ACTIVE';
+    if (!allowed) throw new BadRequestException('This link is invalid or has expired');
 
     const passwordHash = await argonHash(password);
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: token.userId },
-        data: { passwordHash, status: 'ACTIVE', failedLoginCount: 0, lockedUntil: null },
+        data: {
+          passwordHash,
+          ...(type === 'INVITE' ? { status: 'ACTIVE' as const } : {}),
+          failedLoginCount: 0,
+          lockedUntil: null,
+        },
       }),
       this.prisma.authToken.update({ where: { id: token.id }, data: { usedAt: new Date() } }),
     ]);

@@ -98,12 +98,12 @@ export function MyLeave() {
           : balances.map((b) => (
               <Card key={b.type}>
                 <CardContent className="py-4">
-                  <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
                     {TYPE_LABEL[b.type] ?? b.type} leave
                   </div>
                   <div className="mt-1 flex items-baseline gap-1">
                     <span className="text-2xl font-semibold tabular-nums text-slate-800">{b.availableDays}</span>
-                    <span className="text-sm text-slate-400">/ {b.quotaPerYear} days</span>
+                    <span className="text-sm text-slate-500">/ {b.quotaPerYear} days</span>
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
                     {b.usedDays} used · projected year-end {b.projectedYearEndAvailable}
@@ -149,7 +149,7 @@ export function MyLeave() {
                       <div className="mt-0.5 text-xs text-slate-700">{Number(r.unpaidDays)} day(s) as unpaid</div>
                     ) : null}
                     {r.decisionComment ? (
-                      <div className="mt-0.5 text-xs text-slate-400">Reviewer: {r.decisionComment}</div>
+                      <div className="mt-0.5 text-xs text-slate-500">Reviewer: {r.decisionComment}</div>
                     ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

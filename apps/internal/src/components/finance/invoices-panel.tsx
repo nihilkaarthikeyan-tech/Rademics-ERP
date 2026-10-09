@@ -217,11 +217,11 @@ export function InvoicesPanel() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Invoices
           {/* Say what is off-screen. A silent cap reads as "this is everything". */}
           {rows && total > rows.length ? (
-            <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
+            <span className="ml-2 font-normal normal-case tracking-normal text-slate-500">
               newest {rows.length} of {total}
             </span>
           ) : null}
@@ -322,11 +322,11 @@ export function InvoicesPanel() {
                       <tr className="bg-slate-50/60">
                         <td colSpan={6} className="px-4 py-3">
                           {!detail || detail.id !== i.id ? (
-                            <p className="text-xs text-slate-400">Loading…</p>
+                            <p className="text-xs text-slate-500">Loading…</p>
                           ) : (
                             <div className="flex flex-col gap-3">
                               <div>
-                                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Lines</p>
+                                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Lines</p>
                                 <ul className="flex flex-col gap-0.5 text-xs text-slate-600">
                                   {detail.lines.map((l) => (
                                     <li key={l.id}>
@@ -336,9 +336,9 @@ export function InvoicesPanel() {
                                 </ul>
                               </div>
                               <div>
-                                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Payments</p>
+                                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Payments</p>
                                 {detail.payments.length === 0 ? (
-                                  <p className="text-xs text-slate-400">No payments recorded.</p>
+                                  <p className="text-xs text-slate-500">No payments recorded.</p>
                                 ) : (
                                   <ul className="flex flex-col gap-1 text-xs">
                                     {detail.payments.map((p) => (

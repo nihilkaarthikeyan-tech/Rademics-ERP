@@ -122,9 +122,12 @@ export class PayrollService {
           where: { userId: u.id, date: { gte: monthStart, lte: monthEnd } },
           select: { status: true, lateDeductionApplied: true, overtimeSeconds: true },
         }),
+        // Any approved leave overlapping the month; each is split below so only
+        // its days inside this month count here (leave across two months used to
+        // land entirely in the month it started).
         this.prisma.leaveRequest.findMany({
-          where: { userId: u.id, status: 'APPROVED', fromDate: { gte: monthStart, lte: monthEnd } },
-          select: { type: true, paidDays: true, unpaidDays: true },
+          where: { userId: u.id, status: 'APPROVED', fromDate: { lte: monthEnd }, toDate: { gte: monthStart } },
+          select: { type: true, paidDays: true, unpaidDays: true, fromDate: true, toDate: true, half: true },
         }),
       ]);
 
@@ -137,10 +140,11 @@ export class PayrollService {
       const paidLeaveByType = { CASUAL: 0, SICK: 0, EARNED: 0 };
       let unpaidLeaveDays = 0;
       for (const lv of leaves) {
+        const part = await this.leaveInMonth(lv, monthStart, monthEnd, config.workingDays, secondSaturdayOff);
         if (lv.type === 'CASUAL' || lv.type === 'SICK' || lv.type === 'EARNED') {
-          paidLeaveByType[lv.type] = money(paidLeaveByType[lv.type] + num(lv.paidDays));
+          paidLeaveByType[lv.type] = money(paidLeaveByType[lv.type] + part.paid);
         }
-        unpaidLeaveDays = money(unpaidLeaveDays + num(lv.unpaidDays));
+        unpaidLeaveDays = money(unpaidLeaveDays + part.unpaid);
       }
       const paidLeaveTotal = money(paidLeaveByType.CASUAL + paidLeaveByType.SICK + paidLeaveByType.EARNED);
       const payableDays = money(presentDays + paidLeaveTotal - halfDayDeductions);
@@ -162,6 +166,46 @@ export class PayrollService {
       });
     }
     return rows;
+  }
+
+  /**
+   * The paid and unpaid days of one leave that fall inside [monthStart, monthEnd].
+   * Paid days are used first, in date order (the order a balance runs out), so a
+   * leave whose paid part ran out in October shows its unpaid days in November.
+   */
+  private async leaveInMonth(
+    lv: { paidDays: Parameters<typeof num>[0]; unpaidDays: Parameters<typeof num>[0]; fromDate: Date; toDate: Date; half: string },
+    monthStart: Date,
+    monthEnd: Date,
+    workingDays: number[],
+    secondSaturdayOff: boolean,
+  ): Promise<{ paid: number; unpaid: number }> {
+    const paidTotal = num(lv.paidDays);
+    const unpaidTotal = num(lv.unpaidDays);
+    if (lv.half !== 'FULL') {
+      // A half day is a single date: all of it is in this month or none.
+      const inside = lv.fromDate >= monthStart && lv.fromDate <= monthEnd;
+      return inside ? { paid: paidTotal, unpaid: unpaidTotal } : { paid: 0, unpaid: 0 };
+    }
+    const holidays = await this.prisma.holiday.findMany({
+      where: { date: { gte: lv.fromDate, lte: lv.toDate } },
+      select: { date: true },
+    });
+    const holidaySet = new Set(holidays.map((h) => h.date.toISOString().slice(0, 10)));
+    let before = 0;
+    let inside = 0;
+    for (let t = lv.fromDate.getTime(); t <= lv.toDate.getTime(); t += 86_400_000) {
+      const d = new Date(t);
+      if (!workingDays.includes(d.getUTCDay())) continue;
+      if (holidaySet.has(d.toISOString().slice(0, 10))) continue;
+      if (secondSaturdayOff && isSecondSaturday(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate())) continue;
+      if (d < monthStart) before++;
+      else if (d <= monthEnd) inside++;
+    }
+    const paidLeft = Math.max(0, paidTotal - before);
+    const paid = Math.min(paidLeft, inside);
+    const unpaid = Math.min(unpaidTotal, inside - paid);
+    return { paid: money(paid), unpaid: money(unpaid) };
   }
 
   /** Documented generic CSV (Spec §21 payroll columns; Tally/Zoho mapping is a config task). */

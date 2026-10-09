@@ -12,11 +12,13 @@ import { pageArgs } from '../common/pagination';
 import { CapabilityService } from '../rbac/capability.service';
 import { AttendanceService } from './attendance.service';
 import { AttendanceComputeService } from './attendance-compute.service';
-import { businessDateKey, overlapWithShiftWindow } from './attendance-rules';
+import { businessDateKey, endOfLocalDayUtc, localTimeInstantUtc, overlapWithShiftWindow } from './attendance-rules';
 
 const HOUR_MS = 3600 * 1000;
 import type { AuthUser } from '../auth/auth-user';
 import type { CreateRegularizationDto, DecideRegularizationDto } from './dto';
+import { escapeHtml } from '../common/escape-html';
+import { assertPayrollOpen } from '../common/payroll-lock';
 
 interface Meta {
   ip?: string | null;
@@ -46,9 +48,14 @@ export class RegularizationService {
     const date = new Date(dto.date);
     if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid date');
     if (date > new Date()) throw new BadRequestException('Cannot regularize a future date');
+    await assertPayrollOpen(this.prisma, date);
     const kind = dto.kind ?? 'CORRECTION';
     if (kind === 'POWER_CUT' && (!dto.requestedCheckInAt || !dto.requestedCheckOutAt)) {
       throw new BadRequestException('Give the time the power cut started and ended');
+    }
+    // A correction with no times could be approved but would change nothing.
+    if (kind === 'CORRECTION' && !dto.requestedCheckInAt && !dto.requestedCheckOutAt) {
+      throw new BadRequestException('Give the correct check-in time, check-out time, or both');
     }
     await this.assertWindowFitsDay(dto, kind);
 
@@ -138,6 +145,12 @@ export class RegularizationService {
     if (req.status !== 'PENDING') throw new BadRequestException('Request is already actioned');
 
     await this.assertCanApprove(caller, req.userId);
+    if (approve) await assertPayrollOpen(this.prisma, req.date);
+
+    // Work out the corrective session BEFORE claiming, so a request that can't
+    // be applied is refused instead of being marked Approved with no effect.
+    const corrective =
+      approve && req.kind !== 'POWER_CUT' ? await this.correctiveSession(req) : null;
 
     // Claim the request atomically before applying anything: two approvers
     // clicking at once would otherwise both pass the PENDING check above and
@@ -165,20 +178,25 @@ export class RegularizationService {
 
     if (idleCreditedSeconds !== null) {
       const rules = await this.attendance.getRules();
-      await this.compute.computeDay(req.userId, businessDateKey(req.requestedCheckInAt!, rules.timezone), rules);
-    } else if (approve && req.requestedCheckInAt && req.requestedCheckOutAt) {
-      // Corrective session — original sessions are untouched (§5.3 "never overwrites").
+      const dayKey = businessDateKey(req.requestedCheckInAt!, rules.timezone);
+      await this.compute.computeDay(req.userId, dayKey, rules);
+      await this.compute.recomputeLateDeductions(req.userId, dayKey, rules);
+    } else if (corrective) {
+      // Corrective session — original sessions are untouched (§5.3 "never overwrites");
+      // the day's calculation merges overlapping time so nothing is counted twice.
       await this.prisma.attendanceSession.create({
         data: {
           userId: req.userId,
-          checkInAt: req.requestedCheckInAt,
-          checkOutAt: req.requestedCheckOutAt,
+          checkInAt: corrective.checkInAt,
+          checkOutAt: corrective.checkOutAt,
           checkInIp: meta.ip ?? null,
           checkInUserAgent: 'regularization',
         },
       });
       const rules = await this.attendance.getRules();
-      await this.compute.computeDay(req.userId, businessDateKey(req.date, rules.timezone), rules);
+      const dayKey = businessDateKey(req.date, rules.timezone);
+      await this.compute.computeDay(req.userId, dayKey, rules);
+      await this.compute.recomputeLateDeductions(req.userId, dayKey, rules);
     }
 
     await this.audit.record({
@@ -197,6 +215,52 @@ export class RegularizationService {
   }
 
   // ── helpers ──
+
+  /**
+   * The session an approved correction adds. Both times: exactly that span.
+   * Only a check-out ("I forgot to check out"): from that day's last check-in
+   * before it to the given time. Only a check-in ("I came earlier"): from the
+   * given time to the end of that day's first session.
+   */
+  private async correctiveSession(req: {
+    userId: string;
+    date: Date;
+    requestedCheckInAt: Date | null;
+    requestedCheckOutAt: Date | null;
+  }): Promise<{ checkInAt: Date; checkOutAt: Date }> {
+    const inAt = req.requestedCheckInAt;
+    const outAt = req.requestedCheckOutAt;
+    if (inAt && outAt) {
+      if (outAt <= inAt) throw new BadRequestException('The check-out time must be after the check-in time');
+      return { checkInAt: inAt, checkOutAt: outAt };
+    }
+    if (!inAt && !outAt) {
+      throw new BadRequestException('This request has no times to apply. Reject it and ask for the correct times.');
+    }
+    const rules = await this.attendance.getRules();
+    // req.date is the business date at UTC midnight; noon keeps it inside that local day.
+    const midday = new Date(req.date.getTime() + 12 * 3600 * 1000);
+    const dayStart = localTimeInstantUtc(midday, rules.timezone, '00:00');
+    const dayEnd = endOfLocalDayUtc(midday, rules.timezone);
+    const sessions = await this.prisma.attendanceSession.findMany({
+      where: { userId: req.userId, checkInAt: { gte: dayStart, lte: dayEnd } },
+      select: { checkInAt: true, checkOutAt: true },
+      orderBy: { checkInAt: 'asc' },
+    });
+    if (outAt) {
+      const anchor = [...sessions].reverse().find((s) => s.checkInAt < outAt);
+      if (!anchor) {
+        throw new BadRequestException('There is no check-in that day before this check-out time. Ask for the check-in time too.');
+      }
+      return { checkInAt: anchor.checkInAt, checkOutAt: outAt };
+    }
+    const first = sessions[0];
+    const end = first ? (first.checkOutAt ?? first.checkInAt) : null;
+    if (!end || end <= inAt!) {
+      throw new BadRequestException('There is no session that day after this check-in time. Ask for the check-out time too.');
+    }
+    return { checkInAt: inAt!, checkOutAt: end };
+  }
 
   /**
    * The requested times must belong to the day being corrected: the start on
@@ -314,7 +378,7 @@ export class RegularizationService {
     await this.email.enqueue({
       to: approverEmail,
       subject: 'Attendance regularization awaiting your approval',
-      html: `<p>${requester?.name ?? 'An employee'} requested an attendance regularization for <strong>${dateLabel}</strong>.</p><p>Review it in the Attendance section.</p>`,
+      html: `<p>${escapeHtml(requester?.name ?? 'An employee')} requested an attendance regularization for <strong>${dateLabel}</strong>.</p><p>Review it in the Attendance section.</p>`,
       text: `${requester?.name ?? 'An employee'} requested an attendance regularization for ${dateLabel}.`,
     });
   }

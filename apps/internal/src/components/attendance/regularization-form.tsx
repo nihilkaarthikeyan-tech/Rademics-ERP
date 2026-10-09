@@ -146,7 +146,7 @@ export function RegularizationForm({ onSubmitted }: { onSubmitted: () => void })
               ? 'e.g. Power cut in my area, the PC was off (at least 10 characters)…'
               : 'Explain the correction (at least 10 characters)…'
           }
-          className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
+          className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1"
         />
       </div>
       <div className="flex items-center gap-3">

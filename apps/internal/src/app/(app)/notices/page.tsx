@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, ChevronDown, Megaphone, Pin } from 'lucide-react';
 import { Badge, Button, EmptyState, Input, Label, LoadingState, PageGuide } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
@@ -70,16 +71,24 @@ export default function NoticesPage() {
   }, [load]);
 
   // Opened from search (/notices?notice=<id>): bring that notice into view and flash it.
+  // Only once per notice: the list reloads live (new notices, acks), and each
+  // reload must not yank the page back to it.
+  const searchParams = useSearchParams();
+  const wanted = searchParams.get('notice');
   const [flashId, setFlashId] = useState<string | null>(null);
+  const handledNotice = useRef<string | null>(null);
   useEffect(() => {
-    if (!notices) return;
-    const wanted = new URLSearchParams(window.location.search).get('notice');
-    if (!wanted || !notices.some((n) => n.id === wanted)) return;
+    if (!notices || !wanted || handledNotice.current === wanted) return;
+    if (!notices.some((n) => n.id === wanted)) return;
+    handledNotice.current = wanted;
     requestAnimationFrame(() => document.getElementById(`notice-${wanted}`)?.scrollIntoView({ block: 'center' }));
     setFlashId(wanted);
+  }, [notices, wanted]);
+  useEffect(() => {
+    if (!flashId) return;
     const t = setTimeout(() => setFlashId(null), 2500);
     return () => clearTimeout(t);
-  }, [notices]);
+  }, [flashId]);
 
   // Live: a page left open all day must show a new notice without a manual
   // reload — the same socket chat already uses, just its own event names.
@@ -281,7 +290,7 @@ export default function NoticesPage() {
                       {n.requiresAck ? <Badge tone="amber">Important</Badge> : null}
                     </div>
                     <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{n.body}</p>
-                    <p className="mt-2 text-xs text-slate-400" title={new Date(n.createdAt).toLocaleString()}>
+                    <p className="mt-2 text-xs text-slate-500" title={new Date(n.createdAt).toLocaleString()}>
                       {n.createdBy?.name ?? 'Rademics'} · {relTime(n.createdAt)}
                     </p>
                   </div>
@@ -291,7 +300,7 @@ export default function NoticesPage() {
                   title={n.pinnedByMe ? 'Unpin' : 'Pin to top'}
                   aria-label={n.pinnedByMe ? 'Unpin this notice' : 'Pin this notice to the top'}
                   className={`shrink-0 rounded-md p-1.5 ${
-                    n.pinnedByMe ? 'text-accent' : 'text-slate-300 hover:text-slate-500'
+                    n.pinnedByMe ? 'text-accent' : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
                   <Pin className={`h-4 w-4 ${n.pinnedByMe ? 'fill-current' : ''}`} />
@@ -328,9 +337,9 @@ export default function NoticesPage() {
                       {pendingOpenFor === n.id ? (
                         <div className="mt-1.5 rounded-md bg-slate-50 p-2">
                           {pendingList === null ? (
-                            <p className="text-xs text-slate-400">Loading…</p>
+                            <p className="text-xs text-slate-500">Loading…</p>
                           ) : pendingList.length === 0 ? (
-                            <p className="text-xs text-slate-400">Everyone has acknowledged this.</p>
+                            <p className="text-xs text-slate-500">Everyone has acknowledged this.</p>
                           ) : (
                             <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-600">
                               {pendingList.map((p) => (
@@ -362,7 +371,7 @@ export default function NoticesPage() {
                   ) : (
                     <button
                       onClick={() => setConfirmDelete(n.id)}
-                      className="text-xs text-slate-400 underline-offset-2 hover:text-red-600 hover:underline"
+                      className="text-xs text-slate-500 underline-offset-2 hover:text-red-600 hover:underline"
                     >
                       Remove
                     </button>

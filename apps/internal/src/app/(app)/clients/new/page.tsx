@@ -154,7 +154,7 @@ export default function NewClientPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              <p className="text-xs text-slate-400">Their portal login. They&apos;ll be emailed an invite.</p>
+              <p className="text-xs text-slate-500">Their portal login. They&apos;ll be emailed an invite.</p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

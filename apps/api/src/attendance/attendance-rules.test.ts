@@ -38,6 +38,20 @@ describe('attendance rules — multi-session sum (§5.3)', () => {
     expect(marks.status).toBe('PRESENT');
   });
 
+  it('an approved correction overlapping the original counts the time once', () => {
+    // Auto-closed 09:00–13:00 IST (03:30–07:30 UTC) + correction 09:00–18:00 IST
+    // (03:30–12:30 UTC) = 9h worked, not 13h.
+    const marks = computeDayMarks([session(3, 30, 7, 30), session(3, 30, 12, 30)], RULES, 1);
+    expect(marks.workedSeconds).toBe(9 * 3600);
+    expect(marks.overtimeSeconds).toBe(0);
+  });
+
+  it('a correction that extends past the original adds only the extra time', () => {
+    // 09:00–13:00 IST + 12:00–18:00 IST (overlaps 1h) = 9h.
+    const marks = computeDayMarks([session(3, 30, 7, 30), session(6, 30, 12, 30)], RULES, 1);
+    expect(marks.workedSeconds).toBe(9 * 3600);
+  });
+
   it('an open session contributes zero until closed', () => {
     const marks = computeDayMarks(
       [{ checkInAt: utc(3, 30), checkOutAt: null, idleSeconds: 0 }],

@@ -234,8 +234,10 @@ export class EmployeesService {
       where: { id },
       data: { status: 'DEACTIVATED', employmentStatus: 'EXITED', activeEngagement: false },
     });
-    // Immediately revoke sessions (Spec §5.2).
+    // Immediately revoke sessions (Spec §5.2), and burn any unused invite or
+    // password-reset link so it can't be used to switch the account back on.
     await this.auth.revokeAllForUser(id);
+    await this.prisma.authToken.updateMany({ where: { userId: id, usedAt: null }, data: { usedAt: new Date() } });
     const reassigned = await this.reassignOpenTasks(id, actor);
 
     await this.audit.record({

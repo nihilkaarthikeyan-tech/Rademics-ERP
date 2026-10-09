@@ -56,6 +56,14 @@ function tryRefresh(): Promise<boolean> {
 }
 
 /**
+ * Renew the access token (same single-flight refresh the REST client uses). The
+ * live-updates socket calls this when the server drops it for a stale token.
+ */
+export function refreshSession(): Promise<boolean> {
+  return tryRefresh();
+}
+
+/**
  * What to actually show the user. Nest's ValidationPipe sends `message` as an
  * ARRAY of field complaints; handing that straight to `new Error()` stringified
  * it as "qty must be positive,GST % must be between 0 and 28" — one run-on line

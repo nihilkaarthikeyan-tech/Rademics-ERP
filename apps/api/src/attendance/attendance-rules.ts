@@ -171,6 +171,26 @@ export function overlapWithShiftWindow(from: Date, to: Date, rules: AttendanceRu
  * session still open right now (checkOutAt substituted with "now" by the caller)
  * naturally reports live overtime once it crosses that boundary.
  */
+/**
+ * Closed sessions merged where they overlap or touch, earliest first. Open
+ * sessions are dropped (they are not counted until closed, as before).
+ */
+export function mergeOverlapping(sessions: SessionInput[]): SessionInput[] {
+  const closed = sessions
+    .filter((s) => s.checkOutAt && s.checkOutAt > s.checkInAt)
+    .sort((x, y) => x.checkInAt.getTime() - y.checkInAt.getTime());
+  const out: SessionInput[] = [];
+  for (const s of closed) {
+    const last = out[out.length - 1];
+    if (last && s.checkInAt.getTime() <= last.checkOutAt!.getTime()) {
+      if (s.checkOutAt!.getTime() > last.checkOutAt!.getTime()) last.checkOutAt = s.checkOutAt;
+    } else {
+      out.push({ checkInAt: s.checkInAt, checkOutAt: s.checkOutAt, idleSeconds: 0 });
+    }
+  }
+  return out;
+}
+
 function splitSessionSeconds(s: SessionInput, rules: AttendanceRules): { regular: number; overtime: number } {
   if (!s.checkOutAt) return { regular: 0, overtime: 0 }; // still open — not counted until closed/auto-closed
   const start = s.checkInAt;
@@ -208,7 +228,10 @@ export function computeDayMarks(
   const isHoliday = dateKey !== undefined && (holidayKeys?.has(dateKey) ?? false);
   const isWorkingDay = rules.workingDays.includes(weekday) && !isSecondSat && !isHoliday;
 
-  const splits = sessions.map((s) => splitSessionSeconds(s, rules));
+  // Overlapping time counts once. An approved correction adds a session beside
+  // the original (originals are never overwritten), so a 09:00–13:00 auto-closed
+  // session plus a 09:00–18:00 correction must give 9 hours, not 13.
+  const splits = mergeOverlapping(sessions).map((s) => splitSessionSeconds(s, rules));
   const workedSeconds = splits.reduce((sum, x) => sum + x.regular, 0);
   const overtimeSeconds = splits.reduce((sum, x) => sum + x.overtime, 0);
   const idleSeconds = sessions.reduce((sum, s) => sum + Math.max(0, s.idleSeconds), 0);

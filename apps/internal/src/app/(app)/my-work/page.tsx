@@ -169,7 +169,7 @@ export default function MyWorkPage() {
             <div key={group.title}>
               <div className="mb-2 flex items-center gap-2 px-1">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{group.title}</span>
-                <span className="text-xs text-slate-400">{groupTasks.length}</span>
+                <span className="text-xs text-slate-500">{groupTasks.length}</span>
               </div>
               <div className="flex flex-col gap-2">
                 {groupTasks.map((t) => {
@@ -192,7 +192,7 @@ export default function MyWorkPage() {
                           <div className="truncate text-sm font-medium text-slate-800 group-hover:text-accent group-hover:underline">
                             {t.title}
                           </div>
-                          <div className="mt-0.5 truncate text-xs text-slate-400">
+                          <div className="mt-0.5 truncate text-xs text-slate-500">
                             {t.project?.name ?? 'No project'}
                             {t.deadline ? ` · due ${new Date(t.deadline).toLocaleDateString()}` : ''}
                           </div>
@@ -237,7 +237,7 @@ export default function MyWorkPage() {
       </div>
 
       {state === 'ready' && tasks.length > 0 ? (
-        <p className="mt-6 text-xs text-slate-400">
+        <p className="mt-6 text-xs text-slate-500">
           Looking for the full board? Open the project from <Link href="/projects" className="underline hover:text-slate-600">Projects</Link>.
         </p>
       ) : null}

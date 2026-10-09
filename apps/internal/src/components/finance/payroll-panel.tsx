@@ -93,11 +93,11 @@ export function PayrollPanel() {
                 </>
               )}
             </div>
-            {!locked ? <p className="text-xs text-slate-400">Lock the month before running the export.</p> : null}
+            {!locked ? <p className="text-xs text-slate-500">Lock the month before running the export.</p> : null}
             {error ? <p className="text-xs text-slate-900">{error}</p> : null}
 
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Export history</h3>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Export history</h3>
               {exports && exports.length > 0 ? (
                 <ul className="flex flex-col divide-y divide-slate-100">
                   {exports.map((e) => (

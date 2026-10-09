@@ -218,7 +218,7 @@ export default function ClientsPage() {
                 )}
               </tbody>
             </table>
-            <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
+            <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">
               {data.length} {data.length === 1 ? 'client' : 'clients'}
             </div>
           </div>

@@ -39,6 +39,9 @@ function sanitize(name: string): string {
   return base.replace(/[^\w.\-]+/g, '_').slice(0, 200) || 'file';
 }
 
+/** How long an upload link works: enough to start any upload, short enough to limit reuse. */
+const UPLOAD_LINK_SECONDS = 5 * 60;
+
 @Injectable()
 export class FilesService {
   constructor(
@@ -92,14 +95,15 @@ export class FilesService {
       },
     });
 
-    const uploadUrl = await this.storage.presignedUpload(storageKey, rules.presignedSeconds);
+    // The upload link only needs to live long enough to start the upload.
+    const uploadUrl = await this.storage.presignedUpload(storageKey, Math.min(rules.presignedSeconds, UPLOAD_LINK_SECONDS));
     return {
       fileAssetId: fileAsset.id,
       versionId: version.id,
       versionNumber,
       storageKey,
       uploadUrl,
-      expiresInSeconds: rules.presignedSeconds,
+      expiresInSeconds: Math.min(rules.presignedSeconds, UPLOAD_LINK_SECONDS),
     };
   }
 
@@ -213,7 +217,13 @@ export class FilesService {
   }
 
   // ── Presigned download — only AVAILABLE versions; clients need CLIENT_VISIBLE (§5.6) ──
-  async download(versionId: string, user: AuthUser, inline = false) {
+  /**
+   * `viaChat` is set only by ChatService, which has already checked that the
+   * caller is in the room. Every other route refuses chat files: they carry no
+   * task or profile to scope by, so without this anyone who learnt a version
+   * id (or was removed from the group) could still fetch them.
+   */
+  async download(versionId: string, user: AuthUser, inline = false, viaChat = false) {
     const rules = await this.fileRules();
     const v = await this.prisma.fileVersion.findUnique({
       where: { id: versionId },
@@ -221,12 +231,14 @@ export class FilesService {
         storageKey: true,
         originalName: true,
         scanStatus: true,
+        scannedEtag: true,
         visibility: true,
         deletedAt: true,
         fileAsset: { select: { taskId: true, profileUserId: true, createdById: true, chatMessageId: true } },
       },
     });
     if (!v || v.deletedAt) throw new NotFoundException('File not found');
+    if (v.fileAsset.chatMessageId && !viaChat) throw new NotFoundException('File not found');
     // Scope BEFORE handing out a presigned URL — that URL bypasses the API
     // entirely, so this is the last point at which access can be refused.
     if (v.fileAsset.taskId) {
@@ -246,6 +258,7 @@ export class FilesService {
     if (user.role === 'CLIENT' && v.visibility !== 'CLIENT_VISIBLE') {
       throw new NotFoundException('File not found');
     }
+    await this.assertUnchangedSinceScan(v.storageKey, v.scannedEtag);
     const url = await this.storage.presignedDownload(v.storageKey, rules.presignedSeconds, v.originalName, inline);
     return { url, expiresInSeconds: rules.presignedSeconds };
   }
@@ -328,6 +341,18 @@ export class FilesService {
     if (!involved) throw new NotFoundException('File not found');
   }
 
+  /**
+   * The object must still be the one that passed the virus scan. Files scanned
+   * before this check existed have no recorded ETag and are served as before.
+   */
+  async assertUnchangedSinceScan(storageKey: string, scannedEtag: string | null): Promise<void> {
+    if (!scannedEtag) return;
+    const now = await this.storage.stat(storageKey);
+    if (!now || now.etag !== scannedEtag) {
+      throw new ConflictException('This file was changed after its virus check, so it cannot be opened. Upload it again.');
+    }
+  }
+
   private async resolveAsset(dto: InitUploadDto, actor: AuthUser) {
     if (dto.fileAssetId) {
       // Uploading a NEW VERSION of an existing file is an edit of that file.
@@ -335,9 +360,12 @@ export class FilesService {
       // anyone's asset — and the UI shows the newest version.
       const asset = await this.prisma.fileAsset.findUnique({
         where: { id: dto.fileAssetId },
-        select: { id: true, taskId: true, profileUserId: true, createdById: true },
+        select: { id: true, taskId: true, profileUserId: true, createdById: true, chatMessageId: true },
       });
       if (!asset) throw new NotFoundException('File not found');
+      // A file already sent in chat can't get a new version: that would change a
+      // sent message's attachment with no "edited" mark, past the edit window.
+      if (asset.chatMessageId) throw new NotFoundException('File not found');
       if (asset.taskId) {
         await this.assertTaskAccess(asset.taskId, actor);
       } else if (asset.profileUserId && asset.profileUserId !== actor.id) {

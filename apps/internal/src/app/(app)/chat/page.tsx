@@ -41,10 +41,11 @@ import {
 import { Button, LoadingState } from '@rademics/ui';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
-import { connectPresence } from '@/lib/socket';
+import { connectPresence, onReconnect } from '@/lib/socket';
 import { desktopHost } from '@/lib/desktop-host';
 import {
   MUTE_EVENT,
+  isViewing,
   plainText,
   popupsEnabled,
   setOpenRoom,
@@ -181,6 +182,17 @@ function isImage(a: Attachment): boolean {
   return Boolean(a.contentType?.startsWith('image/'));
 }
 
+/**
+ * Fold a fresh page of messages into what is already on screen: matching ids
+ * take the server's copy, new ones are added, older loaded history is kept.
+ */
+function mergeMessages(prev: ChatMessage[], fresh: ChatMessage[]): ChatMessage[] {
+  const byId = new Map(fresh.map((m) => [m.id, m]));
+  const known = new Set(prev.map((m) => m.id));
+  const merged = [...prev.map((m) => byId.get(m.id) ?? m), ...fresh.filter((m) => !known.has(m.id))];
+  return merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
 /** Collapse raw reactions into one chip per emoji: count, names, whether mine. */
 function groupReactions(reactions: Reaction[], meId: string) {
   const map = new Map<string, { emoji: string; count: number; mine: boolean; names: string[] }>();
@@ -247,6 +259,13 @@ function RoomView({
   const [reactForId, setReactForId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  // A clock for the 15-minute edit window: the Edit button disappears on time
+  // instead of staying until the page happens to re-render.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 20_000);
+    return () => clearInterval(t);
+  }, []);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [reads, setReads] = useState<Record<string, ReadMark>>({});
   const [dragging, setDragging] = useState(false);
@@ -257,6 +276,10 @@ function RoomView({
   const [scheduled, setScheduled] = useState<ScheduledItem[]>([]);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [jumpId, setJumpId] = useState<string | null>(null);
+  const loadingEarlier = useRef(false);
+  const [loadingEarlierUi, setLoadingEarlierUi] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const schedulingRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -268,9 +291,33 @@ function RoomView({
   // the next visit (by which time the room was already marked read).
   const initialLastReadAt = useRef<string | null>(null);
 
-  const markRead = useCallback(() => {
+  const markReadNow = useCallback(() => {
     apiFetch(`/chat/read${roomParam('?')}`, { method: 'POST', body: '{}' }).catch(() => undefined);
   }, [roomParam]);
+
+  // A message only counts as read when someone is actually looking at it: with
+  // the tab hidden or another window in front, it stays unread (so the badge and
+  // alerts still tell them) until they come back to this conversation.
+  const owesRead = useRef(false);
+  const markRead = useCallback(() => {
+    if (isViewing(room.id)) {
+      owesRead.current = false;
+      markReadNow();
+    } else {
+      owesRead.current = true;
+    }
+  }, [markReadNow, room.id]);
+  useEffect(() => {
+    const onReturn = () => {
+      if (owesRead.current) markRead();
+    };
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, [markRead]);
 
   // Who's active = who is checked in for work right now (same definition the
   // dashboard uses). Refreshed live on every check-in/out event.
@@ -381,11 +428,25 @@ function RoomView({
         [userId]: { userId, name: prev[userId]?.name ?? '', lastReadAt },
       }));
     });
+    // Back after a drop: fetch the latest messages and fold in whatever was
+    // posted, edited or deleted while we were offline.
+    onReconnect(socket, () => {
+      apiFetch<{ items: ChatMessage[]; hasMore: boolean }>(`/chat/messages${roomParam('?')}`)
+        .then((r) => {
+          setMessages((prev) => (prev ? mergeMessages(prev, r.items) : r.items));
+          markRead();
+        })
+        .catch(() => undefined);
+      apiFetch<ReadMark[]>(`/chat/rooms/${room.id}/reads`)
+        .then((list) => setReads(Object.fromEntries(list.map((r) => [r.userId, r]))))
+        .catch(() => undefined);
+      loadActive();
+    });
     return () => {
       socketRef.current = null;
       socket.close();
     };
-  }, [markRead, loadActive, room.id]);
+  }, [markRead, loadActive, roomParam, room.id]);
 
   // Sweep out stale typing entries (someone typed, then walked away).
   useEffect(() => {
@@ -483,7 +544,15 @@ function RoomView({
     if (!scanning) return;
     const t = setInterval(() => {
       apiFetch<{ items: ChatMessage[]; hasMore: boolean }>(`/chat/messages${roomParam('?')}`)
-        .then((r) => setMessages((prev) => (prev && prev.length > r.items.length ? prev : r.items)))
+        // Only the attachments' scan state is news here. Take it per message by id
+        // and leave everything else, including older history loaded beyond this
+        // first page, alone.
+        .then((r) => {
+          const fresh = new Map(r.items.map((m) => [m.id, m.files]));
+          setMessages((prev) =>
+            prev ? prev.map((m) => (fresh.has(m.id) ? { ...m, files: fresh.get(m.id)! } : m)) : r.items,
+          );
+        })
         .catch(() => undefined);
     }, 2500);
     return () => clearInterval(t);
@@ -496,14 +565,22 @@ function RoomView({
   }
 
   async function loadEarlier() {
-    if (!messages || messages.length === 0) return;
+    // One page at a time: a double click (or a jump-to effect firing again)
+    // would otherwise fetch the same page twice and show it twice.
+    if (!messages || messages.length === 0 || loadingEarlier.current) return;
+    loadingEarlier.current = true;
+    setLoadingEarlierUi(true);
     const el = scrollRef.current;
     const prevHeight = el?.scrollHeight ?? 0;
     try {
       const r = await apiFetch<{ items: ChatMessage[]; hasMore: boolean }>(
         `/chat/messages?before=${encodeURIComponent(messages[0]!.createdAt)}${roomParam('&')}`,
       );
-      setMessages((prev) => (prev ? [...r.items, ...prev] : r.items));
+      setMessages((prev) => {
+        if (!prev) return r.items;
+        const known = new Set(prev.map((m) => m.id));
+        return [...r.items.filter((m) => !known.has(m.id)), ...prev];
+      });
       setHasMore(r.hasMore);
       // Hold the reader's place instead of snapping to the top.
       requestAnimationFrame(() => {
@@ -511,6 +588,9 @@ function RoomView({
       });
     } catch {
       /* the button stays; they can retry */
+    } finally {
+      loadingEarlier.current = false;
+      setLoadingEarlierUi(false);
     }
   }
 
@@ -605,6 +685,12 @@ function RoomView({
       setEditingId(null);
       setEditDraft('');
     } catch (err) {
+      // Too late to edit (the window closed while typing): close the editor
+      // rather than leave a box that can never be saved.
+      if (err instanceof ApiError && err.status === 400) {
+        setEditingId(null);
+        setEditDraft('');
+      }
       setError(err instanceof ApiError ? err.message : 'Could not save the edit.');
     }
   }
@@ -626,7 +712,10 @@ function RoomView({
 
   async function scheduleDraft(when: Date) {
     const text = draft.trim();
-    if (!text) return;
+    // Busy guard: a double click on "Schedule" must not queue the message twice.
+    if (!text || schedulingRef.current) return;
+    schedulingRef.current = true;
+    setScheduling(true);
     setError(null);
     try {
       await apiFetch('/chat/scheduled', {
@@ -639,6 +728,9 @@ function RoomView({
       loadScheduled();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not schedule that message.');
+    } finally {
+      schedulingRef.current = false;
+      setScheduling(false);
     }
   }
 
@@ -859,7 +951,7 @@ function RoomView({
           {isCompany ? (
             <div className="hidden items-center gap-2 sm:flex">
               {active.length === 0 ? (
-                <span className="text-xs text-slate-400">Nobody checked in</span>
+                <span className="text-xs text-slate-500">Nobody checked in</span>
               ) : (
                 <>
                   <div className="flex -space-x-1.5">
@@ -885,7 +977,7 @@ function RoomView({
             onClick={() => setPanel('files')}
             title="Files shared in this conversation"
             aria-label="Files shared in this conversation"
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white hover:text-slate-600"
+            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white hover:text-slate-600"
           >
             <FolderOpen className="h-4 w-4" />
           </button>
@@ -895,7 +987,7 @@ function RoomView({
             aria-label={room.muted ? 'Unmute conversation' : 'Mute conversation'}
             aria-pressed={room.muted}
             className={`rounded-lg p-2 transition-colors ${
-              room.muted ? 'bg-slate-100 text-slate-600' : 'text-slate-400 hover:bg-white hover:text-slate-600'
+              room.muted ? 'bg-slate-100 text-slate-600' : 'text-slate-500 hover:bg-white hover:text-slate-600'
             }`}
           >
             {room.muted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
@@ -928,7 +1020,7 @@ function RoomView({
                 onClick={() => void togglePin(topPin)}
                 title="Unpin this announcement"
                 aria-label="Unpin"
-                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-50 hover:text-slate-600"
               >
                 <PinOff className="h-3.5 w-3.5" />
               </button>
@@ -938,8 +1030,8 @@ function RoomView({
         <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 py-3">
           {hasMore ? (
             <div className="mb-3 flex justify-center">
-              <Button size="sm" variant="ghost" onClick={() => void loadEarlier()}>
-                Load earlier messages
+              <Button size="sm" variant="ghost" onClick={() => void loadEarlier()} disabled={loadingEarlierUi}>
+                {loadingEarlierUi ? 'Loading…' : 'Load earlier messages'}
               </Button>
             </div>
           ) : null}
@@ -1027,14 +1119,14 @@ function RoomView({
                 new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < GROUP_WINDOW_MS;
 
               const canEditThis =
-                !m.deleted && mine && Date.now() - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS;
+                !m.deleted && mine && now - new Date(m.createdAt).getTime() < EDIT_WINDOW_MS;
 
               return (
                 <li key={m.id} id={`msg-${m.id}`}>
                   {newDay ? (
                     <div className="my-3 flex items-center gap-3">
                       <span className="h-px flex-1 bg-slate-200" />
-                      <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
                         {dayLabel(m.createdAt)}
                       </span>
                       <span className="h-px flex-1 bg-slate-200" />
@@ -1062,23 +1154,26 @@ function RoomView({
                       // hover on a touch screen, and a time you can only reveal
                       // by pointing at it cannot be scanned down the column —
                       // which is the whole reason a timestamp is on every line.
+                      // w-12 fits "10:45 AM" on one line; the avatar column matches.
                       <span
-                        className="w-7 shrink-0 pt-0.5 text-right text-[10px] leading-5 text-slate-300"
+                        className="w-12 shrink-0 whitespace-nowrap pt-0.5 text-right text-[10px] leading-5 text-slate-500"
                         title={new Date(m.createdAt).toLocaleString()}
                       >
                         {clockTime(m.createdAt)}
                       </span>
                     ) : (
-                      <span
-                        title={m.author && activeIds.has(m.author.id) ? `${name} is checked in` : undefined}
-                        className={`relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
-                          mine ? 'bg-accent text-accent-foreground' : 'bg-accent/10 text-accent'
-                        }`}
-                      >
-                        {initials(name)}
-                        {m.author && activeIds.has(m.author.id) ? (
-                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-success ring-2 ring-white" />
-                        ) : null}
+                      <span className="flex w-12 shrink-0 justify-end">
+                        <span
+                          title={m.author && activeIds.has(m.author.id) ? `${name} is checked in` : undefined}
+                          className={`relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                            mine ? 'bg-accent text-accent-foreground' : 'bg-accent/10 text-accent'
+                          }`}
+                        >
+                          {initials(name)}
+                          {m.author && activeIds.has(m.author.id) ? (
+                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-success ring-2 ring-white" />
+                          ) : null}
+                        </span>
                       </span>
                     )}
 
@@ -1087,7 +1182,7 @@ function RoomView({
                         <div className="flex items-baseline gap-2">
                           <span className="text-sm font-semibold text-slate-800">{mine ? 'You' : name}</span>
                           <span
-                            className="text-[11px] text-slate-400"
+                            className="text-[11px] text-slate-500"
                             title={new Date(m.createdAt).toLocaleString()}
                           >
                             {clockTime(m.createdAt)}
@@ -1108,14 +1203,14 @@ function RoomView({
                       ) : null}
 
                       {!m.deleted && m.forwarded ? (
-                        <p className="mb-0.5 flex items-center gap-1 text-[11px] italic text-slate-400">
+                        <p className="mb-0.5 flex items-center gap-1 text-[11px] italic text-slate-500">
                           <Forward className="h-3 w-3" />
                           Forwarded
                         </p>
                       ) : null}
 
                       {m.deleted ? (
-                        <p className="text-sm italic text-slate-400">Message removed</p>
+                        <p className="text-sm italic text-slate-500">Message removed</p>
                       ) : (
                         <>
                           {editingId === m.id ? (
@@ -1147,7 +1242,7 @@ function RoomView({
                                 onClick={() => setEditingId(null)}
                                 title="Cancel (Esc)"
                                 aria-label="Cancel edit"
-                                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-600"
                               >
                                 <X className="h-3.5 w-3.5" />
                               </button>
@@ -1156,7 +1251,7 @@ function RoomView({
                             <div className="break-words text-sm leading-relaxed text-slate-700">
                               {renderBody(m.body)}
                               {m.edited ? (
-                                <span className="ml-1.5 text-[10px] text-slate-400">(edited)</span>
+                                <span className="ml-1.5 text-[10px] text-slate-500">(edited)</span>
                               ) : null}
                             </div>
                           ) : null}
@@ -1236,7 +1331,7 @@ function RoomView({
                                   <span className="block max-w-[14rem] truncate text-xs font-medium text-slate-700">
                                     {f.name}
                                   </span>
-                                  <span className="block text-[11px] text-slate-400">
+                                  <span className="block text-[11px] text-slate-500">
                                     {fmtSize(f.sizeBytes) || 'File'}
                                   </span>
                                 </span>
@@ -1270,14 +1365,15 @@ function RoomView({
 
                     {!m.deleted ? (
                       <div
-                        // Always visible below sm — touch screens have no hover.
-                        className="flex shrink-0 items-center gap-0.5 self-start opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+                        // Always visible below sm — touch screens have no hover. On wider
+                        // screens it also shows while a keyboard user tabs into it.
+                        className="flex shrink-0 items-center gap-0.5 self-start opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                       >
                         <button
                           onClick={() => startReply(m)}
                           title="Reply"
                           aria-label="Reply to this message"
-                          className="rounded-md p-1 text-slate-300 hover:bg-white hover:text-slate-600"
+                          className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         >
                           <CornerUpLeft className="h-3.5 w-3.5" />
                         </button>
@@ -1285,7 +1381,7 @@ function RoomView({
                           onClick={() => setReactForId(reactForId === m.id ? null : m.id)}
                           title="Add a reaction"
                           aria-label="Add a reaction"
-                          className="rounded-md p-1 text-slate-300 hover:bg-white hover:text-slate-600"
+                          className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         >
                           <SmilePlus className="h-3.5 w-3.5" />
                         </button>
@@ -1293,7 +1389,7 @@ function RoomView({
                           onClick={() => setForwardFor(m)}
                           title="Forward to another chat"
                           aria-label="Forward to another chat"
-                          className="rounded-md p-1 text-slate-300 hover:bg-white hover:text-slate-600"
+                          className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         >
                           <Forward className="h-3.5 w-3.5" />
                         </button>
@@ -1302,7 +1398,7 @@ function RoomView({
                             onClick={() => setTaskFor(m)}
                             title="Make a task from this message"
                             aria-label="Make a task from this message"
-                            className="rounded-md p-1 text-slate-300 hover:bg-white hover:text-slate-600"
+                            className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                           >
                             <ListPlus className="h-3.5 w-3.5" />
                           </button>
@@ -1312,7 +1408,7 @@ function RoomView({
                             onClick={() => startEdit(m)}
                             title="Edit your message"
                             aria-label="Edit message"
-                            className="rounded-md p-1 text-slate-300 hover:bg-white hover:text-slate-600"
+                            className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
@@ -1322,7 +1418,7 @@ function RoomView({
                             onClick={() => void togglePin(m)}
                             title={m.pinned ? 'Unpin' : 'Pin as announcement'}
                             aria-label={m.pinned ? 'Unpin message' : 'Pin message'}
-                            className="rounded-md p-1 text-slate-300 hover:bg-white hover:text-slate-600"
+                            className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                           >
                             {m.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
                           </button>
@@ -1332,7 +1428,7 @@ function RoomView({
                             onClick={() => setConfirmDeleteId(m.id)}
                             title={mine ? 'Delete your message' : 'Remove this message (moderation)'}
                             aria-label="Delete message"
-                            className="rounded-md p-1 text-slate-300 hover:bg-white hover:text-danger"
+                            className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -1360,14 +1456,14 @@ function RoomView({
                       <button
                         onClick={() => (room.kind === 'DIRECT' ? undefined : setPanel('seen'))}
                         className={`flex items-center gap-1 rounded px-1 text-[11px] ${
-                          receipt === 'Sent' ? 'text-slate-400' : 'text-accent'
+                          receipt === 'Sent' ? 'text-slate-500' : 'text-accent'
                         } ${room.kind === 'DIRECT' ? 'cursor-default' : 'hover:bg-slate-50 hover:underline'}`}
                         title={room.kind === 'DIRECT' ? undefined : 'See who has seen it'}
                       >
                         {receipt === 'Sent' ? <Check className="h-3 w-3" /> : <CheckCheck className="h-3 w-3" />}
                         {receipt}
                         {room.kind !== 'DIRECT' && seenBy.length > 0 ? (
-                          <span className="text-slate-400">
+                          <span className="text-slate-500">
                             {' '}
                             · {seenBy.slice(0, 2).map((r) => nameOf(r.userId).split(' ')[0]).join(', ')}
                             {seenBy.length > 2 ? ` +${seenBy.length - 2}` : ''}
@@ -1385,7 +1481,7 @@ function RoomView({
         {/* Composer */}
         <div className="relative border-t border-slate-200 bg-white p-3">
           {typingNames.length > 0 ? (
-            <p className="mb-1 px-1 text-xs text-slate-400">
+            <p className="mb-1 px-1 text-xs text-slate-500">
               {typingNames.length === 1
                 ? `${typingNames[0]} is typing…`
                 : typingNames.length === 2
@@ -1396,7 +1492,7 @@ function RoomView({
 
           {mentionMatches.length > 0 ? (
             <div className="absolute bottom-full left-3 z-10 mb-1 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-              <p className="border-b border-slate-100 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <p className="border-b border-slate-100 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Mention someone
               </p>
               {mentionMatches.map((p) => (
@@ -1424,7 +1520,7 @@ function RoomView({
               >
                 <Clock className="h-3.5 w-3.5 text-accent" />
                 {scheduled.length} scheduled message{scheduled.length === 1 ? '' : 's'}
-                <span className="ml-auto text-slate-400">{scheduledOpen ? 'Hide' : 'Show'}</span>
+                <span className="ml-auto text-slate-500">{scheduledOpen ? 'Hide' : 'Show'}</span>
               </button>
               {scheduledOpen ? (
                 <ul className="mt-1.5 divide-y divide-slate-100">
@@ -1434,7 +1530,7 @@ function RoomView({
                       <span className="min-w-0 flex-1 truncate text-slate-600">{sm.body}</span>
                       <button
                         onClick={() => void cancelScheduled(sm.id)}
-                        className="shrink-0 text-slate-400 hover:text-danger"
+                        className="shrink-0 text-slate-500 hover:text-danger"
                         title="Cancel this scheduled message"
                       >
                         Cancel
@@ -1458,7 +1554,7 @@ function RoomView({
                 onClick={() => setReplyTo(null)}
                 aria-label="Cancel reply"
                 title="Cancel reply (Esc)"
-                className="rounded p-0.5 text-slate-400 hover:text-slate-700"
+                className="rounded p-0.5 text-slate-500 hover:text-slate-700"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -1483,7 +1579,7 @@ function RoomView({
                   <button
                     onClick={() => setPending((prev) => prev.filter((x) => x.key !== p.key))}
                     aria-label={`Remove ${p.name}`}
-                    className="text-slate-400 hover:text-slate-700"
+                    className="text-slate-500 hover:text-slate-700"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1504,7 +1600,7 @@ function RoomView({
               onClick={() => fileInputRef.current?.click()}
               title="Attach a file (or drag files here, or paste a screenshot)"
               aria-label="Attach a file"
-              className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-600"
             >
               <Paperclip className="h-4 w-4" />
             </button>
@@ -1522,7 +1618,7 @@ function RoomView({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               title="Formatting: **bold**  _italic_  `code`  and start a line with - for a list"
-              className="max-h-40 flex-1 resize-none bg-transparent py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              className="max-h-40 flex-1 resize-none bg-transparent py-1.5 text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none"
             />
             <div className="relative shrink-0">
               <button
@@ -1536,12 +1632,16 @@ function RoomView({
                       : 'Write a message, then choose when to send it'
                 }
                 aria-label="Send later"
-                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40 disabled:hover:bg-transparent"
+                className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40 disabled:hover:bg-transparent"
               >
                 <Clock className="h-4 w-4" />
               </button>
               {scheduleOpen ? (
-                <SchedulePicker onPick={(d) => void scheduleDraft(d)} onClose={() => setScheduleOpen(false)} />
+                <SchedulePicker
+                  busy={scheduling}
+                  onPick={(d) => void scheduleDraft(d)}
+                  onClose={() => setScheduleOpen(false)}
+                />
               ) : null}
             </div>
             <Button
@@ -1594,7 +1694,7 @@ function RoomView({
               <li key={pm.id} className="flex items-start gap-3 px-3 py-2.5">
                 <Pin className="mt-1 h-3.5 w-3.5 shrink-0 text-accent" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     <span className="font-semibold text-slate-700">{pm.author?.name ?? 'Someone'}</span> ·{' '}
                     {new Date(pm.createdAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
                   </p>
@@ -1610,7 +1710,7 @@ function RoomView({
                       Show in chat
                     </button>
                     {isModerator ? (
-                      <button className="text-slate-400 hover:text-slate-600" onClick={() => void togglePin(pm)}>
+                      <button className="text-slate-500 hover:text-slate-600" onClick={() => void togglePin(pm)}>
                         Unpin
                       </button>
                     ) : null}
@@ -1618,7 +1718,7 @@ function RoomView({
                 </div>
               </li>
             ))}
-            {pinnedMsgs.length === 0 ? <li className="px-3 py-6 text-center text-sm text-slate-400">Nothing is pinned.</li> : null}
+            {pinnedMsgs.length === 0 ? <li className="px-3 py-6 text-center text-sm text-slate-500">Nothing is pinned.</li> : null}
           </ul>
         </Dialog>
       ) : null}
@@ -1644,12 +1744,12 @@ function RoomView({
                           {initials(nameOf(r.userId))}
                         </span>
                         <span className="flex-1 truncate text-sm text-slate-700">{nameOf(r.userId)}</span>
-                        <span className="shrink-0 text-xs text-slate-400">{fmtWhen(r.lastReadAt)}</span>
+                        <span className="shrink-0 text-xs text-slate-500">{fmtWhen(r.lastReadAt)}</span>
                       </li>
                     ))}
-                  {seenBy.length === 0 ? <li className="py-1.5 text-sm text-slate-400">Nobody yet.</li> : null}
+                  {seenBy.length === 0 ? <li className="py-1.5 text-sm text-slate-500">Nobody yet.</li> : null}
                 </ul>
-                <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Not seen yet · {notSeen.length}
                 </p>
                 <ul className="mt-1">
@@ -1661,7 +1761,7 @@ function RoomView({
                       <span className="flex-1 truncate text-sm text-slate-500">{p.name}</span>
                     </li>
                   ))}
-                  {notSeen.length === 0 ? <li className="py-1.5 text-sm text-slate-400">Everyone has seen it.</li> : null}
+                  {notSeen.length === 0 ? <li className="py-1.5 text-sm text-slate-500">Everyone has seen it.</li> : null}
                 </ul>
               </div>
             );
@@ -1736,7 +1836,7 @@ function Dialog({ title, onClose, children }: { title: string; onClose: () => vo
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-600"
           >
             <X className="h-4 w-4" />
           </button>
@@ -1776,12 +1876,12 @@ function PersonList({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search by name"
-            className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none"
           />
         </label>
       </div>
       <ul className="mt-2 min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {shown.length === 0 ? <li className="px-3 py-6 text-center text-sm text-slate-400">{empty}</li> : null}
+        {shown.length === 0 ? <li className="px-3 py-6 text-center text-sm text-slate-500">{empty}</li> : null}
         {shown.map((p) => {
           const on = selected?.has(p.id) ?? false;
           return (
@@ -1870,7 +1970,7 @@ function NewGroupDialog({
           maxLength={80}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Research team"
-          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent/20"
+          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-500 focus:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent/20"
         />
         <p className="mt-4 text-xs font-medium text-slate-600">
           Add people {picked.size > 0 ? <span className="text-accent">· {picked.size} chosen</span> : null}
@@ -2040,7 +2140,7 @@ function PeopleDialog({
         <p className="text-xs font-medium text-slate-600">
           {members ? `${members.length} people` : 'Loading…'}
           {room.createdBy ? (
-            <span className="font-normal text-slate-400"> · created by {room.createdBy.name}</span>
+            <span className="font-normal text-slate-500"> · created by {room.createdBy.name}</span>
           ) : null}
         </p>
         {canManage ? (
@@ -2065,7 +2165,7 @@ function PeopleDialog({
                 onClick={() => void remove(p)}
                 title={`Remove ${p.name} from the group`}
                 aria-label={`Remove ${p.name}`}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-danger-soft hover:text-danger"
+                className="rounded-md p-1.5 text-slate-500 hover:bg-danger-soft hover:text-danger"
               >
                 <UserMinus className="h-4 w-4" />
               </button>
@@ -2146,7 +2246,7 @@ function RoomRow({
           <span className={`truncate text-sm ${unread ? 'font-semibold text-slate-900' : 'font-medium text-slate-700'}`}>
             {room.name}
           </span>
-          <span className={`flex shrink-0 items-center gap-1 text-[11px] ${unread && !room.muted ? 'font-medium text-accent' : 'text-slate-400'}`}>
+          <span className={`flex shrink-0 items-center gap-1 text-[11px] ${unread && !room.muted ? 'font-medium text-accent' : 'text-slate-500'}`}>
             {room.muted ? <BellOff className="h-3 w-3" aria-label="Muted" /> : null}
             {listTime(room.lastMessageAt)}
           </span>
@@ -2252,7 +2352,7 @@ function AlertSettings({ onClose }: { onClose: () => void }) {
       aria-label="Sounds and pop-ups"
       className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
     >
-      <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
         New messages in this browser
       </p>
       <button
@@ -2283,7 +2383,7 @@ function AlertSettings({ onClose }: { onClose: () => void }) {
         </span>
         {knob(popups && permission === 'granted')}
       </button>
-      <p className="px-3 pb-2 pt-1 text-[11px] leading-relaxed text-slate-400">
+      <p className="px-3 pb-2 pt-1 text-[11px] leading-relaxed text-slate-500">
         Muted conversations stay quiet; @mentions always come through.
       </p>
     </div>
@@ -2524,7 +2624,16 @@ function RichText({ body, names }: { body: string; names: string[] }) {
 }
 
 /** Quick "send later" choices, or any date and time. */
-function SchedulePicker({ onPick, onClose }: { onPick: (d: Date) => void; onClose: () => void }) {
+function SchedulePicker({
+  onPick,
+  onClose,
+  busy = false,
+}: {
+  onPick: (d: Date) => void;
+  onClose: () => void;
+  /** Saving right now: the choices are disabled so a double click schedules once. */
+  busy?: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [custom, setCustom] = useState('');
   useEffect(() => {
@@ -2565,15 +2674,16 @@ function SchedulePicker({ onPick, onClose }: { onPick: (d: Date) => void; onClos
       aria-label="Send later"
       className="absolute bottom-full right-0 z-30 mb-2 w-72 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
     >
-      <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Send later</p>
+      <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Send later</p>
       {options.map((o) => (
         <button
           key={o.label}
           onClick={() => onPick(o.when)}
-          className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+          disabled={busy}
+          className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span className="whitespace-nowrap">{o.label}</span>
-          <span className="whitespace-nowrap text-xs text-slate-400">{fmtWhen(o.when.toISOString())}</span>
+          <span className="whitespace-nowrap text-xs text-slate-500">{fmtWhen(o.when.toISOString())}</span>
         </button>
       ))}
       <div className="mt-1 border-t border-slate-100 px-3 pb-2 pt-2">
@@ -2587,8 +2697,8 @@ function SchedulePicker({ onPick, onClose }: { onPick: (d: Date) => void; onClos
             className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-800 focus:border-accent/40 focus:outline-none"
           />
         </label>
-        <Button size="sm" className="mt-2 w-full" disabled={!custom} onClick={() => onPick(new Date(custom))}>
-          Schedule
+        <Button size="sm" className="mt-2 w-full" disabled={!custom || busy} onClick={() => onPick(new Date(custom))}>
+          {busy ? 'Scheduling…' : 'Schedule'}
         </Button>
       </div>
     </div>
@@ -2657,7 +2767,7 @@ function ForwardDialog({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search conversations"
-            className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none"
           />
         </label>
       </div>
@@ -2674,7 +2784,7 @@ function ForwardDialog({
             </button>
           </li>
         ))}
-        {shown.length === 0 ? <li className="px-3 py-6 text-center text-sm text-slate-400">No conversations match.</li> : null}
+        {shown.length === 0 ? <li className="px-3 py-6 text-center text-sm text-slate-500">No conversations match.</li> : null}
       </ul>
       {error ? <p className="border-t border-slate-100 px-5 py-3 text-xs text-red-600">{error}</p> : null}
     </Dialog>
@@ -2717,14 +2827,14 @@ function FilesDialog({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search file names"
-            className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none"
           />
         </label>
       </div>
       <ul className="mt-2 min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-        {files === null ? <li className="px-3 py-6 text-center text-sm text-slate-400">Loading…</li> : null}
+        {files === null ? <li className="px-3 py-6 text-center text-sm text-slate-500">Loading…</li> : null}
         {files !== null && shown.length === 0 ? (
-          <li className="px-3 py-6 text-center text-sm text-slate-400">
+          <li className="px-3 py-6 text-center text-sm text-slate-500">
             {files.length === 0 ? 'No files have been shared here yet.' : 'No files match.'}
           </li>
         ) : null}
@@ -2735,7 +2845,7 @@ function FilesDialog({
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-slate-700">{f.name}</p>
-              <p className="truncate text-xs text-slate-400">
+              <p className="truncate text-xs text-slate-500">
                 {[fmtSize(f.sizeBytes), f.sharedBy?.name, fmtWhen(f.sharedAt)].filter(Boolean).join(' · ')}
               </p>
             </div>
@@ -2747,12 +2857,12 @@ function FilesDialog({
                 onClick={() => onDownload(f.versionId)}
                 title={`Download ${f.name}`}
                 aria-label={`Download ${f.name}`}
-                className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-white hover:text-slate-700"
+                className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-white hover:text-slate-700"
               >
                 <Download className="h-4 w-4" />
               </button>
             ) : (
-              <span className="shrink-0 text-xs text-slate-400">{f.scanStatus === 'INFECTED' ? 'Quarantined' : 'Checking…'}</span>
+              <span className="shrink-0 text-xs text-slate-500">{f.scanStatus === 'INFECTED' ? 'Quarantined' : 'Checking…'}</span>
             )}
           </li>
         ))}
@@ -2784,28 +2894,28 @@ function StorageDialog({ onClose }: { onClose: () => void }) {
     <Dialog title="Chat file storage" onClose={onClose}>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        {!data && !error ? <p className="text-sm text-slate-400">Loading…</p> : null}
+        {!data && !error ? <p className="text-sm text-slate-500">Loading…</p> : null}
         {data ? (
           <>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-xl bg-slate-50 px-3 py-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Space used</p>
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">Space used</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-slate-800">{fmtSize(data.bytes) || '0 B'}</p>
               </div>
               <div className="rounded-xl bg-slate-50 px-3 py-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Files</p>
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">Files</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-slate-800">{data.files}</p>
               </div>
               <div className="rounded-xl bg-slate-50 px-3 py-3">
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Per-file limit</p>
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">Per-file limit</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-slate-800">{fmtSize(data.uploadLimitBytes)}</p>
               </div>
             </div>
-            <p className="mt-2 text-xs text-slate-400">
+            <p className="mt-2 text-xs text-slate-500">
               The per-file limit applies to every upload in the ERP and can be changed by a Super Admin in Admin settings.
             </p>
 
-            <p className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">By conversation</p>
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">By conversation</p>
             <ul className="mt-2 space-y-2">
               {data.byRoom.map((r, i) => (
                 <li key={i}>
@@ -2820,18 +2930,18 @@ function StorageDialog({ onClose }: { onClose: () => void }) {
                   </div>
                 </li>
               ))}
-              {data.byRoom.length === 0 ? <li className="text-sm text-slate-400">No files shared yet.</li> : null}
+              {data.byRoom.length === 0 ? <li className="text-sm text-slate-500">No files shared yet.</li> : null}
             </ul>
 
             {data.biggest.length > 0 ? (
               <>
-                <p className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Largest files</p>
+                <p className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Largest files</p>
                 <ul className="mt-1 divide-y divide-slate-100">
                   {data.biggest.map((b, i) => (
                     <li key={i} className="flex items-center gap-3 py-2 text-xs">
                       <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
                       <span className="min-w-0 flex-1 truncate text-slate-700">{b.name}</span>
-                      <span className="shrink-0 text-slate-400">{b.room}</span>
+                      <span className="shrink-0 text-slate-500">{b.room}</span>
                       <span className="w-16 shrink-0 text-right font-medium tabular-nums text-slate-600">{fmtSize(b.bytes)}</span>
                     </li>
                   ))}
@@ -2938,12 +3048,21 @@ function ChatScreen() {
       setHits(null);
       return;
     }
+    // A slower reply for an earlier, shorter query must not replace newer results.
+    let stale = false;
     const t = setTimeout(() => {
       apiFetch<SearchHit[]>(`/chat/search?q=${encodeURIComponent(query)}`)
-        .then(setHits)
-        .catch(() => setHits([]));
+        .then((list) => {
+          if (!stale) setHits(list);
+        })
+        .catch(() => {
+          if (!stale) setHits([]);
+        });
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
   }, [query]);
 
   // Keep previews, order and unread counts live. Bursts collapse into one reload.
@@ -2959,6 +3078,11 @@ function ChatScreen() {
     socket.on('chat:roomsChanged', soon);
     socket.on('chat:read', ({ userId }: { userId: string }) => userId === me.id && soon());
     socket.on('presence:update', loadActive);
+    // Back after a drop: previews, order and unread counts may all have moved.
+    onReconnect(socket, () => {
+      loadRooms();
+      loadActive();
+    });
     // "Asha is typing…" in the conversation list, not just inside the chat.
     socket.on('chat:typing', ({ userId, name, roomId }: { userId: string; name: string; roomId?: string | null }) => {
       if (userId === me.id) return;
@@ -3023,7 +3147,7 @@ function ChatScreen() {
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-accent"
+      className="rounded-md p-1 text-slate-500 hover:bg-white hover:text-accent"
     >
       <Plus className="h-3.5 w-3.5" />
     </button>
@@ -3032,11 +3156,11 @@ function ChatScreen() {
   const section = (label: string, list: Room[], emptyText: string, action?: React.ReactNode) => (
     <div className="mt-4 first:mt-0">
       <div className="flex h-6 items-center justify-between px-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
         {action}
       </div>
       {list.length === 0 ? (
-        <p className="px-2.5 py-1.5 text-xs text-slate-400">{emptyText}</p>
+        <p className="px-2.5 py-1.5 text-xs text-slate-500">{emptyText}</p>
       ) : (
         <div className="space-y-0.5">
           {list.map((r) => (
@@ -3075,7 +3199,7 @@ function ChatScreen() {
                 onClick={() => setStorageOpen(true)}
                 title="Chat file storage"
                 aria-label="Chat file storage"
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-600"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-white hover:text-slate-600"
               >
                 <HardDrive className="h-4 w-4" />
               </button>
@@ -3086,7 +3210,7 @@ function ChatScreen() {
                 title="Sounds and pop-ups"
                 aria-label="Sounds and pop-ups"
                 aria-expanded={alertsOpen}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-600"
+                className="rounded-lg p-1.5 text-slate-500 hover:bg-white hover:text-slate-600"
               >
                 <Settings2 className="h-4 w-4" />
               </button>
@@ -3108,7 +3232,7 @@ function ChatScreen() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Search chats and messages"
-              className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
+              className="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-500 focus:outline-none"
             />
           </label>
         </div>
@@ -3116,10 +3240,10 @@ function ChatScreen() {
           {hits !== null ? (
             <div className="mb-4">
               <div className="flex h-6 items-center px-2.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Messages</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Messages</span>
               </div>
               {hits.length === 0 ? (
-                <p className="px-2.5 py-1.5 text-xs text-slate-400">No messages match.</p>
+                <p className="px-2.5 py-1.5 text-xs text-slate-500">No messages match.</p>
               ) : (
                 <div className="space-y-0.5">
                   {hits.map((h) => (
@@ -3131,9 +3255,9 @@ function ChatScreen() {
                       <span className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-xs font-semibold text-slate-700">
                           {h.author?.id === me.id ? 'You' : (h.author?.name ?? 'Someone')}
-                          <span className="font-normal text-slate-400"> in {h.roomName}</span>
+                          <span className="font-normal text-slate-500"> in {h.roomName}</span>
                         </span>
-                        <span className="shrink-0 text-[11px] text-slate-400">{listTime(h.createdAt)}</span>
+                        <span className="shrink-0 text-[11px] text-slate-500">{listTime(h.createdAt)}</span>
                       </span>
                       <span className="mt-0.5 line-clamp-2 text-xs text-slate-500">
                         <Highlight text={plainText(h.body) || h.fileNames.join(', ')} term={query} />

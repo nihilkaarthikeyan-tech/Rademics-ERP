@@ -63,14 +63,14 @@ export default function LeavePage() {
       {canRequest ? (
         <div className="mt-8">
           {isApprover ? (
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">My leave</h2>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">My leave</h2>
           ) : null}
           <MyLeave />
         </div>
       ) : null}
 
       <div className="mt-8">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Team calendar</h2>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Team calendar</h2>
         <TeamCalendar />
       </div>
     </div>

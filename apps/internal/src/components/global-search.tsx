@@ -70,16 +70,29 @@ export function GlobalSearch() {
   useEffect(() => {
     if (term.length < 2) {
       setResults(EMPTY);
+      setLoading(false);
       return;
     }
     setLoading(true);
+    // Once the text changes this reply is out of date: a slow answer for "ra"
+    // must not land on top of the results for "rahul".
+    let stale = false;
     const t = setTimeout(() => {
       apiFetch<SearchResults>(`/search?q=${encodeURIComponent(q.trim())}`)
-        .then((r) => setResults({ ...EMPTY, ...r }))
-        .catch(() => setResults(EMPTY))
-        .finally(() => setLoading(false));
+        .then((r) => {
+          if (!stale) setResults({ ...EMPTY, ...r });
+        })
+        .catch(() => {
+          if (!stale) setResults(EMPTY);
+        })
+        .finally(() => {
+          if (!stale) setLoading(false);
+        });
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
   }, [q, term]);
 
   useEffect(() => {
@@ -182,7 +195,7 @@ export function GlobalSearch() {
           className="w-full bg-transparent text-slate-800 outline-none placeholder:text-slate-500"
         />
         {q ? (
-          <button onClick={() => setQ('')} aria-label="Clear search" className="shrink-0 text-slate-400 hover:text-slate-600">
+          <button onClick={() => setQ('')} aria-label="Clear search" className="shrink-0 text-slate-500 hover:text-slate-600">
             <X className="h-3.5 w-3.5" />
           </button>
         ) : (
@@ -193,9 +206,11 @@ export function GlobalSearch() {
       </div>
 
       {showPanel ? (
-        <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-[28rem] overflow-y-auto rounded-lg border border-slate-200 bg-white text-slate-900 shadow-lg">
+        // On a phone the search box is only a sliver of the app bar, so the panel
+        // spans the screen just below the bar (h-14) instead of the box's width.
+        <div className="fixed inset-x-2 top-14 z-30 mt-2 max-h-[28rem] overflow-y-auto sm:absolute sm:inset-x-auto sm:left-0 sm:right-0 sm:top-full rounded-lg border border-slate-200 bg-white text-slate-900 shadow-lg">
           {nothing ? (
-            <div className="p-4 text-center text-sm text-slate-400">
+            <div className="p-4 text-center text-sm text-slate-500">
               {term.length < 2 ? 'Keep typing…' : <>No matches for &ldquo;{q}&rdquo;.</>}
             </div>
           ) : (
@@ -233,7 +248,7 @@ export function GlobalSearch() {
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate font-medium text-slate-700">{p.name}</span>
-                          <span className="block truncate text-xs text-slate-400">
+                          <span className="block truncate text-xs text-slate-500">
                             {ROLE_LABELS[p.role] ?? p.role} · {p.online ? 'Online now' : 'Offline'}
                             {p.email ? ` · ${p.email}` : ''}
                           </span>
@@ -244,7 +259,7 @@ export function GlobalSearch() {
                           onClick={() => go(`/chat?dm=${p.id}`)}
                           title={`Message ${p.name}`}
                           aria-label={`Message ${p.name}`}
-                          className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-accent-soft hover:text-accent"
+                          className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-accent-soft hover:text-accent"
                         >
                           <MessageSquare className="h-4 w-4" />
                         </button>
@@ -298,7 +313,7 @@ export function GlobalSearch() {
                 </ResultGroup>
               ) : null}
 
-              {serverPending ? <div className="px-3.5 py-2.5 text-xs text-slate-400">Searching…</div> : null}
+              {serverPending ? <div className="px-3.5 py-2.5 text-xs text-slate-500">Searching…</div> : null}
             </div>
           )}
         </div>
@@ -310,7 +325,7 @@ export function GlobalSearch() {
 function ResultGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="py-1.5">
-      <div className="px-3.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="px-3.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
       {children}
     </div>
   );
@@ -337,7 +352,7 @@ function ResultRow({
       {icon}
       <div className="min-w-0">
         <div className="truncate font-medium text-slate-700">{title}</div>
-        {subtitle ? <div className="truncate text-xs text-slate-400">{subtitle}</div> : null}
+        {subtitle ? <div className="truncate text-xs text-slate-500">{subtitle}</div> : null}
       </div>
     </button>
   );

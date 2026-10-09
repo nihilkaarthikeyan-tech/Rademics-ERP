@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell } from 'lucide-react';
+import { Bell, Trash2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { connectPresence } from '@/lib/socket';
+import { connectPresence, onReconnect } from '@/lib/socket';
 
 interface Notification {
   id: string;
@@ -24,6 +24,8 @@ export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {})
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
+  // "Clear all" asks first: it deletes every notification and cannot be undone.
+  const [confirmClear, setConfirmClear] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -50,10 +52,12 @@ export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {})
       setItems((prev) => [{ ...n, readAt: null }, ...prev].slice(0, 100));
       setUnread((u) => u + 1);
     });
+    // Back after a drop: pick up anything that arrived while we were offline.
+    onReconnect(socket, () => void load());
     return () => {
       socket.close();
     };
-  }, []);
+  }, [load]);
 
   // Close on outside click.
   useEffect(() => {
@@ -63,6 +67,21 @@ export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {})
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
+
+  /** Delete one notification (yours only — the API checks that too). */
+  async function removeOne(n: Notification) {
+    setItems((prev) => prev.filter((x) => x.id !== n.id));
+    if (!n.readAt) setUnread((u) => Math.max(0, u - 1));
+    await apiFetch(`/notifications/${n.id}`, { method: 'DELETE' }).catch(() => void load());
+  }
+
+  /** Empty the inbox. */
+  async function clearAll() {
+    setConfirmClear(false);
+    setItems([]);
+    setUnread(0);
+    await apiFetch('/notifications', { method: 'DELETE' }).catch(() => void load());
+  }
 
   async function markAllRead() {
     await apiFetch('/notifications/read-all', { method: 'POST', body: '{}' }).catch(() => undefined);
@@ -92,7 +111,8 @@ export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {})
       }
     } else if (n.entityType === 'Announcement') {
       setOpen(false);
-      router.push('/notices');
+      // The notices page scrolls to and highlights the one named in ?notice=.
+      router.push(n.entityId ? `/notices?notice=${n.entityId}` : '/notices');
     } else if (n.entityType === 'ChatMessage' && n.entityId) {
       setOpen(false);
       try {
@@ -108,7 +128,10 @@ export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {})
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setOpen((o) => !o);
+          setConfirmClear(false);
+        }}
         className={`relative rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 ${
           onDark ? 'text-white/85 hover:bg-white/10 hover:text-white focus-visible:ring-white/70' : 'text-slate-500 hover:text-slate-700 focus-visible:ring-accent'
         }`}
@@ -128,17 +151,46 @@ export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {})
 
       {open ? (
         <div className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white shadow-glass">
-          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-            <span className="text-sm font-semibold text-slate-700">Notifications</span>
-            {unread > 0 ? (
-              <button onClick={markAllRead} className="text-xs text-accent hover:underline">
-                Mark all read
-              </button>
-            ) : null}
-          </div>
+          {confirmClear ? (
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2" role="alert">
+              <span className="text-sm font-medium text-slate-700">Delete all notifications?</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setConfirmClear(false)}
+                  // Focus lands on the safe choice, so a stray Enter keeps everything.
+                  autoFocus
+                  className="rounded text-xs text-slate-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => void clearAll()}
+                  className="rounded text-xs font-semibold text-danger hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+              <span className="text-sm font-semibold text-slate-700">Notifications</span>
+              <div className="flex items-center gap-3">
+                {unread > 0 ? (
+                  <button onClick={markAllRead} className="text-xs text-accent hover:underline">
+                    Mark all read
+                  </button>
+                ) : null}
+                {items.length > 0 ? (
+                  <button onClick={() => setConfirmClear(true)} className="text-xs text-slate-500 hover:text-danger hover:underline">
+                    Clear all
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )}
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-slate-400">You&apos;re all caught up.</p>
+              <p className="px-3 py-6 text-center text-sm text-slate-500">You&apos;re all caught up.</p>
             ) : (
               <ul className="divide-y divide-slate-50">
                 {items.map((n) => {
@@ -146,7 +198,15 @@ export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {})
                     Boolean(n.entityId) &&
                     (n.entityType === 'Task' || n.entityType === 'Announcement' || n.entityType === 'ChatMessage');
                   return (
-                    <li key={n.id}>
+                    <li key={n.id} className="group relative">
+                      <button
+                        onClick={() => void removeOne(n)}
+                        title="Delete this notification"
+                        aria-label={`Delete notification: ${n.title}`}
+                        className="absolute right-2 top-2 z-10 rounded-md p-1 text-slate-500 opacity-100 hover:bg-white hover:text-danger focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         onClick={() => void openNotification(n)}
                         disabled={!clickable && Boolean(n.readAt)}
@@ -154,14 +214,14 @@ export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {})
                           clickable ? 'cursor-pointer hover:bg-accent-soft/60' : 'cursor-default'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start justify-between gap-2 pr-6">
                           <span className="text-sm font-medium text-slate-700">{n.title}</span>
                           {!n.readAt ? (
                             <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-label="Unread" />
                           ) : null}
                         </div>
                         {n.body ? <div className="text-xs text-slate-500">{n.body}</div> : null}
-                        <div className="mt-0.5 flex items-center justify-between text-[11px] text-slate-400">
+                        <div className="mt-0.5 flex items-center justify-between text-[11px] text-slate-500">
                           <span>{new Date(n.createdAt).toLocaleString()}</span>
                           {clickable ? (
                             <span className="text-accent">

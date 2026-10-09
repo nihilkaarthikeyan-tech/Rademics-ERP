@@ -20,6 +20,9 @@ import { CapabilityService } from '../rbac/capability.service';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PresenceService } from '../attendance/presence.service';
+import { AttendanceService } from '../attendance/attendance.service';
+import { AttendanceComputeService } from '../attendance/attendance-compute.service';
+import { businessDateKey } from '../attendance/attendance-rules';
 import {
   countWorkingDays,
   dateKey,
@@ -28,9 +31,11 @@ import {
   splitPaidUnpaid,
   toLeaveConfig,
   type LeaveConfig,
+  eachDate,
 } from './leave-rules';
 import type { CreateHolidayDto, CreateLeaveDto, DecideLeaveDto, LeaveCalendarQuery } from './dto';
 import type { AuthUser } from '../auth/auth-user';
+import { assertPayrollOpen } from '../common/payroll-lock';
 
 interface Meta {
   ip?: string | null;
@@ -56,6 +61,8 @@ export class LeaveService {
     private readonly settings: SettingsService,
     private readonly notifications: NotificationsService,
     private readonly presence: PresenceService,
+    private readonly attendance: AttendanceService,
+    private readonly attendanceCompute: AttendanceComputeService,
   ) {}
 
   /**
@@ -159,7 +166,7 @@ export class LeaveService {
 
     const config = await this.getConfig();
     const holidays = await this.holidayKeys(from, to);
-    const totalDays = countWorkingDays(from, to, half, config.workingDays, holidays);
+    const totalDays = countWorkingDays(from, to, half, config.workingDays, holidays, config.secondSaturdayOff);
     if (totalDays <= 0) {
       throw new BadRequestException('The selected dates contain no working days');
     }
@@ -266,6 +273,7 @@ export class LeaveService {
     if (!req) throw new NotFoundException('Leave request not found');
     if (req.status !== 'PENDING') throw new ConflictException('This request was already actioned');
     await this.assertCanApprove(caller, req);
+    if (approve) await assertPayrollOpen(this.prisma, req.fromDate, req.toDate);
 
     // Re-split against the CURRENT balance at approval time (§24 balance check at approval).
     let paidDays = Number(req.paidDays);
@@ -317,8 +325,31 @@ export class LeaveService {
       entityId: req.id,
     });
 
+    if (approve) await this.remarkPastDays(req.userId, req.fromDate, req.toDate);
+
     this.announce();
     return this.prisma.leaveRequest.findUnique({ where: { id } });
+  }
+
+  /**
+   * Leave approved after the day already passed: those days were marked ABSENT
+   * by the nightly run, so work them out again now (they become ON_LEAVE) and
+   * redo that month's late-mark deductions. Future days need nothing — the
+   * nightly run will see the approved leave when their turn comes.
+   */
+  private async remarkPastDays(userId: string, from: Date, to: Date): Promise<void> {
+    const rules = await this.attendance.getRules();
+    const today = businessDateKey(new Date(), rules.timezone);
+    const monthDay = new Map<string, string>(); // 'YYYY-MM' → any day in it
+    for (const d of eachDate(from, to)) {
+      const key = dateKey(d);
+      if (key >= today) break;
+      await this.attendanceCompute.computeDay(userId, key, rules);
+      monthDay.set(key.slice(0, 7), key);
+    }
+    for (const key of monthDay.values()) {
+      await this.attendanceCompute.recomputeLateDeductions(userId, key, rules);
+    }
   }
 
   /**
@@ -512,7 +543,14 @@ export class LeaveService {
 
     for (const req of affected) {
       const holidays = await this.holidayKeys(req.fromDate, req.toDate);
-      const newTotal = countWorkingDays(req.fromDate, req.toDate, req.half as never, config.workingDays, holidays);
+      const newTotal = countWorkingDays(
+        req.fromDate,
+        req.toDate,
+        req.half as never,
+        config.workingDays,
+        holidays,
+        config.secondSaturdayOff,
+      );
       const oldPaid = Number(req.paidDays);
       // Refund only the paid portion that shrank.
       const newPaid = Math.max(0, Math.min(oldPaid, newTotal - Number(req.unpaidDays)));

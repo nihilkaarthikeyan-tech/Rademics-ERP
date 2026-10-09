@@ -109,10 +109,10 @@ export class StorageService implements OnModuleInit {
   }
 
   /** null only when the object genuinely isn't there; any other failure throws. */
-  async stat(key: string): Promise<{ size: number } | null> {
+  async stat(key: string): Promise<{ size: number; etag: string } | null> {
     try {
       const s = await this.client.statObject(this.bucket, key);
-      return { size: s.size };
+      return { size: s.size, etag: s.etag };
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === 'NotFound' || code === 'NoSuchKey') return null;

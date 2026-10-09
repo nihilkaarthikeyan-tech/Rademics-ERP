@@ -101,7 +101,7 @@ export default function ProjectsPage() {
                       <h3 className="font-semibold text-slate-800">{p.name}</h3>
                       <Badge tone={STATUS_TONE[p.status] ?? 'slate'}>{p.status}</Badge>
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                    <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
                       <span className="font-mono">{formatProjectCode(p.number)}</span>
                       <span>·</span>
                       {p.pm ? <span>Manager: {p.pm.name}</span> : <span>No manager yet</span>}
@@ -193,12 +193,12 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
               </div>
               <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-xs uppercase tracking-wide text-slate-400">Project number</span>
+                  <span className="text-xs uppercase tracking-wide text-slate-500">Project number</span>
                   <span className="font-mono text-base font-semibold text-slate-800">{created.code}</span>
                 </div>
                 {created.clientCode ? (
                   <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-2">
-                    <span className="text-xs uppercase tracking-wide text-slate-400">Client ID</span>
+                    <span className="text-xs uppercase tracking-wide text-slate-500">Client ID</span>
                     <span className="font-mono text-base font-semibold text-accent">{created.clientCode}</span>
                   </div>
                 ) : null}
@@ -242,7 +242,7 @@ function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </div>
             <div>
               <Label htmlFor="p-pm">
-                Project manager <span className="font-normal text-slate-400">(optional)</span>
+                Project manager <span className="font-normal text-slate-500">(optional)</span>
               </Label>
               <select
                 id="p-pm"

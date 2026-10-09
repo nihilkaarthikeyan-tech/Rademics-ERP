@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
-import { connectPresence } from '@/lib/socket';
+import { connectPresence, onReconnect } from '@/lib/socket';
 
 interface Person {
   id: string;
@@ -43,6 +43,8 @@ export function OnlineNow() {
     load();
     const socket = connectPresence();
     socket.on('presence:update', load);
+    // Check-ins and check-outs missed while offline.
+    onReconnect(socket, load);
     return () => {
       socket.close();
     };
@@ -61,7 +63,7 @@ export function OnlineNow() {
       </div>
 
       {people === null ? (
-        <p className="mt-4 text-sm text-slate-400">Loading…</p>
+        <p className="mt-4 text-sm text-slate-500">Loading…</p>
       ) : list.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">Nobody is checked in right now.</p>
       ) : (

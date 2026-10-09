@@ -66,7 +66,7 @@ export default function ReportsPage() {
       {/* Capacity strip (§5.9) */}
       <Card className="mt-4">
         <CardContent className="pt-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Team capacity</h2>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Team capacity</h2>
           {capacity === null ? (
             <LoadingState />
           ) : capacity.length === 0 ? (
@@ -77,7 +77,7 @@ export default function ReportsPage() {
                 <div key={String(c.userId)} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-1.5 text-sm">
                   <Badge tone={AVAIL_TONE[String(c.availability)] ?? 'slate'}>{String(c.availability)}</Badge>
                   <span className="text-slate-700">{String(c.name)}</span>
-                  <span className="text-xs text-slate-400">{String(c.openTasks)} open · {String(c.loadHours)}h / {String(c.weeklyCapacity)}h</span>
+                  <span className="text-xs text-slate-500">{String(c.openTasks)} open · {String(c.loadHours)}h / {String(c.weeklyCapacity)}h</span>
                 </div>
               ))}
             </div>

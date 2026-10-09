@@ -99,7 +99,7 @@ export default function MyClientsPage() {
                         href={`/projects/${p.id}`}
                         className="rounded border border-slate-200 px-1.5 py-0.5 hover:bg-slate-50"
                       >
-                        <span className="font-mono text-slate-400">{p.code}</span>{' '}
+                        <span className="font-mono text-slate-500">{p.code}</span>{' '}
                         <span className="text-slate-700">{p.name}</span>
                       </Link>
                     ))}

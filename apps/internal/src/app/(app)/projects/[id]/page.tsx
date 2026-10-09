@@ -208,7 +208,7 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
           <div className="flex flex-wrap items-center gap-2">
             {/* Both codes needed to create the client's account live here, together,
                 because this page is where anyone comes looking for them. */}
-            <span className="font-mono text-sm text-slate-400">{formatProjectCode(project.number)}</span>
+            <span className="font-mono text-sm text-slate-500">{formatProjectCode(project.number)}</span>
             {project.clientOrg?.code ? (
               <span className="font-mono text-sm font-medium text-accent">{project.clientOrg.code}</span>
             ) : null}
@@ -335,7 +335,7 @@ function ProjectDetail_({ params }: { params: Promise<{ id: string }> }) {
           <option value="MEDIUM">Medium</option>
           <option value="LOW">Low</option>
         </select>
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-slate-500">
           {filtered.length} task{filtered.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -424,10 +424,10 @@ function TaskCard({ task, onOpen }: { task: TaskRow; onOpen: (id: string) => voi
             <span className="truncate">{task.assignee.name}</span>
           </>
         ) : (
-          <span className="italic text-slate-400">Unassigned</span>
+          <span className="italic text-slate-500">Unassigned</span>
         )}
         {task.deadline ? (
-          <span className={`ml-auto shrink-0 ${task.overdue ? 'font-medium text-rose-500' : 'text-slate-400'}`}>
+          <span className={`ml-auto shrink-0 ${task.overdue ? 'font-medium text-rose-500' : 'text-slate-500'}`}>
             {new Date(task.deadline).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
           </span>
         ) : null}
@@ -473,7 +473,7 @@ function BoardView({ tasks, onOpen }: { tasks: TaskRow[]; onOpen: (id: string) =
               </span>
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-                  colTasks.length > 0 ? 'bg-slate-50 text-slate-600' : 'text-slate-300'
+                  colTasks.length > 0 ? 'bg-slate-50 text-slate-600' : 'text-slate-500'
                 }`}
               >
                 {colTasks.length}
@@ -481,7 +481,7 @@ function BoardView({ tasks, onOpen }: { tasks: TaskRow[]; onOpen: (id: string) =
             </div>
             <div className="flex min-h-24 flex-1 flex-col gap-2 p-2">
               {colTasks.length === 0 ? (
-                <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200/80 py-4 text-[11px] text-slate-300">
+                <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200/80 py-4 text-[11px] text-slate-500">
                   Nothing here
                 </div>
               ) : (
@@ -643,7 +643,7 @@ function NewTaskModal({
               />
             </div>
             <div>
-              <Label htmlFor="t-desc">Details <span className="font-normal text-slate-400">(optional)</span></Label>
+              <Label htmlFor="t-desc">Details <span className="font-normal text-slate-500">(optional)</span></Label>
               <textarea
                 id="t-desc"
                 rows={3}
@@ -715,7 +715,7 @@ function NewTaskModal({
                 {showMore ? (
                   <div>
                     <Label htmlFor="t-est">
-                      Estimate <span className="font-normal text-slate-400">(hours)</span>
+                      Estimate <span className="font-normal text-slate-500">(hours)</span>
                     </Label>
                     <Input id="t-est" type="number" step="0.25" min="0.25" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
                   </div>

@@ -77,20 +77,20 @@ export function AttendanceCard() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex gap-6">
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-slate-400">Worked today</div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Worked today</div>
                   <div className="text-2xl font-semibold tabular-nums text-slate-800">
                     {fmtDuration(liveWorked)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-slate-400">Idle</div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Idle</div>
                   <div className="text-2xl font-semibold tabular-nums text-slate-500">
                     {fmtDuration(status?.idleSeconds ?? 0)}
                   </div>
                 </div>
                 {status?.overtimeSeconds ? (
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-slate-400">Overtime</div>
+                    <div className="text-xs uppercase tracking-wide text-slate-500">Overtime</div>
                     <div className="text-2xl font-semibold tabular-nums text-amber-600">
                       {fmtDuration(status.overtimeSeconds)}
                     </div>

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailProducer } from '../queue/email.producer';
 import { PresenceService } from '../attendance/presence.service';
+import { escapeHtml } from '../common/escape-html';
 
 export interface NotifyInput {
   userId: string;
@@ -90,7 +91,11 @@ export class NotificationsService {
         await this.email.enqueue({
           to: user.email,
           subject: input.title,
-          html: input.emailHtml ?? `<p>${input.title}</p>${input.body ? `<p>${input.body}</p>` : ''}`,
+          // Titles and bodies can carry names people typed (file names, task
+          // titles), so they're escaped: never markup or links in a company email.
+          html:
+            input.emailHtml ??
+            `<p>${escapeHtml(input.title)}</p>${input.body ? `<p>${escapeHtml(input.body)}</p>` : ''}`,
           text: input.body ?? input.title,
         });
       }
@@ -168,6 +173,20 @@ export class NotificationsService {
       data: { readAt: new Date() },
     });
     return { updated: res.count };
+  }
+
+  /** Delete one notification — only ever the caller's own (the where-clause is the check). */
+  async remove(userId: string, id: string): Promise<{ id: string; deleted: boolean }> {
+    const res = await this.prisma.notification.deleteMany({ where: { id, userId } });
+    return { id, deleted: res.count > 0 };
+  }
+
+  /** Clear the caller's inbox, or only the notifications they have already read. */
+  async clear(userId: string, readOnly: boolean): Promise<{ deleted: number }> {
+    const res = await this.prisma.notification.deleteMany({
+      where: { userId, ...(readOnly ? { readAt: { not: null } } : {}) },
+    });
+    return { deleted: res.count };
   }
 
   // ── Preferences (§5.12) ──

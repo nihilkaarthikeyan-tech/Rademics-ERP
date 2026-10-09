@@ -218,10 +218,10 @@ export function DashboardOverview() {
                 Project completion
               </h3>
             </div>
-            <span className="text-xs text-slate-400">% of tasks done</span>
+            <span className="text-xs text-slate-500">% of tasks done</span>
           </div>
           {topProjects.length === 0 ? (
-            <p className="py-6 text-sm text-slate-400">No projects yet.</p>
+            <p className="py-6 text-sm text-slate-500">No projects yet.</p>
           ) : (
             <div className="flex flex-col gap-3">
               {topProjects.map((p) => (
@@ -272,12 +272,12 @@ export function DashboardOverview() {
               </div>
               <h3 className="mt-1 text-[15px] font-bold tracking-tight text-slate-900">Projects</h3>
             </div>
-            <span className="text-xs text-slate-400">{projects.length} total</span>
+            <span className="text-xs text-slate-500">{projects.length} total</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-t border-slate-200 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-slate-400">
+                <tr className="border-t border-slate-200 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-slate-500">
                   <th className="px-6 py-2.5 font-semibold">Project</th>
                   <th className="px-6 py-2.5 font-semibold">Client</th>
                   <th className="px-6 py-2.5 font-semibold">Manager</th>
@@ -386,7 +386,7 @@ function Kpi({
           />
         </div>
       ) : null}
-      <div className="mt-2 text-xs text-slate-400">{sub}</div>
+      <div className="mt-2 text-xs text-slate-500">{sub}</div>
       {chip ? (
         <span
           className={`mt-3 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
@@ -472,7 +472,7 @@ function AvailabilityDonut({
         <div className="absolute inset-0 grid place-items-center text-center">
           <div>
             <div className="text-2xl font-bold tabular-nums text-slate-900">{total}</div>
-            <div className="text-[10px] text-slate-400">people</div>
+            <div className="text-[10px] text-slate-500">people</div>
           </div>
         </div>
       </div>

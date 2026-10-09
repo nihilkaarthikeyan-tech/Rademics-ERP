@@ -66,7 +66,7 @@ export default function AttendancePage() {
       {hasSelf ? (
         <div className="mt-8">
           {isManager ? (
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
               My attendance
             </h2>
           ) : null}

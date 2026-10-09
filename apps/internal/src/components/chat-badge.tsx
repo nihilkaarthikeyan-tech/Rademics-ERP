@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
-import { connectPresence } from '@/lib/socket';
+import { connectPresence, onReconnect } from '@/lib/socket';
 
 /**
  * Unread pill on the "Chat" nav item. Hidden while the room itself is open —
@@ -30,6 +30,8 @@ export function ChatBadge() {
     const socket = connectPresence();
     // Small delay so the chat page's mark-read wins when the room is open.
     socket.on('chat:message', () => setTimeout(() => void load(), 600));
+    // Messages that arrived while the socket was down never fired the event above.
+    onReconnect(socket, () => void load());
     return () => {
       socket.close();
     };

@@ -29,6 +29,8 @@ import { QUEUE_ATTENDANCE } from './attendance.constants';
     PresenceService,
     PresenceGateway,
   ],
-  exports: [AttendanceService, PresenceService], // PresenceService reused for real-time notifications (§5.12)
+  // PresenceService reused for real-time notifications (§5.12); the compute service
+  // lets leave approval re-mark past days that were already counted as absent.
+  exports: [AttendanceService, AttendanceComputeService, PresenceService],
 })
 export class AttendanceModule {}

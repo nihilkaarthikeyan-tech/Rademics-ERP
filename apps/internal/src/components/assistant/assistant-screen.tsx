@@ -166,7 +166,7 @@ export function AssistantScreen() {
                       only the records it drew on are shown. */}
                   {t.role === 'assistant' && t.citations?.length ? (
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {t.citations.map((c, j) => <span key={j} className="text-[11px] text-slate-400">· {c}</span>)}
+                      {t.citations.map((c, j) => <span key={j} className="text-[11px] text-slate-500">· {c}</span>)}
                     </div>
                   ) : null}
                 </div>
@@ -209,7 +209,7 @@ export function AssistantScreen() {
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask a question…" disabled={busy} />
             <Button type="submit" disabled={busy || !q.trim()}>{busy ? '…' : 'Ask'}</Button>
           </form>
-          <p className="text-[11px] text-slate-400">Read-only. Answers are scoped to your access and cite the records used.</p>
+          <p className="text-[11px] text-slate-500">Read-only. Answers are scoped to your access and cite the records used.</p>
         </CardContent>
       </Card>
     </div>

@@ -10,6 +10,7 @@ import {
   type AttendanceRules,
   type SessionInput,
 } from './attendance-rules';
+import { isPayrollLocked } from '../common/payroll-lock';
 
 /**
  * Nightly rule computation + auto-close (Spec §5.3, §4). Runs off the queue so it
@@ -79,6 +80,8 @@ export class AttendanceComputeService {
     rules: AttendanceRules,
     holidayKeys?: ReadonlySet<string>,
   ): Promise<void> {
+    // A locked payroll month keeps the figures that were paid on.
+    if (await isPayrollLocked(this.prisma, new Date(dateKey))) return;
     const sessions = await this.sessionsForDate(userId, dateKey, rules);
     const weekday = weekdayOfLocalDate(dateKey, rules.timezone);
     // Fetched per-call only when the caller has not already done it for a batch.
@@ -155,6 +158,33 @@ export class AttendanceComputeService {
         where: { userId: row.userId, date: new Date(dateKey), isLate: true },
         data: { lateDeductionApplied: applies },
       });
+    }
+  }
+
+  /**
+   * Re-derive one person's "3 lates = half-day" marks for the whole month a date
+   * falls in. The nightly rule only ever marks the newest day, so when a
+   * correction (or a late leave approval) later removes a late mark, the
+   * deduction on that month must be worked out again or payroll keeps it.
+   */
+  async recomputeLateDeductions(userId: string, dateKey: string, rules: AttendanceRules): Promise<void> {
+    if (await isPayrollLocked(this.prisma, new Date(dateKey))) return;
+    const monthStart = new Date(`${dateKey.slice(0, 7)}-01`);
+    const nextMonth = new Date(monthStart);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    const days = await this.prisma.attendanceDay.findMany({
+      where: { userId, date: { gte: monthStart, lt: nextMonth } },
+      select: { id: true, isLate: true, lateDeductionApplied: true },
+      orderBy: { date: 'asc' },
+    });
+    const threshold = rules.threeLatesDeduction.lateCount;
+    let lates = 0;
+    for (const d of days) {
+      if (d.isLate) lates++;
+      const applies = d.isLate && threshold > 0 && lates % threshold === 0;
+      if (applies !== d.lateDeductionApplied) {
+        await this.prisma.attendanceDay.update({ where: { id: d.id }, data: { lateDeductionApplied: applies } });
+      }
     }
   }
 

@@ -262,7 +262,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             aria-label={panelEntry.section.label}
             className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-slate-200 bg-white px-3 py-4 md:flex"
           >
-            <h2 className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <h2 className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               {panelEntry.section.label}
             </h2>
             {panelEntry.items.map((item) => {
@@ -297,7 +297,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="flex h-14 items-center justify-between border-b border-slate-200 px-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/rademics-logo.png" alt="Rademics" width={68} height={48} className="h-12 w-auto" />
-                <button onClick={() => setNavOpen(false)} aria-label="Close menu" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                <button onClick={() => setNavOpen(false)} aria-label="Close menu" className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -305,7 +305,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {rail.map(({ section, items }) => (
                   <div key={section.label}>
                     {items.length > 1 ? (
-                      <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{section.label}</div>
+                      <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{section.label}</div>
                     ) : null}
                     {items.map((item) => {
                       const active = isActiveHref(pathname, item.href);

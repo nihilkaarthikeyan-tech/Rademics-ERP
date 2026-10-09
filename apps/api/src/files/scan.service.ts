@@ -38,7 +38,10 @@ export class ScanService {
     await this.prisma.fileVersion.update({ where: { id: versionId }, data: { scanStatus: 'SCANNING' } });
 
     let result;
+    let scannedEtag: string | null = null;
     try {
+      // Note which object is being scanned, so it's the one that gets marked clean.
+      scannedEtag = (await this.storage.stat(version.storageKey))?.etag ?? null;
       const stream = await this.storage.getObjectStream(version.storageKey);
       result = await this.clamav.scanStream(stream);
     } catch (err) {
@@ -49,7 +52,16 @@ export class ScanService {
     }
 
     if (result.clean) {
-      await this.prisma.fileVersion.update({ where: { id: versionId }, data: { scanStatus: 'AVAILABLE', scanDetail: null } });
+      // Replaced while it was being scanned: scan again rather than vouch for bytes we never read.
+      const after = (await this.storage.stat(version.storageKey))?.etag ?? null;
+      if (!scannedEtag || after !== scannedEtag) {
+        await this.prisma.fileVersion.update({ where: { id: versionId }, data: { scanStatus: 'ERROR' } });
+        throw new Error(`File ${versionId} changed during its virus scan`);
+      }
+      await this.prisma.fileVersion.update({
+        where: { id: versionId },
+        data: { scanStatus: 'AVAILABLE', scanDetail: null, scannedEtag },
+      });
       return;
     }
 

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { useMe } from '@/lib/me-context';
-import { connectPresence } from '@/lib/socket';
+import { connectPresence, onReconnect } from '@/lib/socket';
 import { MUTE_EVENT, isViewing, plainText, playChime, popupsEnabled, soundEnabled } from '@/lib/chat-alerts';
 
 interface RoomInfo {
@@ -109,6 +109,11 @@ export function ChatNotifier() {
     });
     socket.on('chat:messageDeleted', recount);
     socket.on('chat:roomsChanged', () => void loadRooms());
+    // Back after a drop: the count and room list may have moved while offline.
+    onReconnect(socket, () => {
+      void loadRooms();
+      void loadUnread();
+    });
 
     const onMuted = () => {
       void loadRooms();
