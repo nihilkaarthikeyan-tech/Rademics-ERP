@@ -1,11 +1,11 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, ipcMain, Menu, powerMonitor, session } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, Notification, powerMonitor, session } from 'electron';
 import { ApiClient } from './api-client';
 import { AuthStore } from './auth-store';
 import { IdleTracker } from './idle-tracker';
 import { OfflineQueue } from './offline-queue';
 import { StatusPoller } from './status-poller';
-import { existsSync, unlinkSync } from 'node:fs';
+import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { registerShutdownHandler, shutdownMarkerPath } from './shutdown-handler';
 import { createTray } from './tray';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -15,6 +15,8 @@ import { ChatWatcher } from './chat-watcher';
 import { ChatWindow } from './chat-window';
 import { unreadBadge } from './badge';
 import { IpcChannel } from '../shared/ipc';
+import { openExternalIfAllowed } from './open-external';
+import { originOf } from './url-guard';
 
 // A packaged build (what employees install) talks to production by default; a dev
 // run (`pnpm dev`, unpackaged) talks to the local stack. Either can be overridden
@@ -32,6 +34,11 @@ const DESKTOP_APP_KEY = (process.env.RADEMICS_DESKTOP_KEY as string) || null;
 // local staff app.
 const PROD_WEB_URL = 'https://rademics.52digit.com';
 const WEB_URL = process.env.RADEMICS_WEB_URL ?? (app.isPackaged ? PROD_WEB_URL : 'http://localhost:3000');
+// The file-storage server chat attachments are served from — the only place the
+// chat window downloads files from. Dev runs use the local MinIO.
+const PROD_STORAGE_URL = 'https://storage.52digit.com';
+const STORAGE_URL =
+  process.env.RADEMICS_STORAGE_URL ?? (app.isPackaged ? PROD_STORAGE_URL : 'http://localhost:9000');
 
 // Windows only shows notifications from an app with an identity: the installer
 // registers the appId; an unpackaged dev run has to name itself.
@@ -94,15 +101,45 @@ if (!gotLock) {
     });
     mainWindow = win;
 
+    // The window only ever shows the app's own screens. A link that tries to open
+    // a new window goes to the normal browser (web and email links only), and the
+    // window itself never navigates away. The renderer's address is known once
+    // it is loaded below; until then nothing is let through.
+    let rendererOrigin: string | null = null;
+    win.webContents.setWindowOpenHandler(({ url: target }) => {
+      openExternalIfAllowed(target);
+      return { action: 'deny' };
+    });
+    win.webContents.on('will-navigate', (event, target) => {
+      if (rendererOrigin === null || originOf(target) !== rendererOrigin) {
+        event.preventDefault();
+        openExternalIfAllowed(target);
+      }
+    });
+
     const isQuitting = { value: false };
     win.on('close', (event) => {
       // Closing the window must NOT check the employee out — it keeps tracking
-      // in the background. It minimizes to the taskbar (not just the tray) so the
-      // unread-message badge stays in sight, the way WhatsApp's does. Only an
-      // explicit Quit or a real system shutdown (shutdown-handler.ts) ends the session.
+      // in the background, hidden to the tray (the tray icon carries the unread
+      // dot and count). Only an explicit Quit or a real system shutdown
+      // (shutdown-handler.ts) ends the session. 0.2.12 minimized to the taskbar
+      // instead, which read as "the app won't close", so this is back to hiding.
       if (!isQuitting.value) {
         event.preventDefault();
-        win.minimize();
+        win.hide();
+        // Say so once, so nobody thinks closing it stopped their attendance.
+        const hintFlag = join(app.getPath('userData'), 'tray-hint-shown');
+        if (!existsSync(hintFlag)) {
+          new Notification({
+            title: 'Rademics is still running',
+            body: 'Your attendance and chat keep working. Find the app in the tray by the clock; right-click it and choose Quit to close it fully.',
+          }).show();
+          try {
+            writeFileSync(hintFlag, new Date().toISOString());
+          } catch {
+            /* not critical: the note may simply show again next time */
+          }
+        }
       }
     });
     app.on('before-quit', () => {
@@ -111,7 +148,9 @@ if (!gotLock) {
 
     // Chat: a live feed that pops up Windows notifications, and a chat window.
     let watcher: ChatWatcher | null = null;
-    const chatWindow = new ChatWindow(WEB_URL, auth, () => void watcher?.refreshUnread());
+    const chatWindow = new ChatWindow(WEB_URL, auth, () => void watcher?.refreshUnread(), [
+      originOf(STORAGE_URL) ?? PROD_STORAGE_URL,
+    ]);
     const tray = createTray({ mainWindow: win, isQuitting, openChat: () => chatWindow.open() });
     watcher = new ChatWatcher(auth, API_BASE_URL.replace(/\/api\/?$/, ''), {
       isChatFocused: () => chatWindow.isFocused(),
@@ -137,12 +176,14 @@ if (!gotLock) {
 
     if (process.env.ELECTRON_RENDERER_URL) {
       // electron-vite dev server — already serves over http://localhost.
+      rendererOrigin = originOf(process.env.ELECTRON_RENDERER_URL);
       await win.loadURL(process.env.ELECTRON_RENDERER_URL);
     } else {
       // Packaged build: serve over http://localhost too (not file://), since
       // Cloudflare Turnstile needs a real hostname to validate against.
       const rendererDir = join(__dirname, '../renderer');
       const { url } = await startLocalServer(rendererDir);
+      rendererOrigin = originOf(url);
       await win.loadURL(url);
     }
 
