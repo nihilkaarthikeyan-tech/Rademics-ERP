@@ -43,7 +43,8 @@ export function AttendanceCard() {
       : (status?.workedSeconds ?? 0);
 
   return (
-    <Card className="sticky top-4 z-10">
+    // Fills its row on the dashboard so it lines up with "Online now" beside it.
+    <Card className="flex h-full flex-col">
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-slate-400" />
@@ -55,7 +56,7 @@ export function AttendanceCard() {
           <Badge tone="slate">Checked out</Badge>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-1 flex-col justify-center">
         {state === 'loading' ? (
           <div className="h-16 animate-pulse rounded bg-slate-100" />
         ) : state === 'error' ? (

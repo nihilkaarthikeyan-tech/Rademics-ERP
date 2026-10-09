@@ -42,7 +42,7 @@ export function OnlineNow() {
 
   const list = people ?? [];
   return (
-    <section className="glass-panel animate-rise p-5" aria-labelledby="online-now-title">
+    <section className="glass-panel animate-rise flex h-full flex-col p-5" aria-labelledby="online-now-title">
       <div className="flex items-center justify-between gap-3">
         <h2 id="online-now-title" className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
           <span className="h-2 w-2 rounded-full bg-success" aria-hidden />
@@ -56,9 +56,12 @@ export function OnlineNow() {
       ) : list.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">Nobody is checked in right now.</p>
       ) : (
-        <ul className="mt-4 grid max-h-64 gap-1 overflow-y-auto pr-1">
+        // The list scrolls inside the card, so the card keeps the height of the
+        // attendance card beside it however many people are online.
+        <div className="relative mt-3 min-h-[132px] flex-1">
+        <ul className="absolute inset-0 grid content-start gap-0.5 overflow-y-auto pr-1">
           {list.map((p) => (
-            <li key={p.id} className="flex items-center gap-3 rounded-md px-1.5 py-1.5">
+            <li key={p.id} className="flex items-center gap-3 rounded-md px-1.5 py-1">
               <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-semibold text-accent">
                 {initials(p.name)}
                 <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-success ring-2 ring-white" />
@@ -70,6 +73,7 @@ export function OnlineNow() {
             </li>
           ))}
         </ul>
+        </div>
       )}
       <Link href="/chat" className="mt-3 inline-block text-xs font-medium text-accent hover:underline">
         Message someone in Chat
