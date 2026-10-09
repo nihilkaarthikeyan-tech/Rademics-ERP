@@ -2847,6 +2847,8 @@ function ChatScreen() {
   const params = useSearchParams();
   const roomFromUrl = params.get('room');
   const messageFromUrl = params.get('message');
+  // /chat?dm=<userId> (Message from search): open, or start, a one-to-one with them.
+  const dmFromUrl = params.get('dm');
   const canManage = CAN_MODERATE.includes(me.role);
   const [rooms, setRooms] = useState<Room[] | null>(null);
   const [selectedId, setSelectedId] = useState<string>(COMPANY_ROOM_ID);
@@ -2893,6 +2895,18 @@ function ChatScreen() {
     setRooms((prev) => (prev ? prev.map((r) => (r.id === roomFromUrl ? { ...r, unread: 0 } : r)) : prev));
     if (messageFromUrl) setFocus((f) => ({ roomId: roomFromUrl, messageId: messageFromUrl, n: (f?.n ?? 0) + 1 }));
   }, [roomFromUrl, messageFromUrl]);
+
+  useEffect(() => {
+    if (!dmFromUrl || dmFromUrl === me.id) return;
+    apiFetch<{ id: string }>('/chat/direct', { method: 'POST', body: JSON.stringify({ userId: dmFromUrl }) })
+      .then((room) => {
+        selectedRef.current = room.id;
+        setSelectedId(room.id);
+        setMobileRoomOpen(true);
+        loadRooms();
+      })
+      .catch(() => undefined);
+  }, [dmFromUrl, me.id, loadRooms]);
 
   useEffect(() => {
     loadRooms();

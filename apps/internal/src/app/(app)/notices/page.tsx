@@ -69,6 +69,18 @@ export default function NoticesPage() {
     void load();
   }, [load]);
 
+  // Opened from search (/notices?notice=<id>): bring that notice into view and flash it.
+  const [flashId, setFlashId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notices) return;
+    const wanted = new URLSearchParams(window.location.search).get('notice');
+    if (!wanted || !notices.some((n) => n.id === wanted)) return;
+    requestAnimationFrame(() => document.getElementById(`notice-${wanted}`)?.scrollIntoView({ block: 'center' }));
+    setFlashId(wanted);
+    const t = setTimeout(() => setFlashId(null), 2500);
+    return () => clearTimeout(t);
+  }, [notices]);
+
   // Live: a page left open all day must show a new notice without a manual
   // reload — the same socket chat already uses, just its own event names.
   // Posting/removing calls load() itself too; the socket echo just re-runs
@@ -249,9 +261,10 @@ export default function NoticesPage() {
           return (
             <article
               key={n.id}
-              className={`rounded-xl border p-4 shadow-glass ${
+              id={`notice-${n.id}`}
+              className={`rounded-xl border p-4 shadow-glass transition-shadow duration-700 ${
                 needsMyAck ? 'border-warning/40 bg-warning-soft/60' : 'border-slate-200 bg-white'
-              }`}
+              } ${flashId === n.id ? 'ring-2 ring-accent/50' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-2.5">

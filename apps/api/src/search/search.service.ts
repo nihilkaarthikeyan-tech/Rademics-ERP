@@ -10,7 +10,13 @@ const TAKE = 6;
 export interface SearchResults {
   tasks: { id: string; title: string; projectId: string; projectName: string; status: string }[];
   projects: { id: string; name: string }[];
-  people: { id: string; name: string; email: string; role: string }[];
+  /**
+   * Every staff member can find a colleague (name, role, online). `email` is only
+   * included for callers who may see the staff directory; nobody else gets it.
+   */
+  people: { id: string; name: string; role: string; online: boolean; email?: string }[];
+  /** Notices are for all staff, so every staff member can search them. */
+  notices: { id: string; title: string; excerpt: string; createdAt: Date }[];
 }
 
 /**
@@ -31,14 +37,15 @@ export class SearchService {
 
   async search(q: string, user: AuthUser): Promise<SearchResults> {
     const query = q.trim();
-    if (query.length < 2) return { tasks: [], projects: [], people: [] };
+    if (query.length < 2) return { tasks: [], projects: [], people: [], notices: [] };
 
-    const [tasks, projects, people] = await Promise.all([
+    const [tasks, projects, people, notices] = await Promise.all([
       this.searchTasks(query, user),
       this.searchProjects(query, user),
       this.searchPeople(query, user),
+      this.searchNotices(query, user),
     ]);
-    return { tasks, projects, people };
+    return { tasks, projects, people, notices };
   }
 
   /** null = no task/project surface at all (e.g. CLIENT — they use the portal). */
@@ -80,17 +87,60 @@ export class SearchService {
     });
   }
 
+  /**
+   * Find a colleague. All staff get name, role and whether they are checked in
+   * right now — the same things the chat already shows everyone. Email (and
+   * matching on it) only for callers who may view the staff directory. Clients
+   * never search people here.
+   */
   private async searchPeople(q: string, user: AuthUser): Promise<SearchResults['people']> {
+    if (user.role === 'CLIENT') return [];
     const grant = await this.capabilities.resolveGrant(user.role, user.resourceType, 'people.directory.view');
-    if (grant !== Grant.ALLOW) return [];
-    return this.prisma.user.findMany({
+    const directory = grant === Grant.ALLOW;
+    const rows = await this.prisma.user.findMany({
       where: {
         status: 'ACTIVE',
         role: { not: 'CLIENT' },
-        OR: [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }],
+        OR: directory
+          ? [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }]
+          : [{ name: { contains: q, mode: 'insensitive' } }],
       },
-      select: { id: true, name: true, email: true, role: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        attendanceSessions: { where: { checkOutAt: null }, select: { id: true }, take: 1 },
+      },
+      orderBy: { name: 'asc' },
       take: TAKE,
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      role: r.role,
+      online: r.attendanceSessions.length > 0,
+      ...(directory ? { email: r.email } : {}),
+    }));
+  }
+
+  /** Notices whose title or text contains the words, newest first. Staff only. */
+  private async searchNotices(q: string, user: AuthUser): Promise<SearchResults['notices']> {
+    if (user.role === 'CLIENT') return [];
+    const rows = await this.prisma.announcement.findMany({
+      where: {
+        OR: [{ title: { contains: q, mode: 'insensitive' } }, { body: { contains: q, mode: 'insensitive' } }],
+      },
+      select: { id: true, title: true, body: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: TAKE,
+    });
+    return rows.map((n) => {
+      // Show the words around the match, not just the opening line.
+      const at = n.body.toLowerCase().indexOf(q.toLowerCase());
+      const start = Math.max(0, at - 40);
+      const slice = n.body.slice(start, start + 140).replace(/\s+/g, ' ').trim();
+      return { id: n.id, title: n.title, excerpt: `${start > 0 ? '…' : ''}${slice}`, createdAt: n.createdAt };
     });
   }
 }
