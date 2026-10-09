@@ -17,6 +17,7 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
   const [error, setError] = useState<string | null>(null);
   const [autoCheckedOut, setAutoCheckedOut] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -64,6 +65,28 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
     setBusy(false);
   }
 
+  // Signing out does NOT end the work day: the session stays open with no
+  // heartbeats, so the time after it shows as idle. "Sign out" reads like
+  // "I'm done", so ask first whenever someone is still checked in.
+  function onSignOutClick() {
+    if (status?.checkedIn) setConfirmSignOut(true);
+    else void window.rademicsDesktop.logout();
+  }
+
+  async function onCheckOutAndSignOut() {
+    setBusy(true);
+    setError(null);
+    const res = await window.rademicsDesktop.checkOut();
+    setBusy(false);
+    if (!res.ok) {
+      // Never sign out on a failed check-out — they'd be left checked in unawares.
+      setConfirmSignOut(false);
+      setError(res.error ?? 'Check-out failed, so you are still signed in.');
+      return;
+    }
+    await window.rademicsDesktop.logout();
+  }
+
   return (
     <div className="flex h-full flex-col gap-4 px-5 py-6">
       <div className="flex items-center justify-between">
@@ -71,10 +94,42 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
           <p className="text-sm font-semibold text-slate-800">{user.email}</p>
           <p className="text-xs text-slate-400">Rademics Work Monitoring App</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => window.rademicsDesktop.logout()}>
+        <Button variant="ghost" size="sm" onClick={onSignOutClick}>
           Sign out
         </Button>
       </div>
+
+      {confirmSignOut ? (
+        <div
+          role="alertdialog"
+          aria-labelledby="signout-title"
+          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900"
+        >
+          <p id="signout-title" className="font-semibold">You&apos;re still checked in</p>
+          <p className="mt-1 text-xs text-amber-800">
+            Signing out doesn&apos;t end your work day, and the time after it will show as idle. Check out first?
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            <Button size="sm" onClick={() => void onCheckOutAndSignOut()} disabled={busy}>
+              {busy ? 'Checking out…' : 'Check out & sign out'}
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                disabled={busy}
+                onClick={() => void window.rademicsDesktop.logout()}
+              >
+                Just sign out
+              </Button>
+              <Button variant="ghost" size="sm" className="flex-1" disabled={busy} onClick={() => setConfirmSignOut(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {updateStatus?.state === 'downloaded' ? (
         <div className="flex items-center justify-between gap-3 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800">
