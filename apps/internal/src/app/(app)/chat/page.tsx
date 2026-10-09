@@ -824,21 +824,21 @@ function RoomView({
           if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
         }}
         onDrop={onDrop}
-        className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/60 shadow-glass backdrop-blur-xl"
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-glass"
       >
         {dragging ? (
-          <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-accent/50 bg-white/85 text-accent">
+          <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-accent/50 bg-white text-accent">
             <UploadCloud className="h-8 w-8" />
             <p className="mt-2 text-sm font-semibold">Drop files to attach</p>
             <p className="text-xs text-slate-500">They&apos;re virus-checked before anyone can open them</p>
           </div>
         ) : null}
         {/* Room header: who this conversation is with, and who is around */}
-        <div className="flex items-center gap-3 border-b border-white/70 px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
           <button
             onClick={onBack}
             aria-label="Back to conversations"
-            className="-ml-1 rounded-md p-1.5 text-slate-500 hover:bg-white/70 hover:text-slate-700 md:hidden"
+            className="-ml-1 rounded-md p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 md:hidden"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -902,7 +902,7 @@ function RoomView({
           {room.kind === 'GROUP' ? (
             <button
               onClick={onPeople}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-white"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-white"
             >
               <Users className="h-3.5 w-3.5" />
               {isModerator ? 'Manage people' : 'People'}
@@ -911,7 +911,7 @@ function RoomView({
         </div>
         {/* Pinned announcement — the newest pin leads the room. */}
         {topPin ? (
-          <div className="flex items-start gap-2.5 border-b border-white/70 bg-accent/5 px-4 py-2.5">
+          <div className="flex items-start gap-2.5 border-b border-slate-200 bg-accent/5 px-4 py-2.5">
             <Pin className="mt-1 h-3.5 w-3.5 shrink-0 text-accent" />
             <button onClick={() => setPanel('pins')} className="min-w-0 flex-1 text-left" title="See all pinned messages">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">
@@ -927,7 +927,7 @@ function RoomView({
                 onClick={() => void togglePin(topPin)}
                 title="Unpin this announcement"
                 aria-label="Unpin"
-                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-white/70 hover:text-slate-600"
+                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
               >
                 <PinOff className="h-3.5 w-3.5" />
               </button>
@@ -965,7 +965,7 @@ function RoomView({
 
               {isCompany ? (
               <div className="mt-8 grid w-full max-w-2xl gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-white/70 bg-white/70 p-4 text-left shadow-glass">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left shadow-glass">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
                     <Users className="h-4 w-4" />
                   </span>
@@ -974,7 +974,7 @@ function RoomView({
                     Every message is visible to all staff — announcements, questions, quick coordination.
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/70 bg-white/70 p-4 text-left shadow-glass">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left shadow-glass">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
                     <Paperclip className="h-4 w-4" />
                   </span>
@@ -983,7 +983,7 @@ function RoomView({
                     Drop in documents and images — every upload is virus-checked before anyone can open it.
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/70 bg-white/70 p-4 text-left shadow-glass">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-left shadow-glass">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
                     <ShieldCheck className="h-4 w-4" />
                   </span>
@@ -1040,7 +1040,7 @@ function RoomView({
                   ) : null}
 
                   <div
-                    className={`group relative flex items-start gap-2.5 rounded-lg px-2 py-1 transition-colors duration-700 hover:bg-white/70 ${
+                    className={`group relative flex items-start gap-2.5 rounded-lg px-2 py-1 transition-colors duration-700 hover:bg-slate-50 ${
                       grouped ? '' : 'mt-2'
                     } ${flashId === m.id ? 'bg-accent/10 ring-1 ring-accent/30' : ''}`}
                   >
@@ -1200,7 +1200,7 @@ function RoomView({
                                   key={f.id}
                                   onClick={() => void download(f.versionId, true)}
                                   title={`View ${f.name}`}
-                                  className="block overflow-hidden rounded-lg border border-white/70 shadow-glass"
+                                  className="block overflow-hidden rounded-lg border border-slate-200 shadow-glass"
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
@@ -1215,7 +1215,7 @@ function RoomView({
                               <button
                                 key={f.id}
                                 onClick={() => void download(f.versionId)}
-                                className="inline-flex items-center gap-2 rounded-lg border border-white/70 bg-white/70 px-2.5 py-1.5 text-left transition-colors hover:bg-white"
+                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-left transition-colors hover:bg-white"
                               >
                                 <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent/10 text-accent">
                                   <FileText className="h-3.5 w-3.5" />
@@ -1245,7 +1245,7 @@ function RoomView({
                               className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
                                 g.mine
                                   ? 'border-accent/40 bg-accent/10 text-accent'
-                                  : 'border-slate-200 bg-white/70 text-slate-600 hover:bg-white'
+                                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'
                               }`}
                             >
                               <span>{g.emoji}</span>
@@ -1349,7 +1349,7 @@ function RoomView({
                         onClick={() => (room.kind === 'DIRECT' ? undefined : setPanel('seen'))}
                         className={`flex items-center gap-1 rounded px-1 text-[11px] ${
                           receipt === 'Sent' ? 'text-slate-400' : 'text-accent'
-                        } ${room.kind === 'DIRECT' ? 'cursor-default' : 'hover:bg-white/80 hover:underline'}`}
+                        } ${room.kind === 'DIRECT' ? 'cursor-default' : 'hover:bg-slate-50 hover:underline'}`}
                         title={room.kind === 'DIRECT' ? undefined : 'See who has seen it'}
                       >
                         {receipt === 'Sent' ? <Check className="h-3 w-3" /> : <CheckCheck className="h-3 w-3" />}
@@ -1371,7 +1371,7 @@ function RoomView({
         </div>
 
         {/* Composer */}
-        <div className="relative border-t border-white/70 bg-white/50 p-3">
+        <div className="relative border-t border-slate-200 bg-white p-3">
           {typingNames.length > 0 ? (
             <p className="mb-1 px-1 text-xs text-slate-400">
               {typingNames.length === 1
@@ -1405,7 +1405,7 @@ function RoomView({
             </div>
           ) : null}
           {scheduled.length > 0 ? (
-            <div className="mb-2 rounded-lg bg-white/80 px-3 py-1.5 text-xs">
+            <div className="mb-2 rounded-lg bg-slate-50 px-3 py-1.5 text-xs">
               <button
                 onClick={() => setScheduledOpen((o) => !o)}
                 className="flex w-full items-center gap-1.5 font-medium text-slate-600"
@@ -1434,7 +1434,7 @@ function RoomView({
             </div>
           ) : null}
           {replyTo ? (
-            <div className="mb-2 flex items-start gap-2 rounded-lg border-l-2 border-accent bg-white/80 px-3 py-1.5">
+            <div className="mb-2 flex items-start gap-2 rounded-lg border-l-2 border-accent bg-slate-50 px-3 py-1.5">
               <CornerUpLeft className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold text-accent">
@@ -1458,7 +1458,7 @@ function RoomView({
                 <span
                   key={p.key}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs ${
-                    p.state === 'failed' ? 'bg-danger-soft text-danger' : 'bg-white/80 text-slate-600'
+                    p.state === 'failed' ? 'bg-danger-soft text-danger' : 'bg-slate-50 text-slate-600'
                   }`}
                 >
                   {p.state === 'uploading' ? (
@@ -2125,7 +2125,7 @@ function RoomRow({
       onClick={onSelect}
       aria-current={selected ? 'true' : undefined}
       className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors ${
-        selected ? 'bg-white shadow-sm ring-1 ring-slate-200/70' : 'hover:bg-white/70'
+        selected ? 'bg-white shadow-sm ring-1 ring-slate-200/70' : 'hover:bg-slate-50'
       }`}
     >
       <RoomAvatar room={room} active={active} />
@@ -3039,7 +3039,7 @@ function ChatScreen() {
       <aside
         className={`${
           mobileRoomOpen ? 'hidden' : 'flex'
-        } min-h-0 w-full flex-col rounded-2xl border border-white/70 bg-white/50 shadow-glass backdrop-blur-xl md:flex md:w-72 md:shrink-0`}
+        } min-h-0 w-full flex-col rounded-2xl border border-slate-200 bg-white shadow-glass md:flex md:w-72 md:shrink-0`}
       >
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <h1 className="text-lg font-semibold text-slate-800">Chat</h1>
@@ -3076,7 +3076,7 @@ function ChatScreen() {
           </div>
         </div>
         <div className="px-3 pb-3">
-          <label className="flex items-center gap-2 rounded-lg bg-white/80 px-2.5 py-1.5 ring-1 ring-slate-200/70 focus-within:ring-2 focus-within:ring-accent/30">
+          <label className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 ring-1 ring-slate-200/70 focus-within:ring-2 focus-within:ring-accent/30">
             <Search className="h-3.5 w-3.5 text-slate-400" />
             <input
               value={filter}
@@ -3100,7 +3100,7 @@ function ChatScreen() {
                     <button
                       key={h.id}
                       onClick={() => openHit(h)}
-                      className="flex w-full flex-col rounded-xl px-2.5 py-2 text-left hover:bg-white/70"
+                      className="flex w-full flex-col rounded-xl px-2.5 py-2 text-left hover:bg-slate-50"
                     >
                       <span className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-xs font-semibold text-slate-700">

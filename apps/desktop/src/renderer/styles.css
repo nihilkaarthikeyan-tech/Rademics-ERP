@@ -47,3 +47,25 @@
     animation: none !important;
   }
 }
+
+@layer components {
+  /* Shared-component surfaces (packages/ui): Aurora Glass, as before. */
+  .ui-card {
+    @apply rounded-2xl border border-white/70 bg-white/65 shadow-glass backdrop-blur-xl;
+  }
+  .ui-btn-outline {
+    @apply border border-white/70 bg-white/60 backdrop-blur-sm hover:bg-white/80;
+  }
+  .ui-btn-ghost {
+    @apply hover:bg-white/60;
+  }
+  .ui-guide {
+    @apply rounded-2xl border border-white/70 bg-white/60 shadow-glass backdrop-blur-xl;
+  }
+  .ui-empty {
+    @apply rounded-2xl border border-dashed border-white/70 bg-white/40 backdrop-blur-sm;
+  }
+  .ui-error {
+    @apply rounded-2xl border border-white/70 bg-white/55 backdrop-blur-sm;
+  }
+}

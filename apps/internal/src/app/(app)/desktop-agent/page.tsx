@@ -44,7 +44,7 @@ export default function DesktopAgentPage() {
         <CardContent className="grid gap-5 pt-6 sm:grid-cols-2">
           {POINTS.map((p) => (
             <div key={p.title} className="flex gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#1B2A4A] text-white shadow-sm">
                 <p.icon className="h-4 w-4" />
               </div>
               <div>

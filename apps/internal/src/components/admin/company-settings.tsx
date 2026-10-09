@@ -215,7 +215,7 @@ export function CompanySettings() {
                 id="fyStart"
                 value={form.financialYearStartMonth}
                 onChange={(e) => set('financialYearStartMonth', Number(e.target.value))}
-                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white/80 px-3 text-sm text-slate-800"
+                className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-800"
               >
                 {MONTHS.map((m, i) => (
                   <option key={m} value={i + 1}>

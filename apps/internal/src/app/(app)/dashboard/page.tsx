@@ -3,6 +3,7 @@
 import { useMe } from '@/lib/me-context';
 import { AttendanceCard } from '@/components/attendance-card';
 import { DashboardOverview } from '@/components/dashboard-overview';
+import { OnlineNow } from '@/components/online-now';
 
 // Roles that clock in/out (Spec §3: Super Admin & Client never check in).
 const CAN_CHECK_IN = ['HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'];
@@ -26,28 +27,27 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      {/* Hero briefing — a luminous glass slab that opens the day (Aurora Glass). */}
-      <section className="glass-hero animate-rise px-7 py-8 sm:px-9">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -right-16 -top-32 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(124,108,246,0.40),transparent_68%)]"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -bottom-40 left-[42%] h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.22),transparent_68%)]"
-        />
-        <div className="relative">
-          <p className="inline-flex items-center gap-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_0_4px_rgba(79,70,229,0.16)]" />
-            {new Date().toLocaleDateString(undefined, DATE_FMT)}
-          </p>
-          <h1 className="mt-3.5 text-3xl font-bold tracking-tight text-slate-900 sm:text-[2.3rem]">
+      {/* Greeting: today's date and who is signed in (Teams-style: plain, no banner). */}
+      <section className="animate-rise flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-500">{new Date().toLocaleDateString(undefined, DATE_FMT)}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#1B2A4A] sm:text-[1.75rem]">
             {greeting()}, {displayName(me.email)}
           </h1>
         </div>
       </section>
 
-      {CAN_CHECK_IN.includes(me.role) ? <AttendanceCard /> : null}
+      {/* Your attendance beside who is online right now. */}
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        {CAN_CHECK_IN.includes(me.role) ? (
+          <div className="min-w-0 lg:col-span-2">
+            <AttendanceCard />
+          </div>
+        ) : null}
+        <div className={CAN_CHECK_IN.includes(me.role) ? 'min-w-0' : 'min-w-0 lg:col-span-3'}>
+          <OnlineNow />
+        </div>
+      </div>
 
       {/* Studio overview — self-gating: renders only for roles with reports access. */}
       <DashboardOverview />

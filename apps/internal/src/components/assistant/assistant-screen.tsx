@@ -136,7 +136,7 @@ export function AssistantScreen() {
         {turns.length > 0 ? (
           <button
             onClick={clearThread}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-xs font-medium text-slate-500 shadow-glass backdrop-blur-xl hover:text-slate-800"
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 shadow-glass hover:text-slate-800"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Clear conversation

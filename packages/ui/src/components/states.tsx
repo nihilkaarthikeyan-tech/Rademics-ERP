@@ -28,7 +28,7 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/70 bg-white/40 py-12 text-center backdrop-blur-sm">
+    <div className="ui-empty flex flex-col items-center justify-center gap-2 py-12 text-center">
       <Inbox className="h-8 w-8 text-slate-300" />
       <p className="text-sm font-medium text-slate-700">{title}</p>
       {description ? <p className="max-w-sm text-sm text-slate-500">{description}</p> : null}
@@ -47,7 +47,7 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/70 bg-white/55 py-12 text-center backdrop-blur-sm">
+    <div className="ui-error flex flex-col items-center justify-center gap-2 py-12 text-center">
       <AlertTriangle className="h-8 w-8 text-danger" />
       <p className="text-sm font-medium text-slate-900">{title}</p>
       {description ? <p className="max-w-sm text-sm text-slate-500">{description}</p> : null}

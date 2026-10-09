@@ -2,16 +2,15 @@ import * as React from 'react';
 import { cn } from '../lib/cn';
 
 /**
- * Aurora Glass surface (2026-07-18 direction, user-approved). Frosted and
- * translucent with a colour-tinted elevation shadow — it sits on the aurora ground
- * and blurs it through. Shared by both apps; kept a touch more opaque (65%) than the
- * dashboard's showcase panels so it stays readable in dense and nested contexts.
+ * The card surface. Its look comes from the `ui-card` class, which each app
+ * defines in its own stylesheet: the staff app draws a solid Teams-style card,
+ * the client portal and desktop app keep their frosted Aurora Glass surface.
  */
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        'rounded-2xl border border-white/70 bg-white/65 shadow-glass backdrop-blur-xl',
+        'ui-card',
         className,
       )}
       {...props}

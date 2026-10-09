@@ -223,7 +223,7 @@ function EmployeeDetail_({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Identity header */}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-base font-semibold text-white">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1B2A4A] text-base font-semibold text-white">
           {emp.name
             .split(/\s+/)
             .slice(0, 2)

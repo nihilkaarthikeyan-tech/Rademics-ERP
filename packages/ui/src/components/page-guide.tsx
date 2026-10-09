@@ -59,7 +59,7 @@ export function PageGuide({
   return (
     <section
       className={cn(
-        'rounded-2xl border border-white/70 bg-white/60 px-4 py-3 shadow-glass backdrop-blur-xl',
+        'ui-guide px-4 py-3',
         className,
       )}
     >

@@ -206,7 +206,7 @@ export default function CalendarPage() {
                     className={[
                       'min-h-[4.5rem] rounded-md border p-1.5 text-left',
                       off ? 'border-rose-200 bg-rose-50/70' : 'border-slate-200 bg-white',
-                      isToday ? 'ring-2 ring-[#7C6CF6]' : '',
+                      isToday ? 'ring-2 ring-accent' : '',
                     ].join(' ')}
                   >
                     <div className="flex items-start justify-between">

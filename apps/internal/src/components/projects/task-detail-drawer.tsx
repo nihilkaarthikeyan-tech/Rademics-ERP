@@ -122,7 +122,7 @@ function initials(name: string): string {
 
 /** The kit's outline variant is white-on-white against the glass hero card —
  *  secondary actions in there need a visible edge. */
-const OUTLINE_ON_GLASS = 'border-slate-300 bg-white/90 hover:bg-white';
+const OUTLINE_ON_GLASS = 'border-slate-300 bg-white hover:bg-white';
 
 function relTime(iso: string): string {
   const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
@@ -218,7 +218,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <div className="mb-2 flex items-center gap-2">
         {/* Same gradient tick the sidebar uses for the active page — one visual language. */}
-        <span className="h-3 w-[3px] rounded-full bg-gradient-to-b from-[#7C6CF6] to-[#A855F7]" />
+        <span className="h-3 w-[3px] rounded-full bg-accent" />
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</span>
       </div>
       {children}
@@ -533,7 +533,7 @@ export function TaskDetailDrawer({
       }}
     >
       <div
-        className="drawer-in h-full w-full max-w-xl overflow-y-auto border-l border-white/70 bg-white/85 shadow-xl backdrop-blur-2xl"
+        className="drawer-in h-full w-full max-w-xl overflow-y-auto border-l border-slate-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {loadFailed ? (
@@ -552,7 +552,7 @@ export function TaskDetailDrawer({
         ) : (
           <>
             {/* ── Sticky header: status + title stay while the body scrolls ── */}
-            <div className="sticky top-0 z-10 border-b border-white/60 bg-white/80 px-6 py-4 backdrop-blur-xl">
+            <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-6 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <Badge tone={STATUS_TONE[task.status] ?? 'slate'}>{STATUS_LABEL[task.status] ?? task.status}</Badge>
@@ -598,7 +598,7 @@ export function TaskDetailDrawer({
                   </div>
                 )
               ) : (
-                <div className="rounded-xl border border-white/70 bg-white/60 p-4 shadow-glass backdrop-blur-xl">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-glass">
                   {/* Zone A — the pipeline. Index-based fill: after a send-back the
                       bar truthfully drops back to In progress. */}
                   <div className="flex gap-1">
@@ -704,7 +704,7 @@ export function TaskDetailDrawer({
 
                       {/* Send-back reason — inline, never window.prompt. */}
                       {pendingAction && pendingAction.action === TaskAction.SEND_BACK ? (
-                        <div className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3">
+                        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                           <p className="text-sm font-medium text-slate-800">Send back — why?</p>
                           <p className="mt-0.5 text-xs text-slate-500">
                             The assignee sees this, so say what needs changing.
@@ -740,7 +740,7 @@ export function TaskDetailDrawer({
 
                       {/* Assign / reassign — pick, then confirm. Nothing fires on a click in the list. */}
                       {assignOpen ? (
-                        <div className="mt-3 rounded-lg border border-slate-200 bg-white/80 p-3">
+                        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                           <div className="flex items-center justify-between">
                             <p className="text-sm font-medium text-slate-800">
                               {task.status === 'DRAFT' ? 'Assign this task' : 'Reassign this task'}
@@ -1048,7 +1048,7 @@ export function TaskDetailDrawer({
               {cancelable ? (
                 <div className="border-t border-slate-200/60 pt-2">
                   {pendingAction && pendingAction.action === TaskAction.CANCEL ? (
-                    <div className="mb-2 rounded-lg border border-slate-200 bg-white/80 p-3">
+                    <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <p className="text-sm font-medium text-slate-800">Cancel this task?</p>
                       <p className="mt-0.5 text-xs text-slate-500">
                         The task stops here and stays on record with your reason. This cannot be undone.

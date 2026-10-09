@@ -9,8 +9,9 @@ const buttonVariants = cva(
       variant: {
         primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
         accent: 'bg-accent text-accent-foreground hover:bg-accent/90',
-        outline: 'border border-white/70 bg-white/60 text-slate-900 backdrop-blur-sm hover:bg-white/80',
-        ghost: 'text-slate-700 hover:bg-white/60',
+        // Surface comes from each app's stylesheet (ui-btn-*), like ui-card.
+        outline: 'ui-btn-outline text-slate-900',
+        ghost: 'ui-btn-ghost text-slate-700',
         danger: 'bg-red-600 text-white hover:bg-red-700',
       },
       size: {

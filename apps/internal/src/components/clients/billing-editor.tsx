@@ -105,7 +105,7 @@ export function BillingEditor({
             value={derived ?? stateCode}
             disabled={derived !== null}
             onChange={(e) => { setStateCode(e.target.value); setMsg(null); }}
-            className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white/80 px-3 text-sm text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
+            className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-800 disabled:bg-slate-100 disabled:text-slate-500"
           >
             {STATES.map(([code, label]) => (
               <option key={code} value={code}>{label}</option>

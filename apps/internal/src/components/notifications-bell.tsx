@@ -18,7 +18,8 @@ interface Notification {
 }
 
 /** Notifications bell (Spec §5.12): unread badge + dropdown, real-time via socket. */
-export function NotificationsBell() {
+/** `onDark`: sits in the navy app bar, so the bell is drawn light. */
+export function NotificationsBell({ onDark = false }: { onDark?: boolean } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
@@ -108,7 +109,9 @@ export function NotificationsBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative rounded-md text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+        className={`relative rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 ${
+          onDark ? 'text-white/85 hover:bg-white/10 hover:text-white focus-visible:ring-white/70' : 'text-slate-500 hover:text-slate-700 focus-visible:ring-accent'
+        }`}
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-haspopup="true"
         aria-expanded={open}
@@ -124,7 +127,7 @@ export function NotificationsBell() {
       </button>
 
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/70 bg-white/85 shadow-glass backdrop-blur-xl">
+        <div className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white shadow-glass">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
             <span className="text-sm font-semibold text-slate-700">Notifications</span>
             {unread > 0 ? (

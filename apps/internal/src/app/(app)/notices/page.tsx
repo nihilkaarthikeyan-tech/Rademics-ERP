@@ -189,7 +189,7 @@ export default function NoticesPage() {
       {canPost ? (
         <form
           onSubmit={post}
-          className="mt-4 rounded-xl border border-white/70 bg-white/60 p-4 shadow-glass backdrop-blur-xl"
+          className="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-glass"
         >
           <Label htmlFor="n-title">Post a notice</Label>
           <Input
@@ -249,8 +249,8 @@ export default function NoticesPage() {
           return (
             <article
               key={n.id}
-              className={`rounded-xl border p-4 shadow-glass backdrop-blur-xl ${
-                needsMyAck ? 'border-warning/40 bg-warning-soft/60' : 'border-white/70 bg-white/60'
+              className={`rounded-xl border p-4 shadow-glass ${
+                needsMyAck ? 'border-warning/40 bg-warning-soft/60' : 'border-slate-200 bg-white'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -313,7 +313,7 @@ export default function NoticesPage() {
                         {n.ackStats.acknowledged < n.ackStats.total ? ' — see who hasn\'t' : ''}
                       </button>
                       {pendingOpenFor === n.id ? (
-                        <div className="mt-1.5 rounded-md bg-white/70 p-2">
+                        <div className="mt-1.5 rounded-md bg-slate-50 p-2">
                           {pendingList === null ? (
                             <p className="text-xs text-slate-400">Loading…</p>
                           ) : pendingList.length === 0 ? (

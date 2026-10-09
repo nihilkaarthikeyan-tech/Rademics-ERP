@@ -211,7 +211,7 @@ export function DashboardOverview() {
         >
           <div className="mb-5 flex items-start justify-between">
             <div>
-              <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+              <div className="text-xs font-medium text-slate-500">
                 Delivery
               </div>
               <h3 className="mt-1 text-[15px] font-bold tracking-tight text-slate-900">
@@ -229,9 +229,9 @@ export function DashboardOverview() {
                   <div className="w-40 shrink-0 truncate text-sm text-slate-600" title={p.project}>
                     {p.project}
                   </div>
-                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[rgba(79,70,229,0.10)]">
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#A855F7]"
+                      className="h-full rounded-full bg-accent"
                       style={{ width: `${Math.max(2, Math.min(100, p.pctComplete))}%` }}
                     />
                   </div>
@@ -249,7 +249,7 @@ export function DashboardOverview() {
           className="glass-panel animate-rise p-6 transition-all duration-200 hover:shadow-glass-hover"
           style={{ animationDelay: '340ms' }}
         >
-          <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+          <div className="text-xs font-medium text-slate-500">
             Capacity
           </div>
           <h3 className="mb-4 mt-1 text-[15px] font-bold tracking-tight text-slate-900">
@@ -267,7 +267,7 @@ export function DashboardOverview() {
         >
           <div className="flex items-center justify-between px-6 py-5">
             <div>
-              <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+              <div className="text-xs font-medium text-slate-500">
                 Portfolio
               </div>
               <h3 className="mt-1 text-[15px] font-bold tracking-tight text-slate-900">Projects</h3>
@@ -277,7 +277,7 @@ export function DashboardOverview() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-t border-white/50 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-slate-400">
+                <tr className="border-t border-slate-200 text-left font-mono text-[10px] uppercase tracking-[0.12em] text-slate-400">
                   <th className="px-6 py-2.5 font-semibold">Project</th>
                   <th className="px-6 py-2.5 font-semibold">Client</th>
                   <th className="px-6 py-2.5 font-semibold">Manager</th>
@@ -287,12 +287,12 @@ export function DashboardOverview() {
               </thead>
               <tbody>
                 {topProjects.map((p) => (
-                  <tr key={p.project} className="border-t border-white/50 transition-colors hover:bg-white/40">
+                  <tr key={p.project} className="border-t border-slate-200 transition-colors hover:bg-slate-50">
                     <td className="px-6 py-3.5 font-semibold text-slate-900">{p.project}</td>
                     <td className="px-6 py-3.5 text-slate-500">{p.client}</td>
                     <td className="px-6 py-3.5">
                       <span className="inline-flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-[#7C6CF6] to-[#A855F7] text-[10px] font-bold text-white">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1B2A4A] text-[10px] font-bold text-white">
                           {initials(p.pm)}
                         </span>
                         <span className="text-slate-500">{p.pm}</span>
@@ -300,9 +300,9 @@ export function DashboardOverview() {
                     </td>
                     <td className="px-6 py-3.5">
                       <span className="inline-flex items-center gap-2.5">
-                        <span className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-[rgba(79,70,229,0.10)] sm:inline-block">
+                        <span className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 sm:inline-block">
                           <span
-                            className="block h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#A855F7]"
+                            className="block h-full rounded-full bg-accent"
                             style={{ width: `${Math.max(2, Math.min(100, p.pctComplete))}%` }}
                           />
                         </span>
@@ -327,20 +327,20 @@ export function DashboardOverview() {
 
 /* ── Pieces ── */
 
-// Gradient icon tiles (Aurora Glass): a small vivid glyph per KPI; status still reads
-// by label too. Chips/meters only ever carry numbers derived from the real data.
+// Soft icon chips (Teams-style): a pale tint with a readable glyph. Status still
+// reads by label too. Chips/meters only ever carry numbers derived from the real data.
 const TINTS = {
-  indigo: 'bg-gradient-to-br from-[#6D63F0] to-[#9B4FF0]',
-  teal: 'bg-gradient-to-br from-[#22C3B4] to-[#12A08F]',
-  amber: 'bg-gradient-to-br from-[#F5B84C] to-[#E08A2B]',
-  rose: 'bg-gradient-to-br from-[#F2739B] to-[#D8356E]',
+  indigo: 'bg-accent-soft text-accent',
+  teal: 'bg-teal-soft text-teal',
+  amber: 'bg-warning-soft text-warning',
+  rose: 'bg-danger-soft text-danger',
 } as const;
 
 const METER = {
-  indigo: 'bg-gradient-to-r from-[#4F46E5] to-[#A855F7]',
-  teal: 'bg-gradient-to-r from-[#22C3B4] to-[#12A08F]',
-  amber: 'bg-gradient-to-r from-[#E0A23A] to-[#F0C163]',
-  rose: 'bg-gradient-to-r from-[#F2739B] to-[#D8356E]',
+  indigo: 'bg-accent',
+  teal: 'bg-teal',
+  amber: 'bg-warning',
+  rose: 'bg-danger',
 } as const;
 
 function Kpi({
@@ -364,22 +364,22 @@ function Kpi({
 }) {
   return (
     <div
-      className="glass-panel animate-rise p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glass-hover"
+      className="glass-panel animate-rise p-5 transition-shadow duration-200 hover:shadow-glass-hover"
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-500">{label}</span>
         <span
-          className={`flex h-9 w-9 items-center justify-center rounded-xl text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] ${TINTS[tint]}`}
+          className={`flex h-9 w-9 items-center justify-center rounded-lg ${TINTS[tint]}`}
         >
           <Icon className="h-[18px] w-[18px]" />
         </span>
       </div>
-      <div className="mt-4 text-[34px] font-bold leading-none tracking-tight tabular-nums text-slate-900">
+      <div className="mt-3 text-[30px] font-bold leading-none tracking-tight tabular-nums text-[#1B2A4A]">
         {value}
       </div>
       {typeof meterPct === 'number' ? (
-        <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-[rgba(79,70,229,0.10)]">
+        <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
           <div
             className={`h-full rounded-full ${METER[tint]}`}
             style={{ width: `${Math.max(2, Math.min(100, meterPct))}%` }}

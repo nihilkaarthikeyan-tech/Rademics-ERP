@@ -62,15 +62,15 @@ export function GlobalSearch() {
   const hasResults = results.tasks.length || results.projects.length || results.people.length;
 
   return (
-    <div ref={rootRef} className="relative w-full max-w-sm">
-      <div className="flex items-center gap-2 rounded-xl border border-white/60 bg-white/60 px-3.5 py-2 text-sm text-slate-500 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent">
-        <Search className="h-4 w-4 shrink-0 text-slate-400" />
+    <div ref={rootRef} className="relative w-full max-w-xl">
+      <div className="flex items-center gap-2.5 rounded-md bg-white px-3.5 py-2 text-sm text-slate-600 shadow-sm focus-within:ring-2 focus-within:ring-[#8FA7EE]">
+        <Search className="h-4 w-4 shrink-0 text-slate-500" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => setOpen(true)}
           placeholder="Search tasks, projects, people…"
-          className="w-full bg-transparent text-slate-700 outline-none placeholder:text-slate-400"
+          className="w-full bg-transparent text-slate-800 outline-none placeholder:text-slate-500"
         />
         {q ? (
           <button onClick={() => setQ('')} aria-label="Clear search" className="shrink-0 text-slate-400 hover:text-slate-600">

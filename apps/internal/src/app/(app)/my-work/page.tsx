@@ -127,7 +127,7 @@ export default function MyWorkPage() {
           without it the status chip is the only signal, and nothing says the
           chain is waiting on them. */}
       {state === 'ready' && open.length > 0 ? (
-        <div className="mt-4 rounded-2xl border border-white/70 bg-white/60 px-4 py-3 shadow-glass backdrop-blur-xl">
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-glass">
           <p className="text-sm font-medium text-slate-800">How your tasks move</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
             {[
@@ -178,8 +178,8 @@ export default function MyWorkPage() {
                   return (
                     <div
                       key={t.id}
-                      className={`rounded-xl border bg-white/65 px-4 py-3 shadow-glass backdrop-blur-xl transition-colors ${
-                        step ? 'border-accent/30' : 'border-white/70'
+                      className={`rounded-xl border bg-white px-4 py-3 shadow-glass transition-colors ${
+                        step ? 'border-accent/30' : 'border-slate-200'
                       }`}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">

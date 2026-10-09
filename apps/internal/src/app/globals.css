@@ -5,45 +5,48 @@
 @layer base {
   body {
     @apply font-sans text-slate-900 antialiased;
-    /* Aurora Glass ground (2026-07-18 direction, user-approved): a soft rainbow-lit
-       wash — violet / cyan / pink / purple blobs over a light base — that the frosted
-       surfaces sit on and blur through. Fixed so it stays put while content scrolls. */
-    background:
-      radial-gradient(760px 520px at 8% -6%, rgba(124, 108, 246, 0.5) 0%, transparent 60%),
-      radial-gradient(720px 560px at 98% 2%, rgba(34, 211, 238, 0.4) 0%, transparent 58%),
-      radial-gradient(680px 620px at 82% 108%, rgba(236, 72, 153, 0.38) 0%, transparent 60%),
-      radial-gradient(720px 600px at 12% 112%, rgba(168, 85, 247, 0.4) 0%, transparent 62%),
-      linear-gradient(160deg, #eef0ff 0%, #eaf2ff 50%, #f4ecff 100%);
-    background-attachment: fixed;
+    /* Teams-style shell (2026-10-09): a plain light grey ground under solid white
+       surfaces. Replaces the Aurora gradient wash. */
+    background: #f3f4f7;
     min-height: 100vh;
   }
 }
 
 @layer components {
-  /* Frosted surface for cards, panels and the sidebar/topbar chrome. Translucent so
-     the aurora shows through, with a colour-tinted elevation shadow. */
+  /* Shared-component surfaces (packages/ui), Teams-style: solid and flat. */
+  .ui-card {
+    @apply rounded-lg border border-slate-200 bg-white shadow-glass;
+  }
+  .ui-btn-outline {
+    @apply border border-slate-300 bg-white hover:bg-slate-50;
+  }
+  .ui-btn-ghost {
+    @apply hover:bg-slate-100;
+  }
+  .ui-guide {
+    @apply rounded-lg border border-slate-200 bg-white shadow-glass;
+  }
+  .ui-empty {
+    @apply rounded-lg border border-dashed border-slate-300 bg-white;
+  }
+  .ui-error {
+    @apply rounded-lg border border-slate-200 bg-white;
+  }
+  /* Card surface (the class names are kept from the Aurora era so every page
+     picks up the new look at once): solid white, thin border, flat shadow. */
   .glass-panel {
-    @apply rounded-2xl border border-white/70 bg-white/55 shadow-glass backdrop-blur-xl;
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    @apply rounded-lg border border-slate-200 bg-white shadow-glass;
   }
-  /* The hero briefing — a larger, more luminous glass slab with its own aurora glow. */
   .glass-hero {
-    @apply relative overflow-hidden rounded-3xl border border-white/80 bg-white/45 backdrop-blur-2xl;
-    -webkit-backdrop-filter: blur(22px) saturate(1.5);
-    box-shadow:
-      0 26px 60px -26px rgba(124, 108, 246, 0.5),
-      0 8px 22px -14px rgba(236, 72, 153, 0.22);
+    @apply relative overflow-hidden rounded-lg border border-slate-200 bg-white shadow-glass;
   }
-  /* Chrome (sidebar / topbar): frosted but lighter than content cards. */
   .glass-chrome {
-    @apply bg-white/55 backdrop-blur-xl;
-    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    @apply bg-white;
   }
-  /* Slim scrollbar for horizontal rails (kanban board) — the native bar reads
-     as a gray slab across the aurora. */
+  /* Slim scrollbar for horizontal rails (kanban board). */
   .scrollbar-slim {
     scrollbar-width: thin;
-    scrollbar-color: rgba(124, 108, 246, 0.35) transparent;
+    scrollbar-color: rgba(102, 112, 133, 0.35) transparent;
   }
   .scrollbar-slim::-webkit-scrollbar {
     height: 6px;
@@ -54,10 +57,10 @@
   }
   .scrollbar-slim::-webkit-scrollbar-thumb {
     border-radius: 9999px;
-    background: rgba(124, 108, 246, 0.35);
+    background: rgba(102, 112, 133, 0.35);
   }
   .scrollbar-slim::-webkit-scrollbar-thumb:hover {
-    background: rgba(124, 108, 246, 0.55);
+    background: rgba(102, 112, 133, 0.55);
   }
 }
 
