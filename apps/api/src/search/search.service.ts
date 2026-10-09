@@ -11,8 +11,8 @@ export interface SearchResults {
   tasks: { id: string; title: string; projectId: string; projectName: string; status: string }[];
   projects: { id: string; name: string }[];
   /**
-   * Every staff member can find a colleague (name, role, online). `email` is only
-   * included for callers who may see the staff directory; nobody else gets it.
+   * Every staff member can find a colleague (name, role, online). `email` only
+   * for HR, Super Admin and Finance (owner's call, 2026-10-09).
    */
   people: { id: string; name: string; role: string; online: boolean; email?: string }[];
   /** Notices are for all staff, so every staff member can search them. */
@@ -90,13 +90,12 @@ export class SearchService {
   /**
    * Find a colleague. All staff get name, role and whether they are checked in
    * right now — the same things the chat already shows everyone. Email (and
-   * matching on it) only for callers who may view the staff directory. Clients
-   * never search people here.
+   * matching on it) only for HR, Super Admin and Finance who manage people and
+   * payroll; everyone else gets names only. Clients never search people here.
    */
   private async searchPeople(q: string, user: AuthUser): Promise<SearchResults['people']> {
     if (user.role === 'CLIENT') return [];
-    const grant = await this.capabilities.resolveGrant(user.role, user.resourceType, 'people.directory.view');
-    const directory = grant === Grant.ALLOW;
+    const directory = ['SUPER_ADMIN', 'HR', 'FINANCE'].includes(user.role);
     const rows = await this.prisma.user.findMany({
       where: {
         status: 'ACTIVE',

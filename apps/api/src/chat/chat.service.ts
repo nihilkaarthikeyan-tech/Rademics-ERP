@@ -15,6 +15,7 @@ import { FilesService } from '../files/files.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { StorageService } from '../storage/storage.service';
+import { EncryptionService } from '../crypto/encryption.service';
 import type { AuthUser } from '../auth/auth-user';
 
 /** Audit metadata shape produced by reqMeta(). */
@@ -38,6 +39,9 @@ const FLOOD_WINDOW_MS = 10_000;
 /** How long an author may still edit their own message. Long enough to fix a
  *  typo, short enough that the room's history can't be quietly rewritten. */
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+/** How far back message search looks (newest first), across the rooms you can read. */
+const SEARCH_SCAN_LIMIT = 5000;
 
 /** Largest group HR can create in one go — the whole staff fits comfortably. */
 const MAX_GROUP_MEMBERS = 300;
@@ -216,7 +220,37 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     private readonly storage: StorageService,
+    private readonly crypto: EncryptionService,
   ) {}
+
+  // ── Message text at rest (2026-10-09) ──
+  // Chat text is stored encrypted (AES-256-GCM, the same field encryption used
+  // for salary and personal data), so a copy of the database or a backup does
+  // not reveal conversations. It is decrypted only on the way out to someone
+  // allowed to read that room. An empty body (a file-only message) stays empty.
+
+  private seal(text: string): string {
+    return text ? this.crypto.encrypt(text) : '';
+  }
+
+  /** Decrypt; text written before encryption was switched on passes through as-is. */
+  private open(stored: string): string {
+    if (!stored || !stored.startsWith('v1.')) return stored;
+    try {
+      return this.crypto.decrypt(stored);
+    } catch {
+      return stored;
+    }
+  }
+
+  /** shapeMessage with the text (and any quoted reply) decrypted. */
+  private shape(m: MessageRow) {
+    return shapeMessage({
+      ...m,
+      body: this.open(m.body),
+      replyTo: m.replyTo ? { ...m.replyTo, body: this.open(m.replyTo.body) } : null,
+    });
+  }
 
   private schedulerTimer: NodeJS.Timeout | null = null;
 
@@ -392,7 +426,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
           lastMessageAt: last?.createdAt ?? null,
           lastMessage: last
             ? {
-                body: last.body || (last._count.files > 0 ? 'Shared a file' : ''),
+                body: this.open(last.body) || (last._count.files > 0 ? 'Shared a file' : ''),
                 authorId: last.author?.id ?? null,
                 authorName: last.author?.name ?? null,
               }
@@ -561,7 +595,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       }),
       this.readPointer(user, room),
     ]);
-    const items = rows.reverse().map(shapeMessage);
+    const items = rows.reverse().map((r) => this.shape(r));
     return { items, hasMore: rows.length >= take, lastReadAt };
   }
 
@@ -615,7 +649,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
 
     const message = await this.prisma.$transaction(async (tx) => {
       const m = await tx.chatMessage.create({
-        data: { body: text, authorId: user.id, roomId: room.id, replyToId: replyToId ?? null },
+        data: { body: this.seal(text), authorId: user.id, roomId: room.id, replyToId: replyToId ?? null },
         select: { id: true, createdAt: true },
       });
       if (fileAssetIds.length > 0) {
@@ -631,7 +665,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       });
     });
 
-    const shaped = shapeMessage(message);
+    const shaped = this.shape(message);
     // Live to everyone who can read this room; senders dedupe by id on their own append.
     await this.emitToRoom(room, 'chat:message', shaped);
     // Your own message never counts as unread for you.
@@ -673,7 +707,12 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       select: { name: true },
     });
     const where = room.kind === 'COMPANY' ? 'the company chat' : room.kind === 'GROUP' ? (room.name ?? 'a group') : 'a direct message';
-    const excerpt = text.length > 120 ? `${text.slice(0, 117)}…` : text;
+    // The bell keeps its own copy of the notification text, so private rooms
+    // don't put the message itself there.
+    const excerpt =
+      room.kind === 'COMPANY'
+        ? text.length > 120 ? `${text.slice(0, 117)}…` : text
+        : 'Open the chat to read the message.';
     await this.notifications.notifyMany(mentioned, {
       type: 'CHAT_MENTION',
       eventGroup: 'chat',
@@ -727,7 +766,8 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       action: 'CHAT_MESSAGE_DELETED',
       entityType: 'ChatMessage',
       entityId: messageId,
-      before: { body: message.body, authorId: message.authorId, moderated: !isAuthor, roomId: room.id },
+      // Private rooms' text is not copied into the audit log in readable form.
+      before: { body: room.kind === 'COMPANY' ? this.open(message.body) : '[private conversation]', authorId: message.authorId, moderated: !isAuthor, roomId: room.id },
       ...meta,
     });
 
@@ -753,7 +793,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
 
     const updated = await this.prisma.chatMessage.update({
       where: { id: messageId },
-      data: { body: text, editedAt: new Date() },
+      data: { body: this.seal(text), editedAt: new Date() },
       select: MESSAGE_SELECT,
     });
 
@@ -763,12 +803,12 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       action: 'CHAT_MESSAGE_EDITED',
       entityType: 'ChatMessage',
       entityId: messageId,
-      before: { body: message.body },
-      after: { body: text },
+      before: { body: room.kind === 'COMPANY' ? this.open(message.body) : '[private conversation]' },
+      after: { body: room.kind === 'COMPANY' ? text : '[private conversation]' },
       ...meta,
     });
 
-    const shaped = shapeMessage(updated);
+    const shaped = this.shape(updated);
     await this.emitToRoom(room, 'chat:messageEdited', shaped);
     return shaped;
   }
@@ -823,7 +863,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       take: 5,
       select: MESSAGE_SELECT,
     });
-    return rows.map(shapeMessage);
+    return rows.map((r) => this.shape(r));
   }
 
   async setPinned(user: AuthUser, messageId: string, pin: boolean, meta: Meta) {
@@ -847,7 +887,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       ...meta,
     });
 
-    const shaped = shapeMessage(updated);
+    const shaped = this.shape(updated);
     await this.emitToRoom(room, pin ? 'chat:pinned' : 'chat:unpinned', pin ? shaped : { id: messageId, roomId: room.id });
     return shaped;
   }
@@ -1004,17 +1044,14 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
     const readable = roomId ? rooms.filter((r) => r.id === roomId) : rooms;
     if (readable.length === 0) return [];
     const byId = new Map(readable.map((r) => [r.id, r]));
-    const rows = await this.prisma.chatMessage.findMany({
-      where: {
-        roomId: { in: [...byId.keys()] },
-        deletedAt: null,
-        OR: [
-          { body: { contains: term, mode: 'insensitive' } },
-          { files: { some: { displayName: { contains: term, mode: 'insensitive' } } } },
-        ],
-      },
+    // Message text is encrypted, so the database cannot match it: read the most
+    // recent messages of the rooms you can open, decrypt, and match here.
+    // File names are not encrypted and are still matched in the database.
+    const needle = term.toLowerCase();
+    const recent = await this.prisma.chatMessage.findMany({
+      where: { roomId: { in: [...byId.keys()] }, deletedAt: null },
       orderBy: { createdAt: 'desc' },
-      take: 30,
+      take: SEARCH_SCAN_LIMIT,
       select: {
         id: true,
         roomId: true,
@@ -1024,6 +1061,14 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
         files: { select: { displayName: true } },
       },
     });
+    const rows = recent
+      .map((m) => ({ ...m, body: this.open(m.body) }))
+      .filter(
+        (m) =>
+          m.body.toLowerCase().includes(needle) ||
+          m.files.some((f) => f.displayName.toLowerCase().includes(needle)),
+      )
+      .slice(0, 30);
     return rows.map((m) => {
       const room = byId.get(m.roomId)!;
       return {
@@ -1167,7 +1212,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       await this.storage.copy(v.storageKey, key);
       copies.push({ displayName: a.displayName, key, v });
     }
-    if (!message.body.trim() && copies.length === 0) {
+    if (!this.open(message.body).trim() && copies.length === 0) {
       throw new BadRequestException('There is nothing in that message that can be forwarded');
     }
 
@@ -1199,7 +1244,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       await tx.chatRoom.update({ where: { id: target.id }, data: { lastMessageAt: m.createdAt } });
       return tx.chatMessage.findUniqueOrThrow({ where: { id: m.id }, select: MESSAGE_SELECT });
     });
-    const shaped = shapeMessage(created);
+    const shaped = this.shape(created);
     await this.emitToRoom(target, 'chat:message', shaped);
     await this.markRead(user, target.id);
     return shaped;
@@ -1224,21 +1269,23 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
       where: { authorId: user.id, sentAt: null, cancelledAt: null },
     });
     if (pendingCount >= 50) throw new BadRequestException('You already have 50 messages waiting to be sent');
-    return this.prisma.chatScheduledMessage.create({
-      data: { roomId: room.id, authorId: user.id, body: text, sendAt: when },
+    const created = await this.prisma.chatScheduledMessage.create({
+      data: { roomId: room.id, authorId: user.id, body: this.seal(text), sendAt: when },
       select: { id: true, roomId: true, body: true, sendAt: true },
     });
+    return { ...created, body: text };
   }
 
   /** The caller's own messages waiting to be sent in a conversation. */
   async listScheduled(user: AuthUser, roomId?: string) {
     this.assertStaff(user);
     const room = await this.roomFor(user, roomId);
-    return this.prisma.chatScheduledMessage.findMany({
+    const rows = await this.prisma.chatScheduledMessage.findMany({
       where: { roomId: room.id, authorId: user.id, sentAt: null, cancelledAt: null },
       orderBy: { sendAt: 'asc' },
       select: { id: true, roomId: true, body: true, sendAt: true },
     });
+    return rows.map((r) => ({ ...r, body: this.open(r.body) }));
   }
 
   async cancelScheduled(user: AuthUser, id: string) {
@@ -1283,7 +1330,7 @@ export class ChatService implements OnModuleInit, OnModuleDestroy {
           resourceType: s.author.resourceType as AuthUser['resourceType'],
           desktopCheckInRequired: s.author.desktopCheckInRequired,
         };
-        const m = await this.post(author, s.body, [], s.roomId);
+        const m = await this.post(author, this.open(s.body), [], s.roomId);
         await this.prisma.chatScheduledMessage.update({ where: { id: s.id }, data: { messageId: m.id } });
         this.presence.emitToUser(s.author.id, 'chat:scheduledSent', { id: s.id, roomId: s.roomId });
         sent++;

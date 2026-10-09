@@ -103,6 +103,16 @@ async function main(): Promise<void> {
   const hidden = await req(`/chat/messages/${ping.json?.id}/locate`, { token: c.token });
   check('Someone outside the group cannot locate it (404)', hidden.status === 404, `(${hidden.status})`);
 
+  console.log('\n— Message text is encrypted at rest');
+  const raw = await prisma.chatMessage.findUnique({ where: { id: sent.json?.id }, select: { body: true } });
+  check('Stored text is encrypted, not readable in the database', Boolean(raw?.body.startsWith('v1.') && !raw.body.includes('research')), raw?.body.slice(0, 20));
+  const readBack = await req(`/chat/messages?roomId=${gid}`, { token: b.token });
+  check('Members still read it normally in the app', readBack.json?.items?.some((m: any) => m.body === 'Hello research team'));
+  const empSearch = await req('/search?q=chat%20verify', { token: a.token });
+  const hrSearch = await req('/search?q=chat%20verify', { token: hr.token });
+  check('Employees find colleagues by name without seeing emails', empSearch.json?.people?.length > 0 && !empSearch.json.people.some((p: any) => p.email), JSON.stringify(empSearch.json?.people?.[0]));
+  check('HR still sees work emails in search', hrSearch.json?.people?.some((p: any) => p.email));
+
   console.log('\n— Replies, read receipts, mute, search');
   const reply = await req('/chat/messages', { method: 'POST', token: b.token, body: { body: 'Sure, on it', roomId: gid, replyToId: sent.json?.id } });
   check('A reply quotes the original', reply.json?.replyTo?.id === sent.json?.id && reply.json?.replyTo?.body === 'Hello research team', JSON.stringify(reply.json?.replyTo));

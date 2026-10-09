@@ -15,6 +15,7 @@ import {
   Forward,
   HardDrive,
   ListPlus,
+  Lock,
   Settings2,
   UploadCloud,
   Download,
@@ -959,8 +960,8 @@ function RoomView({
                 {isCompany
                   ? 'This is where the whole team talks. Be the first to say hello.'
                   : room.kind === 'DIRECT'
-                    ? 'Only the two of you can see these messages.'
-                    : 'Only the people in this group can see these messages.'}
+                    ? `Only you and ${room.name} can see this chat.`
+                    : 'Only people in this group can see these messages.'}
               </p>
 
               {isCompany ? (
@@ -1002,6 +1003,17 @@ function RoomView({
               messages — its min-h-full plus the welcome panel's h-full made the
               empty room twice the viewport tall, scrolling the welcome out of view. */}
           <ul className={messages && messages.length > 0 ? 'flex min-h-full flex-col justify-end gap-0.5' : 'hidden'}>
+            {/* At the start of a private conversation, the way WhatsApp marks it. */}
+            {!isCompany && !hasMore ? (
+              <li className="mb-3 flex justify-center">
+                <p className="inline-flex max-w-md items-center gap-1.5 rounded-md bg-[#FDF6E3] px-3 py-1.5 text-center text-xs text-[#6B5512]">
+                  <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {room.kind === 'DIRECT'
+                    ? `Only you and ${room.name} can see this chat.`
+                    : 'Only people in this group can see these messages.'}
+                </p>
+              </li>
+            ) : null}
             {(messages ?? []).map((m, i) => {
               const prev = i > 0 ? messages![i - 1] : null;
               const mine = m.author?.id === me.id;
