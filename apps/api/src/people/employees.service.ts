@@ -37,6 +37,31 @@ const DIRECTORY_SELECT = {
   skills: { select: { skill: { select: { id: true, name: true } } } },
 } satisfies Prisma.UserSelect;
 
+/**
+ * Who sees colleagues' contact details (email, phone, employee code) in the
+ * directory. Everyone else gets names, roles and teams only (2026-10-09: the
+ * directory used to hand every employee the whole company's phone numbers).
+ * Your own record always comes back in full.
+ */
+const CONTACT_ROLES = new Set(['SUPER_ADMIN', 'HR', 'FINANCE']);
+
+function seesContacts(viewer: AuthUser | undefined): boolean {
+  return Boolean(viewer && CONTACT_ROLES.has(viewer.role));
+}
+
+type DirectoryRow = Prisma.UserGetPayload<{ select: typeof DIRECTORY_SELECT }>;
+
+function withoutContacts(u: DirectoryRow, viewer: AuthUser | undefined): DirectoryRow {
+  if (seesContacts(viewer) || u.id === viewer?.id) return u;
+  return {
+    ...u,
+    email: '',
+    phone: null,
+    employeeCode: null,
+    reportingManager: u.reportingManager ? { ...u.reportingManager, email: '' } : null,
+  };
+}
+
 @Injectable()
 export class EmployeesService {
   constructor(
@@ -79,11 +104,15 @@ export class EmployeesService {
       where.NOT = { role: 'CLIENT' };
     }
     if (query.search) {
-      where.OR = [
-        { name: { contains: query.search, mode: 'insensitive' } },
-        { email: { contains: query.search, mode: 'insensitive' } },
-        { phone: { contains: query.search, mode: 'insensitive' } },
-      ];
+      // Searching by email or phone is only for those who can see them; otherwise
+      // a search would confirm whose number is whose.
+      where.OR = seesContacts(viewer)
+        ? [
+            { name: { contains: query.search, mode: 'insensitive' } },
+            { email: { contains: query.search, mode: 'insensitive' } },
+            { phone: { contains: query.search, mode: 'insensitive' } },
+          ]
+        : [{ name: { contains: query.search, mode: 'insensitive' } }];
     }
 
     const [items, total] = await this.prisma.$transaction([
@@ -98,7 +127,7 @@ export class EmployeesService {
     ]);
 
     return {
-      items: items.map(flattenSkills),
+      items: items.map((u) => flattenSkills(withoutContacts(u, viewer))),
       total,
       page: query.page,
       pageSize: query.pageSize,
@@ -119,7 +148,7 @@ export class EmployeesService {
       throw new NotFoundException('Employee not found');
     }
 
-    return flattenSkills(user);
+    return flattenSkills(withoutContacts(user, requester));
   }
 
   // ── Create + invite (Spec §5.2) ──

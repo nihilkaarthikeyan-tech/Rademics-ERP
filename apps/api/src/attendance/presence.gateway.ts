@@ -39,6 +39,11 @@ const SOCKET_ORIGINS = [
  */
 const REVOCATION_SWEEP_MS = 30_000;
 
+/** The app sends a typing hint at most every 2s; anything faster is dropped. */
+const TYPING_MIN_GAP_MS = 1_500;
+/** How long a looked-up display name is reused for typing hints. */
+const TYPING_NAME_TTL_MS = 5 * 60_000;
+
 /**
  * Socket.IO real-time layer (Spec §12). Authenticates the handshake with the same
  * short-lived JWT as REST (§5.1), then joins the socket to the presence room and a
@@ -136,19 +141,43 @@ export class PresenceGateway
     this.authed.delete(client);
   }
 
+  /** Display names for typing hints, so the name shown is never client-supplied. */
+  private readonly typingNames = new Map<string, { name: string; at: number }>();
+
+  private async typingName(userId: string): Promise<string | null> {
+    const hit = this.typingNames.get(userId);
+    if (hit && Date.now() - hit.at < TYPING_NAME_TTL_MS) return hit.name;
+    const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+    if (!u) return null;
+    if (this.typingNames.size > 2000) this.typingNames.clear();
+    this.typingNames.set(userId, { name: u.name, at: Date.now() });
+    return u.name;
+  }
+
   /**
-   * Chat typing relay (2026-07-27): ephemeral fan-out, nothing stored. The
-   * sender's identity comes from the authenticated socket, never the payload —
-   * only the display name is client-supplied (cosmetic, length-capped).
+   * Chat typing relay (2026-07-27): ephemeral fan-out, nothing stored. Both the
+   * sender and the name shown come from the authenticated socket (2026-10-09:
+   * the name used to be taken from the payload, so anyone could show "Priya is
+   * typing…"). Hints faster than the app ever sends them are dropped.
    */
   @SubscribeMessage('chat:typing')
   async handleTyping(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { name?: unknown; roomId?: unknown } | undefined,
+    @MessageBody() payload: { roomId?: unknown } | undefined,
   ): Promise<void> {
     const userId = client.data.userId as string | undefined;
     if (!userId) return;
-    const name = typeof payload?.name === 'string' ? payload.name.slice(0, 80) : '';
+    const now = Date.now();
+    const last = (client.data.lastTypingAt as number | undefined) ?? 0;
+    if (now - last < TYPING_MIN_GAP_MS) return;
+    client.data.lastTypingAt = now;
+    let name: string | null;
+    try {
+      name = await this.typingName(userId);
+    } catch {
+      return;
+    }
+    if (!name) return;
     const roomId = typeof payload?.roomId === 'string' ? payload.roomId : null;
     if (!roomId) {
       // Company room: the staff room, not the whole namespace — chat is internal.
