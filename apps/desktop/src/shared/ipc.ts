@@ -16,6 +16,11 @@ export const IpcChannel = {
   UpdateStatusChanged: 'update:statusChanged',
   UpdateRestartToInstall: 'update:restartToInstall',
   AppGetVersion: 'app:getVersion',
+  ChatOpen: 'chat:open',
+  ChatGetUnread: 'chat:getUnread',
+  ChatUnreadChanged: 'chat:unreadChanged',
+  ChatHostGetToken: 'chatHost:getToken',
+  ChatHostRefreshToken: 'chatHost:refreshToken',
 } as const;
 
 export interface AuthUserPayload {
@@ -90,4 +95,8 @@ export interface RademicsDesktopBridge {
   onStatusUpdated(cb: (payload: StatusUpdatePayload) => void): () => void;
   onUpdateStatusChanged(cb: (status: UpdateStatus) => void): () => void;
   restartToInstallUpdate(): void;
+  /** Open the chat window. */
+  openChat(): void;
+  getChatUnread(): Promise<number>;
+  onChatUnreadChanged(cb: (count: number) => void): () => void;
 }

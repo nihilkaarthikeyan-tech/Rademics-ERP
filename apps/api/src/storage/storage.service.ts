@@ -122,6 +122,11 @@ export class StorageService implements OnModuleInit {
     }
   }
 
+  /** Server-side copy inside the bucket — no download/upload round trip. */
+  async copy(sourceKey: string, destKey: string): Promise<void> {
+    await this.client.copyObject(this.bucket, destKey, `/${this.bucket}/${sourceKey}`);
+  }
+
   async remove(key: string): Promise<void> {
     try {
       await this.client.removeObject(this.bucket, key);

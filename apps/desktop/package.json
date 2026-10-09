@@ -2,7 +2,7 @@
   "name": "@rademics/desktop",
   "version": "0.2.11",
   "private": true,
-  "description": "Rademics ERP Desktop Agent \u2014 Windows companion app for check-in/out and activity tracking",
+  "description": "Rademics ERP Desktop Agent — Windows companion app for check-in/out and activity tracking",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -18,7 +18,8 @@
     "electron-updater": "^6.3.9",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

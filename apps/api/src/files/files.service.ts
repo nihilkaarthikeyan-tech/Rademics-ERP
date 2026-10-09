@@ -50,7 +50,7 @@ export class FilesService {
     @InjectQueue(QUEUE_FILES) private readonly queue: Queue<ScanJobData>,
   ) {}
 
-  private async fileRules() {
+  async fileRules() {
     const r = (await this.settings.getBusinessRules()) as Record<string, unknown>;
     return {
       maxBytes: ((r.fileUploadLimitMb as number) ?? DEFAULT_UPLOAD_LIMIT_MB) * 1024 * 1024,

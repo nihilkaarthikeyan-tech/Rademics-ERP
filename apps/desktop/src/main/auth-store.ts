@@ -21,6 +21,15 @@ export class AuthStore {
     return this.user !== null;
   }
 
+  /** The live access token (memory only) — the chat window and live feed borrow it. */
+  accessToken(): string | null {
+    return this.api.getAccessToken();
+  }
+
+  getJson<T>(path: string): Promise<T> {
+    return this.withAuth(() => this.api.get<T>(path));
+  }
+
   getState(): AuthState {
     return { authenticated: this.authenticated, user: this.user };
   }

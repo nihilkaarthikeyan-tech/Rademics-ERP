@@ -7,24 +7,59 @@ const TRAY_ICON =
 
 export interface AppTray {
   setCheckedIn(checkedIn: boolean): void;
+  setUnread(count: number): void;
+}
+
+/** The tray icon with a brand-navy dot in the top-right corner — "unread messages". */
+function withDot(icon: Electron.NativeImage): Electron.NativeImage {
+  const { width, height } = icon.getSize();
+  const px = Buffer.from(icon.toBitmap()); // BGRA
+  const r = Math.round(width * 0.22);
+  const cx = width - r - 1;
+  const cy = r + 1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const d = Math.hypot(x - cx, y - cy);
+      if (d > r + 1) continue;
+      const i = (y * width + x) * 4;
+      // White ring, brand-navy fill — readable on dark and light taskbars alike.
+      const [b, g, rr] = d > r - 0.5 ? [255, 255, 255] : [74, 42, 27];
+      px[i] = b;
+      px[i + 1] = g;
+      px[i + 2] = rr;
+      px[i + 3] = 255;
+    }
+  }
+  return nativeImage.createFromBitmap(px, { width, height });
 }
 
 export function createTray(opts: {
   mainWindow: BrowserWindow;
   isQuitting: { value: boolean };
+  openChat: () => void;
 }): AppTray {
   const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON, 'base64'));
+  const dotted = withDot(icon);
   const tray = new Tray(icon);
   tray.setToolTip('Rademics Work Monitoring App');
+  let checkedIn = false;
+  let unread = 0;
 
-  const render = (checkedIn: boolean) => {
-    tray.setToolTip(`Rademics Work Monitoring App — ${checkedIn ? 'checked in' : 'checked out'}`);
+  const render = () => {
+    const unreadText = unread > 0 ? ` · ${unread} unread message${unread === 1 ? '' : 's'}` : '';
+    tray.setToolTip(`Rademics Work Monitoring App — ${checkedIn ? 'checked in' : 'checked out'}${unreadText}`);
+    tray.setImage(unread > 0 ? dotted : icon);
     const menu = Menu.buildFromTemplate([
       { label: checkedIn ? 'Checked in' : 'Checked out', enabled: false },
       { type: 'separator' },
       {
+        label: unread > 0 ? `Open chat (${unread > 99 ? '99+' : unread} unread)` : 'Open chat',
+        click: () => opts.openChat(),
+      },
+      {
         label: 'Open',
         click: () => {
+          if (opts.mainWindow.isMinimized()) opts.mainWindow.restore();
           opts.mainWindow.show();
           opts.mainWindow.focus();
         },
@@ -40,11 +75,21 @@ export function createTray(opts: {
     tray.setContextMenu(menu);
   };
 
-  render(false);
+  render();
   tray.on('click', () => {
+    if (opts.mainWindow.isMinimized()) opts.mainWindow.restore();
     opts.mainWindow.show();
     opts.mainWindow.focus();
   });
 
-  return { setCheckedIn: render };
+  return {
+    setCheckedIn: (v) => {
+      checkedIn = v;
+      render();
+    },
+    setUnread: (n) => {
+      unread = n;
+      render();
+    },
+  };
 }

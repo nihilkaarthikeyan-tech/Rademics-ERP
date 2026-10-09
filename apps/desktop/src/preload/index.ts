@@ -46,6 +46,18 @@ const bridge: RademicsDesktopBridge = {
   restartToInstallUpdate: (): void => {
     void ipcRenderer.invoke(IpcChannel.UpdateRestartToInstall);
   },
+
+  openChat: (): void => {
+    void ipcRenderer.invoke(IpcChannel.ChatOpen);
+  },
+
+  getChatUnread: (): Promise<number> => ipcRenderer.invoke(IpcChannel.ChatGetUnread),
+
+  onChatUnreadChanged: (cb: (count: number) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, count: number) => cb(count);
+    ipcRenderer.on(IpcChannel.ChatUnreadChanged, listener);
+    return () => ipcRenderer.removeListener(IpcChannel.ChatUnreadChanged, listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('rademicsDesktop', bridge);

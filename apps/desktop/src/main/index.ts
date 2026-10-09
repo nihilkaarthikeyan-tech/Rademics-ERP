@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, Menu, powerMonitor, session } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, powerMonitor, session } from 'electron';
 import { ApiClient } from './api-client';
 import { AuthStore } from './auth-store';
 import { IdleTracker } from './idle-tracker';
@@ -11,6 +11,9 @@ import { createTray } from './tray';
 import { registerIpcHandlers } from './ipc-handlers';
 import { startLocalServer } from './local-server';
 import { setupAutoUpdater } from './updater';
+import { ChatWatcher } from './chat-watcher';
+import { ChatWindow } from './chat-window';
+import { unreadBadge } from './badge';
 import { IpcChannel } from '../shared/ipc';
 
 // A packaged build (what employees install) talks to production by default; a dev
@@ -25,6 +28,16 @@ const API_BASE_URL =
 // local API has no CAPTCHA secret set anyway. Not a real secret (extractable from the
 // binary); the login rate limit + account lockout are the actual bot protections.
 const DESKTOP_APP_KEY = (process.env.RADEMICS_DESKTOP_KEY as string) || null;
+// The staff website — the chat window shows its chat screen. Dev runs use the
+// local staff app.
+const PROD_WEB_URL = 'https://rademics.52digit.com';
+const WEB_URL = process.env.RADEMICS_WEB_URL ?? (app.isPackaged ? PROD_WEB_URL : 'http://localhost:3000');
+
+// Windows only shows notifications from an app with an identity: the installer
+// registers the appId; an unpackaged dev run has to name itself.
+if (process.platform === 'win32') {
+  app.setAppUserModelId(app.isPackaged ? 'com.rademics.erp.desktop-agent' : process.execPath);
+}
 
 // Keep the ORIGINAL userData folder across the 0.2.5 product rename ("Rademics ERP
 // Desktop Agent" → "Rademics Work Monitoring App"): Electron derives the default
@@ -50,6 +63,7 @@ if (!gotLock) {
 } else {
   let mainWindow: BrowserWindow | null = null;
   app.on('second-instance', () => {
+    if (mainWindow?.isMinimized()) mainWindow.restore();
     mainWindow?.show();
     mainWindow?.focus();
   });
@@ -64,7 +78,7 @@ if (!gotLock) {
 
     const win = new BrowserWindow({
       width: 380,
-      height: 560,
+      height: 640,
       resizable: false,
       minimizable: true,
       maximizable: false,
@@ -83,18 +97,39 @@ if (!gotLock) {
     const isQuitting = { value: false };
     win.on('close', (event) => {
       // Closing the window must NOT check the employee out — it keeps tracking
-      // in the background, hidden to the tray. Only an explicit Quit or a real
-      // system shutdown (shutdown-handler.ts) ends the session.
+      // in the background. It minimizes to the taskbar (not just the tray) so the
+      // unread-message badge stays in sight, the way WhatsApp's does. Only an
+      // explicit Quit or a real system shutdown (shutdown-handler.ts) ends the session.
       if (!isQuitting.value) {
         event.preventDefault();
-        win.hide();
+        win.minimize();
       }
     });
     app.on('before-quit', () => {
       isQuitting.value = true;
     });
 
-    const tray = createTray({ mainWindow: win, isQuitting });
+    // Chat: a live feed that pops up Windows notifications, and a chat window.
+    let watcher: ChatWatcher | null = null;
+    const chatWindow = new ChatWindow(WEB_URL, auth, () => void watcher?.refreshUnread());
+    const tray = createTray({ mainWindow: win, isQuitting, openChat: () => chatWindow.open() });
+    watcher = new ChatWatcher(auth, API_BASE_URL.replace(/\/api\/?$/, ''), {
+      isChatFocused: () => chatWindow.isFocused(),
+      openChat: (roomId, messageId) => chatWindow.open(roomId, messageId),
+      onUnread: (count) => {
+        tray.setUnread(count);
+        // The red number on the taskbar button (Windows overlay badge).
+        const badge = count > 0 ? unreadBadge(count) : null;
+        const label = count > 0 ? `${count} unread message${count === 1 ? '' : 's'}` : '';
+        if (!win.isDestroyed()) {
+          win.setOverlayIcon(badge, label);
+          win.webContents.send(IpcChannel.ChatUnreadChanged, count);
+        }
+        chatWindow.setBadge(badge, label);
+      },
+    });
+    ipcMain.handle(IpcChannel.ChatOpen, () => chatWindow.open());
+    ipcMain.handle(IpcChannel.ChatGetUnread, () => watcher?.unreadCount ?? 0);
     statusPoller.onUpdate((payload) => tray.setCheckedIn(payload.status?.checkedIn ?? false));
 
     registerIpcHandlers({ auth, statusPoller, idleTracker, mainWindow: win });
@@ -136,6 +171,7 @@ if (!gotLock) {
     // Start the always-on polling loops (both no-op internally while logged out).
     idleTracker.start();
     statusPoller.start();
+    watcher.start();
 
     // When the machine wakes from sleep or the screen unlocks, the poll timers were
     // suspended — refresh immediately so the UI doesn't linger on stale data.

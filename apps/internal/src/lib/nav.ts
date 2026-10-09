@@ -30,6 +30,8 @@ export interface NavItem {
   roles: Role[] | 'all';
   icon: LucideIcon;
   group: 'Workspace' | 'Manage' | 'Insights';
+  /** Built but switched off for now: kept in the code, left out of every menu. */
+  hidden?: boolean;
 }
 
 const ALL: 'all' = 'all';
@@ -51,13 +53,60 @@ export const NAV: NavItem[] = [
   { label: 'Clients', href: '/clients', roles: ['SUPER_ADMIN'], icon: Building2, group: 'Manage' },
   { label: 'Finance', href: '/finance', roles: ['SUPER_ADMIN', 'FINANCE'], icon: Wallet, group: 'Manage' },
   { label: 'Reports', href: '/reports', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: BarChart3, group: 'Insights' },
-  { label: 'AI Assistant', href: '/assistant', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Sparkles, group: 'Insights' },
+  // Hidden 2026-10-09 (owner's call): the assistant is kept, not removed — set
+  // hidden: false (and drop the redirect in app/(app)/assistant/page.tsx) to bring it back.
+  { label: 'AI Assistant', href: '/assistant', roles: ['SUPER_ADMIN', 'HR', 'TEAM_LEAD', 'EMPLOYEE', 'FINANCE'], icon: Sparkles, group: 'Insights', hidden: true },
   { label: 'Admin', href: '/admin', roles: ['SUPER_ADMIN'], icon: Settings, group: 'Manage' },
   { label: 'Audit Log', href: '/audit', roles: ['SUPER_ADMIN'], icon: ScrollText, group: 'Manage' },
 ];
 
 export function navForRole(role: string): NavItem[] {
-  return NAV.filter((n) => n.roles === 'all' || (n.roles as string[]).includes(role));
+  return NAV.filter((n) => !n.hidden && (n.roles === 'all' || (n.roles as string[]).includes(role)));
 }
 
 export const NAV_GROUPS: NavItem['group'][] = ['Workspace', 'Manage', 'Insights'];
+
+/**
+ * Two-level navigation: the left icon rail shows these sections; a section with
+ * more than one of the role's pages opens a panel of those pages beside the rail.
+ * Every NAV item belongs to exactly one section, so nothing is dropped, and
+ * visibility per role still comes from NAV's `roles`.
+ */
+export interface RailSection {
+  label: string;
+  icon: LucideIcon;
+  hrefs: string[];
+}
+
+export const RAIL: RailSection[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, hrefs: ['/dashboard'] },
+  { label: 'Notices', icon: Megaphone, hrefs: ['/notices'] },
+  { label: 'Chat', icon: MessagesSquare, hrefs: ['/chat'] },
+  { label: 'Work', icon: ListTodo, hrefs: ['/my-work', '/projects', '/my-clients'] },
+  { label: 'Attendance', icon: Clock, hrefs: ['/attendance', '/leave', '/calendar', '/desktop-agent'] },
+  { label: 'People', icon: Users, hrefs: ['/people'] },
+  { label: 'Finance', icon: Wallet, hrefs: ['/finance'] },
+  { label: 'Reports', icon: BarChart3, hrefs: ['/reports'] },
+  { label: 'AI Assistant', icon: Sparkles, hrefs: ['/assistant'] },
+  { label: 'Admin', icon: Settings, hrefs: ['/admin', '/clients', '/audit'] },
+];
+
+export interface RailEntry {
+  section: RailSection;
+  items: NavItem[];
+}
+
+/** The rail for a role: sections with at least one visible item, items in section order. */
+export function railForRole(role: string): RailEntry[] {
+  const visible = navForRole(role);
+  return RAIL.map((section) => ({
+    section,
+    items: section.hrefs
+      .map((href) => visible.find((n) => n.href === href))
+      .filter((n): n is NavItem => Boolean(n)),
+  })).filter((e) => e.items.length > 0);
+}
+
+export function isActiveHref(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(href + '/');
+}

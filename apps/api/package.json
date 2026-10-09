@@ -27,6 +27,7 @@
     "verify:phase8": "dotenv -e ../../.env -- ts-node scripts/verify-phase8.ts",
     "verify:phase9": "dotenv -e ../../.env -- ts-node scripts/verify-phase9.ts",
     "verify:phase10": "dotenv -e ../../.env -- ts-node scripts/verify-phase10.ts",
+    "verify:chat-rooms": "dotenv -e ../../.env -- ts-node scripts/verify-chat-rooms.ts",
     "loadtest": "dotenv -e ../../.env -- ts-node scripts/loadtest.ts"
   },
   "prisma": {

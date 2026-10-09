@@ -92,6 +92,15 @@ export function NotificationsBell() {
     } else if (n.entityType === 'Announcement') {
       setOpen(false);
       router.push('/notices');
+    } else if (n.entityType === 'ChatMessage' && n.entityId) {
+      setOpen(false);
+      try {
+        const at = await apiFetch<{ roomId: string }>(`/chat/messages/${n.entityId}/locate`);
+        router.push(`/chat?room=${at.roomId}&message=${n.entityId}`);
+      } catch {
+        // Message deleted or you have left that group — the chat list is the safe landing.
+        router.push('/chat');
+      }
     }
   }
 
@@ -131,7 +140,8 @@ export function NotificationsBell() {
               <ul className="divide-y divide-slate-50">
                 {items.map((n) => {
                   const clickable =
-                    Boolean(n.entityId) && (n.entityType === 'Task' || n.entityType === 'Announcement');
+                    Boolean(n.entityId) &&
+                    (n.entityType === 'Task' || n.entityType === 'Announcement' || n.entityType === 'ChatMessage');
                   return (
                     <li key={n.id}>
                       <button
@@ -152,7 +162,11 @@ export function NotificationsBell() {
                           <span>{new Date(n.createdAt).toLocaleString()}</span>
                           {clickable ? (
                             <span className="text-accent">
-                              {n.entityType === 'Announcement' ? 'Open notice →' : 'Open task →'}
+                              {n.entityType === 'Announcement'
+                                ? 'Open notice →'
+                                : n.entityType === 'ChatMessage'
+                                  ? 'Open chat →'
+                                  : 'Open task →'}
                             </span>
                           ) : null}
                         </div>

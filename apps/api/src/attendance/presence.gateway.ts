@@ -15,6 +15,7 @@ import type { Server, Socket } from 'socket.io';
 import type { AccessTokenPayload } from '../auth/jwt-auth.guard';
 import { SessionStateService } from '../auth/session-state.service';
 import { PresenceService } from './presence.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { PRESENCE_ROOM, STAFF_ROOM } from './attendance.constants';
 
 /**
@@ -70,6 +71,7 @@ export class PresenceGateway
     private readonly config: ConfigService,
     private readonly presence: PresenceService,
     private readonly sessions: SessionStateService,
+    private readonly prisma: PrismaService,
   ) {}
 
   afterInit(server: Server): void {
@@ -140,15 +142,35 @@ export class PresenceGateway
    * only the display name is client-supplied (cosmetic, length-capped).
    */
   @SubscribeMessage('chat:typing')
-  handleTyping(
+  async handleTyping(
     @ConnectedSocket() client: Socket,
-    @MessageBody() payload: { name?: unknown } | undefined,
-  ): void {
+    @MessageBody() payload: { name?: unknown; roomId?: unknown } | undefined,
+  ): Promise<void> {
     const userId = client.data.userId as string | undefined;
     if (!userId) return;
     const name = typeof payload?.name === 'string' ? payload.name.slice(0, 80) : '';
-    // Staff room, not the whole namespace — chat is internal.
-    client.broadcast.to(STAFF_ROOM).emit('chat:typing', { userId, name });
+    const roomId = typeof payload?.roomId === 'string' ? payload.roomId : null;
+    if (!roomId) {
+      // Company room: the staff room, not the whole namespace — chat is internal.
+      client.broadcast.to(STAFF_ROOM).emit('chat:typing', { userId, name, roomId: null });
+      return;
+    }
+    // A group or direct chat: only its members hear it, and only if the typist is one.
+    try {
+      const members = await this.prisma.chatRoomMember.findMany({
+        where: { roomId, room: { kind: { not: 'COMPANY' } } },
+        select: { userId: true },
+      });
+      if (!members.some((m) => m.userId === userId)) {
+        if (members.length === 0) client.broadcast.to(STAFF_ROOM).emit('chat:typing', { userId, name, roomId: null });
+        return;
+      }
+      for (const m of members) {
+        if (m.userId !== userId) this.server.to(`user:${m.userId}`).emit('chat:typing', { userId, name, roomId });
+      }
+    } catch {
+      // A malformed id or a passing DB hiccup only costs a typing hint.
+    }
   }
 
   /**

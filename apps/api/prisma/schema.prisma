@@ -281,21 +281,21 @@ model User {
   reviewedRegularizations RegularizationRequest[] @relation("RegReviewer")
 
   // ── Projects & Tasks (Spec §5.4, §6) ──
-  managedProjects   Project[]           @relation("ProjectPM")
-  clientProjects    Project[]           @relation("ProjectClient")
-  assignedTasks     Task[]              @relation("TaskAssignee")
-  createdTasks      Task[]              @relation("TaskCreator")
-  taskHistory       TaskStatusHistory[] @relation("TaskHistoryActor")
+  managedProjects   Project[]                @relation("ProjectPM")
+  clientProjects    Project[]                @relation("ProjectClient")
+  assignedTasks     Task[]                   @relation("TaskAssignee")
+  createdTasks      Task[]                   @relation("TaskCreator")
+  taskHistory       TaskStatusHistory[]      @relation("TaskHistoryActor")
   watching          TaskWatcher[]
-  comments          Comment[]           @relation("CommentAuthor")
+  comments          Comment[]                @relation("CommentAuthor")
   mentionedIn       CommentMention[]
   notifications     Notification[]
   notificationPrefs NotificationPreference[]
 
   // ── Notices & chat (2026-07-26) ──
-  announcements       Announcement[]     @relation("AnnouncementAuthor")
-  announcementPins    AnnouncementPin[]
-  announcementReads   AnnouncementRead[]
+  announcements     Announcement[]     @relation("AnnouncementAuthor")
+  announcementPins  AnnouncementPin[]
+  announcementReads AnnouncementRead[]
   /// Set whenever every session for this user must stop being trusted —
   /// deactivation, a role change, a password change. Access tokens are stateless
   /// and live ~15 minutes, so revoking only refresh tokens left a fired employee
@@ -303,11 +303,14 @@ model User {
   /// The guard rejects any access token issued before this moment.
   sessionsRevokedAt DateTime?
 
-  chatMessages        ChatMessage[]      @relation("ChatAuthor")
-  deletedChatMessages ChatMessage[]      @relation("ChatMessageDeleter")
-  pinnedChatMessages  ChatMessage[]      @relation("ChatMessagePinner")
-  chatReactions       ChatReaction[]     @relation("ChatReactor")
+  chatMessages        ChatMessage[]          @relation("ChatAuthor")
+  deletedChatMessages ChatMessage[]          @relation("ChatMessageDeleter")
+  pinnedChatMessages  ChatMessage[]          @relation("ChatMessagePinner")
+  chatReactions       ChatReaction[]         @relation("ChatReactor")
   chatReadState       ChatReadState?
+  chatRoomsCreated    ChatRoom[]             @relation("ChatRoomCreator")
+  chatMemberships     ChatRoomMember[]
+  chatScheduled       ChatScheduledMessage[] @relation("ChatScheduledAuthor")
 
   // ── Files (Spec §5.6) ──
   createdFiles     FileAsset[]   @relation("FileCreator")
@@ -315,18 +318,18 @@ model User {
   uploadedVersions FileVersion[] @relation("FileUploader")
 
   // ── Leave (Spec §5.7) ──
-  leaveBalances     LeaveBalance[]
-  leaveRequests     LeaveRequest[] @relation("LeaveSubject")
-  leaveToApprove    LeaveRequest[] @relation("LeaveCurrentApprover")
-  reviewedLeave     LeaveRequest[] @relation("LeaveReviewer")
-  leaveLedger       LeaveLedger[]
+  leaveBalances  LeaveBalance[]
+  leaveRequests  LeaveRequest[] @relation("LeaveSubject")
+  leaveToApprove LeaveRequest[] @relation("LeaveCurrentApprover")
+  reviewedLeave  LeaveRequest[] @relation("LeaveReviewer")
+  leaveLedger    LeaveLedger[]
 
   // ── Finance (Spec §5.8) ──
-  createdInvoices Invoice[]       @relation("InvoiceCreator")
-  recordedPayments Payment[]      @relation("PaymentCreator")
-  loggedExpenses  Expense[]       @relation("ExpenseCreator")
-  lockedPayrollMonths PayrollMonth[] @relation("PayrollLocker")
-  payrollExports  PayrollExport[] @relation("PayrollExporter")
+  createdInvoices     Invoice[]       @relation("InvoiceCreator")
+  recordedPayments    Payment[]       @relation("PaymentCreator")
+  loggedExpenses      Expense[]       @relation("ExpenseCreator")
+  lockedPayrollMonths PayrollMonth[]  @relation("PayrollLocker")
+  payrollExports      PayrollExport[] @relation("PayrollExporter")
 
   // ── AI (Spec §7) ──
   aiSummaries AiDailySummary[] @relation("AiSummaryAuthor")
@@ -395,9 +398,9 @@ model RoleCapability {
 
 /// Append-only audit trail (Spec §5.10, §10). No update/delete path exists anywhere.
 model AuditLog {
-  id         String  @id @default(uuid()) @db.Uuid
-  actorId    String? @db.Uuid
-  actor      User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
   actorEmail String? // denormalized so entries survive user changes
   action     String
   entityType String?
@@ -442,12 +445,12 @@ model Department {
 
 /// A team has exactly one Team Lead (Spec §5.2).
 model Team {
-  id           String  @id @default(uuid()) @db.Uuid
+  id           String     @id @default(uuid()) @db.Uuid
   name         String
-  departmentId String  @db.Uuid
+  departmentId String     @db.Uuid
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  teamLeadId   String? @db.Uuid
-  teamLead     User?   @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
+  teamLeadId   String?    @db.Uuid
+  teamLead     User?      @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
 
   members User[] @relation("TeamMembers")
 
@@ -542,19 +545,19 @@ model AttendanceIdleGap {
 /// Nightly-computed daily marks (Spec §5.3, §4): late / half-day / overtime,
 /// derived from configured rules. One row per user per day.
 model AttendanceDay {
-  id              String              @id @default(uuid()) @db.Uuid
-  userId          String              @db.Uuid
-  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date            DateTime            @db.Date
-  workedSeconds   Int                 @default(0)
-  idleSeconds     Int                 @default(0)
-  overtimeSeconds Int                 @default(0)
-  firstCheckInAt  DateTime?
-  isLate          Boolean             @default(false)
-  status          AttendanceDayStatus @default(ABSENT)
+  id                   String              @id @default(uuid()) @db.Uuid
+  userId               String              @db.Uuid
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date                 DateTime            @db.Date
+  workedSeconds        Int                 @default(0)
+  idleSeconds          Int                 @default(0)
+  overtimeSeconds      Int                 @default(0)
+  firstCheckInAt       DateTime?
+  isLate               Boolean             @default(false)
+  status               AttendanceDayStatus @default(ABSENT)
   // 3-lates rule (Spec §4): set the day a monthly late-count deduction is applied.
-  lateDeductionApplied Boolean        @default(false)
-  computedAt      DateTime            @default(now())
+  lateDeductionApplied Boolean             @default(false)
+  computedAt           DateTime            @default(now())
 
   @@unique([userId, date])
   @@index([date])
@@ -591,7 +594,7 @@ model RegularizationRequest {
 
 /// A Project or Work Stream (Spec §5.4). Budget is visible only to PM/Finance/Admin (§3).
 model Project {
-  id String @id @default(uuid()) @db.Uuid
+  id          String        @id @default(uuid()) @db.Uuid
   // Human-facing reference, rendered as RAD-001 (see formatProjectCode in
   // @rademics/types). Backed by a Postgres sequence rather than a count()+1 in
   // application code: two projects created in the same instant would otherwise
@@ -616,7 +619,7 @@ model Project {
 
   startDate    DateTime?
   endDate      DateTime? // absent = ongoing work (2026-07-25: replaced the PROJECT/STREAM flag)
-  budgetAmount Decimal?  @db.Decimal(14, 2)
+  budgetAmount Decimal?          @db.Decimal(14, 2)
   vertical     BusinessVertical? // business vertical for P&L grouping (Spec §5.8)
 
   invoices Invoice[]
@@ -636,11 +639,11 @@ model Project {
 
 /// A named grouping inside a project (Spec §5.4) — e.g. "Frontend", "Chapter 3".
 model Module {
-  id        String @id @default(uuid()) @db.Uuid
-  projectId String @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
+  projectId String  @db.Uuid
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
-  position  Int    @default(0)
+  position  Int     @default(0)
 
   tasks Task[]
 
@@ -653,8 +656,8 @@ model Module {
 
 /// A Task or Subtask (Spec §5.4). Subtasks are one level deep only (enforced in service).
 model Task {
-  id        String @id @default(uuid()) @db.Uuid
-  projectId String @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
+  projectId String  @db.Uuid
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   moduleId String? @db.Uuid
@@ -670,23 +673,23 @@ model Task {
   assigneeId String? @db.Uuid
   assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
-  priority       TaskPriority @default(MEDIUM)
-  estimatedHours Decimal?     @db.Decimal(6, 2) // 0.25–999, quarter-hour steps (§24)
-  actualHours    Decimal?     @db.Decimal(6, 2)
-  deadline       DateTime?
-  clientFacing   Boolean      @default(false) // §6 flag, settable by PM/TL
-  status         TaskStatus   @default(DRAFT)
+  priority        TaskPriority @default(MEDIUM)
+  estimatedHours  Decimal?     @db.Decimal(6, 2) // 0.25–999, quarter-hour steps (§24)
+  actualHours     Decimal?     @db.Decimal(6, 2)
+  deadline        DateTime?
+  clientFacing    Boolean      @default(false) // §6 flag, settable by PM/TL
+  status          TaskStatus   @default(DRAFT)
   // When the task entered its current status. A handoff that nobody picks up
   // (ASSIGNED but never accepted) is invisible without this — it powers the
   // daily acceptance reminders and the board's "waiting" marker.
-  statusChangedAt DateTime @default(now())
+  statusChangedAt DateTime     @default(now())
 
   // 2026-07-27: last time a client-facing task showed the client something new
   // (a status change, or a client-visible comment). Powers the 3-day staleness
   // nudge — a client-facing task the client can't see any movement on for days
   // is the exact silent-stall problem statusChangedAt already solves internally.
-  lastClientUpdateAt   DateTime?
-  lastStatusRequestAt  DateTime? // client's own "ask for a status update" cooldown
+  lastClientUpdateAt  DateTime?
+  lastStatusRequestAt DateTime? // client's own "ask for a status update" cooldown
 
   /// Deadline sweep (2026-07-27, Spec §5.12): stamped once when the 24h-warning /
   /// missed-deadline notification is sent, so the hourly job never nags twice.
@@ -1010,7 +1013,7 @@ model Invoice {
   issueDate DateTime @db.Date
   dueDate   DateTime @db.Date
 
-  subtotal Decimal @default(0) @db.Decimal(14, 2)
+  subtotal  Decimal @default(0) @db.Decimal(14, 2)
   /// Total tax on the invoice. Kept as the single source for totals and reporting;
   /// the three columns below say how that same amount is apportioned.
   gstAmount Decimal @default(0) @db.Decimal(14, 2)
@@ -1021,13 +1024,13 @@ model Invoice {
   // money is identical either way, but the invoice has to say which — the
   // customer's input-tax-credit claim depends on it. Stored rather than derived
   // so a reprint of an old invoice never restates history if settings change.
-  cgstAmount Decimal @default(0) @db.Decimal(14, 2)
-  sgstAmount Decimal @default(0) @db.Decimal(14, 2)
-  igstAmount Decimal @default(0) @db.Decimal(14, 2)
+  cgstAmount             Decimal @default(0) @db.Decimal(14, 2)
+  sgstAmount             Decimal @default(0) @db.Decimal(14, 2)
+  igstAmount             Decimal @default(0) @db.Decimal(14, 2)
   /// Two-digit GST state code of the recipient, captured at issue time.
   placeOfSupplyStateCode String? @db.VarChar(2)
   /// Recipient's GSTIN as it stood when the invoice was raised.
-  clientGstin String?
+  clientGstin            String?
 
   total      Decimal @default(0) @db.Decimal(14, 2)
   amountPaid Decimal @default(0) @db.Decimal(14, 2)
@@ -1202,13 +1205,13 @@ model AiUsage {
 /// A client organization with many individual users (Spec §2). One login per org
 /// is explicitly NOT acceptable — each user has their own login and scope.
 model ClientOrg {
-  id String @id @default(uuid()) @db.Uuid
+  id     String          @id @default(uuid()) @db.Uuid
   // Human-facing reference, rendered as CL-001 (formatClientCode in
   // @rademics/types). This is what staff see INSTEAD of the client's identity —
   // only Super Admin sees `name`. Sequence-backed for the same reason project
   // numbers are: a duplicate would make two clients indistinguishable to
   // everyone who only ever sees the code.
-  number Int @unique @default(autoincrement())
+  number Int             @unique @default(autoincrement())
   // Null until the client's account is actually created. A client ID is
   // reserved the moment a project is marked as client work, so the Super Admin
   // has a code to pair the two with — at that point nobody has said who the
@@ -1317,15 +1320,82 @@ model AnnouncementRead {
 
 /// Company chat v1: ONE general room every staff member is in. Messages are
 /// delivered live over the presence socket and persisted here for history.
+/// COMPANY: the one room every staff member is in (membership is implicit).
+/// GROUP: created by HR or a Super Admin, members added by them.
+/// DIRECT: a one-to-one conversation between exactly two people.
+enum ChatRoomKind {
+  COMPANY
+  GROUP
+  DIRECT
+}
+
+/// A conversation. Messages, pins and reactions all belong to one room, and a
+/// GROUP or DIRECT room is readable only by its members.
+model ChatRoom {
+  id        String       @id @default(uuid()) @db.Uuid
+  kind      ChatRoomKind
+  /// GROUP only. COMPANY is always "Company"; a DIRECT room is named after the other person.
+  name      String?
+  /// DIRECT only: both member ids, sorted and joined, so a pair has exactly one room.
+  directKey String?      @unique
+
+  createdById   String?   @db.Uuid
+  createdBy     User?     @relation("ChatRoomCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  /// Bumped on every message so the conversation list can sort by recent activity.
+  lastMessageAt DateTime  @default(now())
+  /// GROUP only: HR / Super Admin removed the group. It disappears for everyone,
+  /// but its messages and files stay on the server (records are never erased).
+  archivedAt    DateTime?
+  archivedById  String?   @db.Uuid
+
+  members   ChatRoomMember[]
+  scheduled ChatScheduledMessage[]
+  messages  ChatMessage[]
+
+  @@index([kind])
+  @@map("chat_rooms")
+}
+
+/// Membership of a GROUP or DIRECT room, with that person's read pointer.
+model ChatRoomMember {
+  roomId String   @db.Uuid
+  room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId String   @db.Uuid
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt   DateTime @default(now())
+  lastReadAt DateTime @default(now())
+  /// Muted: no sound or pop-up for this conversation, and it leaves the nav
+  /// badge. @mentions still notify.
+  muted      Boolean  @default(false)
+
+  @@id([roomId, userId])
+  @@index([userId])
+  @@map("chat_room_members")
+}
+
 model ChatMessage {
   id   String @id @default(uuid()) @db.Uuid
   /// May be empty when the message is purely an attachment.
   body String
 
+  roomId String   @db.Uuid
+  room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
   authorId String? @db.Uuid
   author   User?   @relation("ChatAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
   files FileAsset[]
+
+  /// Sent with "Forward": a copy of a message from another conversation.
+  forwarded Boolean @default(false)
+
+  /// Quoted reply: the message this one answers (same room). Kept as a link so
+  /// the quote follows edits; a deleted original shows as "message removed".
+  replyToId String?       @db.Uuid
+  replyTo   ChatMessage?  @relation("ChatReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChatMessage[] @relation("ChatReply")
 
   /// Soft-delete (2026-07-26): the author may remove their own message; HR/SA
   /// may remove ANY message for moderation. The row stays (attributed
@@ -1351,7 +1421,32 @@ model ChatMessage {
 
   @@index([createdAt])
   @@index([pinnedAt])
+  @@index([roomId, createdAt])
   @@map("chat_messages")
+}
+
+/// A message written now and sent later ("send at 9 AM tomorrow"). The API's
+/// scheduler posts it at sendAt as the author, through the normal send path, so
+/// every rule (membership, flood limit, mentions) still applies at that moment.
+model ChatScheduledMessage {
+  id           String    @id @default(uuid()) @db.Uuid
+  roomId       String    @db.Uuid
+  room         ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  authorId     String    @db.Uuid
+  author       User      @relation("ChatScheduledAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  body         String
+  sendAt       DateTime
+  createdAt    DateTime  @default(now())
+  /// Set when posted; the posted message's id, for "jump to it".
+  sentAt       DateTime?
+  messageId    String?   @db.Uuid
+  cancelledAt  DateTime?
+  /// Why it could not be sent (the author left the group, the account was closed, …).
+  failedReason String?
+
+  @@index([sendAt])
+  @@index([authorId, roomId])
+  @@map("chat_scheduled_messages")
 }
 
 /// One emoji reaction by one person on one message. Toggling off deletes the row.
@@ -1371,12 +1466,15 @@ model ChatReaction {
   @@map("chat_reactions")
 }
 
-/// Per-person last-read pointer for the general room — powers the unread badge.
+/// Per-person last-read pointer for the COMPANY room (groups and direct chats
+/// keep theirs on ChatRoomMember) — powers the unread badge.
 model ChatReadState {
   userId String @id @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   lastReadAt DateTime @default(now())
+  /// The company room muted for this person (see ChatRoomMember.muted).
+  muted      Boolean  @default(false)
 
   @@map("chat_read_state")
 }

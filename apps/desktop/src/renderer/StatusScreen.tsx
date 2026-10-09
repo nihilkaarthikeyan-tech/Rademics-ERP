@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { LogIn, LogOut, Clock, Download } from 'lucide-react';
+import { LogIn, LogOut, Clock, Download, MessagesSquare } from 'lucide-react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@rademics/ui';
 import type { AuthUserPayload, TodayStatus, UpdateStatus } from '../shared/ipc';
 
@@ -20,6 +20,7 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [chatUnread, setChatUnread] = useState(0);
 
   const baseline = useRef<{ worked: number; at: number } | null>(null);
 
@@ -33,6 +34,11 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
   }, []);
 
   useEffect(() => window.rademicsDesktop.onUpdateStatusChanged(setUpdateStatus), []);
+
+  useEffect(() => {
+    void window.rademicsDesktop.getChatUnread().then(setChatUnread);
+    return window.rademicsDesktop.onChatUnreadChanged(setChatUnread);
+  }, []);
 
   useEffect(() => {
     if (status) baseline.current = { worked: status.workedSeconds, at: Date.now() };
@@ -227,6 +233,28 @@ export function StatusScreen({ user }: { user: AuthUserPayload }) {
           )}
         </CardContent>
       </Card>
+
+      <button
+        onClick={() => window.rademicsDesktop.openChat()}
+        className="animate-rise flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white">
+          <MessagesSquare className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-slate-800">Chat</span>
+          <span className="block text-xs text-slate-500">
+            {chatUnread > 0
+              ? `${chatUnread} unread message${chatUnread === 1 ? '' : 's'}`
+              : 'Company, groups and direct messages'}
+          </span>
+        </span>
+        {chatUnread > 0 ? (
+          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-[#1B2A4A] px-1.5 text-xs font-semibold text-white">
+            {chatUnread > 99 ? '99+' : chatUnread}
+          </span>
+        ) : null}
+      </button>
 
       <p className="text-center font-mono text-[10px] uppercase tracking-widest text-slate-500">
         Tracks active/idle time only — no screen or app activity is recorded.

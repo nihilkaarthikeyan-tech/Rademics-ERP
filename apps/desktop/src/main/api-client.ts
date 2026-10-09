@@ -42,6 +42,15 @@ export class ApiClient {
     this.accessToken = token;
   }
 
+  getAccessToken(): string | null {
+    return this.accessToken;
+  }
+
+  /** A plain authenticated GET (chat rooms, unread count, …). */
+  get<T>(path: string): Promise<T> {
+    return this.request<T>(path, { method: 'GET' });
+  }
+
   /** Write the cookie jar (refresh token) to disk now instead of Electron's lazy flush. */
   flushCookies(): Promise<void> {
     return this.session.cookies.flushStore();

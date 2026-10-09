@@ -147,14 +147,9 @@ export function AuthCard({
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-6 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue to-brand-navy text-sm font-bold text-white">
-            R
-          </span>
-          <span className="text-xl font-bold tracking-tight text-brand-navy">Rademics</span>
-          <span className="rounded border border-brand-navy/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-brand-navy/60">
-            ERP
-          </span>
+        <div className="mb-8 flex items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/rademics-logo.png" alt="Rademics" width={90} height={64} className="h-16 w-auto" />
         </div>
 
         <h2 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h2>

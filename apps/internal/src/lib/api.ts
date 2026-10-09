@@ -1,6 +1,7 @@
 'use client';
 
 import { getToken, setToken } from './session';
+import { desktopHost } from './desktop-host';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
 
@@ -22,6 +23,22 @@ let refreshInFlight: Promise<boolean> | null = null;
 
 function tryRefresh(): Promise<boolean> {
   refreshInFlight ??= (async () => {
+    // Inside the desktop app: the app holds the session. Take its current token
+    // if ours is stale, otherwise ask it to renew.
+    const host = desktopHost();
+    if (host) {
+      try {
+        const current = await host.getToken();
+        const token = current && current !== getToken() ? current : await host.refreshToken();
+        if (!token) return false;
+        setToken(token);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        refreshInFlight = null;
+      }
+    }
     try {
       const res = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' });
       if (!res.ok) return false;
