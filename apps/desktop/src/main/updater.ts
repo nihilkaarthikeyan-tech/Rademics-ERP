@@ -2,7 +2,7 @@ import { app } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import type { UpdateStatus } from '../shared/ipc';
 
-const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // re-check every 4h while the app stays open
+const CHECK_INTERVAL_MS = 60 * 60 * 1000; // re-check hourly while the app stays open (a tiny feed file)
 
 /**
  * Self-hosted auto-update (electron-updater's "generic" provider, pointed at
